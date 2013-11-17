@@ -1,0 +1,26 @@
+* Meta-circularity
+
+Use obo objects to represent obo runtime objects.
+
+If we use obo runtime objects to represent obo runtime objects in the
+JS interpreter, is this also meta-circular?  (Does it even work?).
+
+* Self hosting
+
+Step 1: the Obo interpreter written in JS runs the Obo interpreter
+written in Obo
+
+: ./obo interpreter.obo
+
+Step 2: this running interpreter is fed Obo programs
+
+: var interp = obo.interpretNode(interpreter.obo)
+: return interp(oboProgram)
+
+Step 3: evolve the obo interpreter written in obo, as the JS
+interpreter is only a crutch now.
+
+* Parser
+
+Yep.  Cool thing would be to self-host first, and write the parser in
+obo.
