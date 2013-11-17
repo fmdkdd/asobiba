@@ -17,7 +17,17 @@ if (file) {
 function run(source) {
 	var obo = require('./interpreter');
 
-  var AST = JSON.parse(source);
+  var AST;
+
+  if (file.match(/.ast.js$/)) {
+    with(require('./ASTnodes')) {
+      AST = eval(source);
+    }
+  }
+  else { // Assume .ast
+    AST = JSON.parse(source);
+  }
+
   var main = obo(AST);
   console.log(main.invoke('run'));
 }
