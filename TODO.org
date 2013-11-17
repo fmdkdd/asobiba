@@ -5,7 +5,7 @@ Use obo objects to represent obo runtime objects.
 If we use obo runtime objects to represent obo runtime objects in the
 JS interpreter, is this also meta-circular?  (Does it even work?).
 
-* Self hosting
+* Self interpreter
 
 Step 1: the Obo interpreter written in JS runs the Obo interpreter
 written in Obo
