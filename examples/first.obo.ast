@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "name": "obo",
+  "methods": [
+    {
+      "type": "method",
+      "name": "empty",
+      "body": {
+        "type": "object",
+        "name": null,
+        "methods": []
+      }
+    },
+    {
+      "type": "method",
+      "name": "run",
+      "body": {
+        "type": "methodCall",
+        "receiver": {
+          "type": "identifier",
+          "value": "self"
+        },
+        "methodName": {
+          "type": "identifier",
+          "value": "empty"
+        }
+      }
+    }
+  ]
+}

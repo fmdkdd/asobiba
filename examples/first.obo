@@ -1,0 +1,4 @@
+obo {
+  empty () -> {}
+  run () -> self.empty
+}
