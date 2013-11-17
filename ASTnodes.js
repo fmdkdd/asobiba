@@ -3,6 +3,11 @@ var nodes = {
   method: nodeMaker('method', 'name', 'body'),
   identifier: nodeMaker('identifier', 'value'),
   methodCall: nodeMaker('methodCall', 'receiver', 'methodName'),
+  methodUpdate: nodeMaker('methodUpdate', 'receiver', 'methodName', 'body'),
+
+  // Sugar
+  func: nodeMaker('func', 'argument', 'body'),
+  apply: nodeMaker('apply', 'func', 'argument'),
 };
 
 function nodeMaker(type) {

@@ -1,0 +1,5 @@
+cell {
+  contents () -> {}
+  set () -> (n) -> self.contents = n
+  run () -> (self.set {hello () -> {}}).contents
+}

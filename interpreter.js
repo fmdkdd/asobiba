@@ -7,7 +7,7 @@ function interpretNode(ASTnode) {
 
 var EmptyObject = function() {
 	return Object.create(null);
-}
+};
 
 var Obobject = {
   methods: EmptyObject(),
@@ -16,11 +16,12 @@ var Obobject = {
     return this.methods[name].invoke(this);
   },
 
-  update: function(name, newMethod) {
+  update: function(name, newMethodBody) {
     // FIXME: Mutable semantics
-	  this.methods[name] = newMethod;
+	  this.methods[name].body = newMethodBody;
+    return this;
   }
-}
+};
 
 var Method = {
   name: undefined,
@@ -30,15 +31,39 @@ var Method = {
     Runtime.identifiers.self = self;
 	  return interpretNode(this.body);
   }
-}
+};
+
+var Lambda = {
+  argName: undefined,
+  body: undefined,
+
+  call: function(arg) {
+    Runtime.identifiers[this.argName] = arg;
+	  return interpretNode(this.body);
+  }
+};
 
 var Runtime = {
   identifiers: EmptyObject(),
-}
+};
 
 var rules = {
-  function: function(node) {
-    throw "not yet";
+  func: function(node) {
+    var f = clone(Lambda);
+
+    f.argName = node.argument;
+    f.body = node.body;
+
+    return f;
+  },
+
+  apply: function(node) {
+    var f = interpretNode(node.func);
+    var a = interpretNode(node.argument);
+
+    // Assume f is a Lambda object
+
+    return f.call(a);
   },
 
   identifier: function(node) {
@@ -73,6 +98,14 @@ var rules = {
     var m = node.methodName.value;
 
     return r.invoke(m);
+  },
+
+  methodUpdate: function(node) {
+	  var r = interpretNode(node.receiver);
+    var m = node.methodName.value;
+    var v = node.body;
+
+    return r.update(m, v);
   },
 }
 
