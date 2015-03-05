@@ -1,3 +1,5 @@
+{- Failed attempt at defining `index` on HLists.  See hlist.idr for the correct version. -}
+
 module hlist
 
 data Vect : Nat -> Type -> Type where
@@ -28,18 +30,22 @@ plain : Exactly n -> Nat
 plain eZ     = Z
 plain (eS k) = S (plain k)
 
-index : Nat -> Vect n a -> a
-index Z     (x :: xs) = x
-index (S k) (x :: xs) = index k xs
+-- This is not total, so cannot be reduced when used in a type
+-- signature.  Indeed, it cannot be total unless we produce an element
+-- of `a`, which we do not have
+-- index : Nat -> Vect n a -> a
+-- index _     vNil      = ?h
+-- index Z     (x :: xs) = x
+-- index (S k) (x :: xs) = index k xs
 
 namespace hList
-  -- data hList : Vect n Type -> Type where
-  --   hNil : hList vNil
-  --   (::) : a -> hList xs -> hList (a :: xs)
-
-  data hList : List Type -> Type where
-    hNil : hList Nil
+  data hList : Vect n Type -> Type where
+    hNil : hList vNil
     (::) : a -> hList xs -> hList (a :: xs)
+
+  -- data hList : List Type -> Type where
+  --   hNil : hList Nil
+  --   (::) : a -> hList xs -> hList (a :: xs)
 
   head : hList (x :: xs) -> x
   head (x :: xs) = x
@@ -79,11 +85,11 @@ namespace hList
   -- hIndex : Exactly n -> hList xs -> index n xs
   -- hIndex k xs = index (plain k) xs
 
-  --hIndex : Exactly n -> hList xs -> indexTy n xs
+  -- hIndex : Exactly n -> hList xs -> index n xs
   -- index : Fin n -> hList xs -> index (FZ {k=n}) xs
-  hIndex : Exactly n -> hList xs -> index n xs
-  hIndex eZ     (x :: xs) = x
-  hIndex (eS k) (x :: xs) = hIndex k xs
+  -- hIndex : (k:Fin n) -> hList xs -> index k xs
+  -- hIndex eZ     (x :: xs) = x
+  -- hIndex (eS k) (x :: xs) = hIndex k xs
 
   -- index : Fin n -> hList xs -> index (FZ {k=n}) xs
   -- index FZ     (x :: xs) = x

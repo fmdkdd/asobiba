@@ -30,8 +30,9 @@ mult (S k) y = plus y (mult k y)
 -- Desugared into arabic numbers
 
 -- Polymorphic lists, not type-dependent
-data Liste a = Nil | (::) a (Liste a)
+data Liste a = lNil | (::) a (Liste a)
+--data Liste a = Nil | Cons a (Liste a)
 
 (++) : Liste a -> Liste a -> Liste a
-(++) Nil       ys = ys
-(++) (x :: xs) ys = x :: (xs ++ ys)
+(++) lNil      ys = ys
+(++) (x :: xs) ys = lNil

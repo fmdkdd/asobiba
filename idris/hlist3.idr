@@ -1,3 +1,5 @@
+{- Failed attempt at defining `index` on HLists.  See hlist.idr for the correct version. -}
+
 module hlist
 
 data Vect : Nat -> Type -> Type where
@@ -51,11 +53,11 @@ namespace hList
   (++) hNil      ys = ys
   (++) (x :: xs) ys = x :: (xs ++ ys)
 
-  data indexTy : Nat -> List Type -> Type where
-    Here  : indexTy Z (x :: xs) -> indexTy Z x
-    There : indexTy (S k) (x :: xs) -> indexTy k xs
+  -- data indexTy : Nat -> List Type -> Type where
+  --   Here  : indexTy Z (x :: xs) -> indexTy Z x
+  --   There : indexTy (S k) (x :: xs) -> indexTy k xs
 
-  index : Fin n -> hList n xs -> indexTy n xs
+  index : Fin n -> hList n (x :: xs) -> x
   index FZ (x :: xs) = x
 
   -- plain : hList xs -> Vect (length xs) a

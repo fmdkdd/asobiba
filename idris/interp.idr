@@ -48,7 +48,7 @@ using (G:Vect n Ty) -- context as implicit argument
                                           else interp env e
 
   -- Can’t create ill-typed terms
-  val : Expr G TyBool
+  val : Expr G TyInt
   val = Val 42
 
   add : Expr G (TyFun TyInt (TyFun TyInt TyInt))
@@ -64,3 +64,7 @@ main : IO ()
 main = do putStr "Enter a number: "
           x <- getLine
           print (interp [] fact (cast x))
+
+
+-- Can prove False = True with that
+Lfer : not x = x

@@ -8,23 +8,23 @@ data Vect : Nat -> Type -> Type where
 -- Break it!
 (++) : Vect n a -> Vect m a -> Vect (n + m) a
 (++) Nil       ys = ys
-(++) (x :: xs) ys = x :: xs ++ ys
+(++) (x :: xs) ys = x :: (xs ++ ys)
 
 -- Do you see the bug?
-index : Nat -> Vect n a -> a
-index Z     (x :: xs) = x
-index (S k) (x :: xs) = index k xs
+-- index : Nat -> Vect n a -> a
+-- index Z     (x :: xs) = x
+-- index (S k) (x :: xs) = index k xs
 
 
 -- Finite sets
 
-data Fin : Nat -> Type where
+data Fin : (k:Nat) -> Type where
   FZ : Fin (S k)
   FS : Fin k -> Fin (S k)
 
--- index : Fin n -> Vect n a -> a
--- index FZ     (x :: xs) = x
--- index (FS k) (x :: xs) = index k xs
+index : Fin n -> Vect n a -> a
+index FZ     (x :: xs) = x
+index (FS k) (x :: xs) = index k xs
 
 
 -- Pairs (sigma types)
@@ -46,7 +46,6 @@ vec'' = (_ ** [3, 4])
 -- Inference of type of first element
 vec''' : (n ** Vect n Int)
 vec''' = (_ ** [3,4])
-
 
 filter : (a -> Bool) -> Vect n a -> (p ** Vect p a)
 filter p Nil = (_ ** [])
