@@ -6,19 +6,19 @@ data Fin : Nat -> Type where
 
 data hList : List Type -> Type where
   hNil : hList []
-  hCons : a -> hList xs -> hList (a :: xs)
+  (::) : a -> hList xs -> hList (a :: xs)
 
 total head : hList (x :: xs) -> x
-head (hCons x xs) = x
+head (x :: xs) = x
 
 total tail : hList (x :: xs) -> hList xs
-tail (hCons x xs) = xs
+tail (x :: xs) = xs
 
 total (++) : hList xs -> hList ys -> hList (xs ++ ys)
-(++) hNil         ys = ys
-(++) (hCons x xs) ys = hCons x (xs ++ ys)
+(++) hNil      ys = ys
+(++) (x :: xs) ys = x :: (xs ++ ys)
 
--- index : a -> Fin n -> hList xs -> a
--- index a FZ (hCons x xs)    = a
--- -- index (hCons x xs) (S k) = index xs k
+index : Fin n -> hList xs -> index n xs
+index FZ     (x :: xs) = x
+index (FS k) (x :: xs) = index k xs
 -- --index (S k) (x :: xs) = proj k xs

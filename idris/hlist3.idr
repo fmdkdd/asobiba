@@ -32,24 +32,31 @@ index : Nat -> Vect n a -> a
 index Z     (x :: xs) = x
 index (S k) (x :: xs) = index k xs
 
+index' : Nat -> List a -> a
+index' Z     (x :: xs) = x
+index' (S k) (x :: xs) = index' k xs
+
 namespace hList
-  -- data hList : Vect n Type -> Type where
-  --   hNil : hList vNil
-  --   (::) : a -> hList xs -> hList (a :: xs)
+  data hList : Nat -> List Type -> Type where
+    hNil : hList Z Nil
+    (::) : a -> hList k xs -> hList (S k) (a :: xs)
 
-  data hList : List Type -> Type where
-    hNil : hList Nil
-    (::) : a -> hList xs -> hList (a :: xs)
-
-  head : hList (x :: xs) -> x
+  head : hList n (x :: xs) -> x
   head (x :: xs) = x
 
-  tail : hList (x :: xs) -> hList xs
+  tail : hList (S k) (x :: xs) -> hList k xs
   tail (x :: xs) = xs
 
-  (++) : hList xs -> hList ys -> hList (xs ++ ys)
+  (++) : hList n xs -> hList m ys -> hList (n+m) (xs ++ ys)
   (++) hNil      ys = ys
   (++) (x :: xs) ys = x :: (xs ++ ys)
+
+  data indexTy : Nat -> List Type -> Type where
+    Here  : indexTy Z (x :: xs) -> indexTy Z [x]
+    There : indexTy (S k) (x :: xs) -> indexTy k xs
+
+  index : Fin n -> hList n xs -> indexTy n xs
+  index FZ (x :: xs) = x
 
   -- plain : hList xs -> Vect (length xs) a
   -- plain hNil      = vNil
@@ -68,8 +75,8 @@ namespace hList
   -- indexTy (S k) (x :: xs) = indexTy k xs
 
   -- index : Fin n -> hList xs -> hlist.index n xs
-  -- index : Fin n -> hList xs -> index n xs
-  -- index FZ     (x :: xs) = x
+  -- index : Fin n -> hList xs -> indexTy n xs
+  --index FZ     (x :: xs) = x
   -- index (FS k) (x :: xs) = index k xs
 
   -- data indexTy : hList xs -> Type where
@@ -79,11 +86,10 @@ namespace hList
   -- hIndex : Exactly n -> hList xs -> index n xs
   -- hIndex k xs = index (plain k) xs
 
-  --hIndex : Exactly n -> hList xs -> indexTy n xs
+  -- hIndex : Exactly n -> hList xs -> indexTy n xs
   -- index : Fin n -> hList xs -> index (FZ {k=n}) xs
-  hIndex : Exactly n -> hList xs -> index n xs
-  hIndex eZ     (x :: xs) = x
-  hIndex (eS k) (x :: xs) = hIndex k xs
+  -- hIndex eZ     (x :: xs) = x
+  --index (FS k) (x :: xs) = hList.hList.index k xs
 
   -- index : Fin n -> hList xs -> index (FZ {k=n}) xs
   -- index FZ     (x :: xs) = x
