@@ -52,7 +52,7 @@ namespace hList
   (++) (x :: xs) ys = x :: (xs ++ ys)
 
   data indexTy : Nat -> List Type -> Type where
-    Here  : indexTy Z (x :: xs) -> indexTy Z [x]
+    Here  : indexTy Z (x :: xs) -> indexTy Z x
     There : indexTy (S k) (x :: xs) -> indexTy k xs
 
   index : Fin n -> hList n xs -> indexTy n xs

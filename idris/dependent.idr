@@ -27,9 +27,32 @@ data Fin : Nat -> Type where
 -- index (FS k) (x :: xs) = index k xs
 
 
+-- Pairs (sigma types)
+
+-- data Sigma : (A : Type) -> (P : A -> Type) -> Type where
+--   MkSigma : {P : A -> Type} -> (a : A) -> P a -> Sigma A P
+
+vec : Sigma Nat (\n => Vect n Int)
+vec = MkSigma 2 [3,4]
+
+-- Syntactic sugar
+vec' : (n : Nat ** Vect n Int)
+vec' = (2 ** [3, 4])
+
+-- Inference of first element
+vec'' : (n : Nat ** Vect n Int)
+vec'' = (_ ** [3, 4])
+
+-- Inference of type of first element
+vec''' : (n ** Vect n Int)
+vec''' = (_ ** [3,4])
 
 
-
+filter : (a -> Bool) -> Vect n a -> (p ** Vect p a)
+filter p Nil = (_ ** [])
+filter p (x :: xs) with (filter p xs)
+                   | ( _ ** xs' ) = if p x then ( _ ** x :: xs' )
+                                           else ( _ ** xs' )
 
 -- data Elem : a -> Vect n a -> Type where
 --   Here  : Elem x (x :: xs)

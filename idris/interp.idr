@@ -47,6 +47,10 @@ using (G:Vect n Ty) -- context as implicit argument
   interp env (If x t e) = if interp env x then interp env t
                                           else interp env e
 
+  -- Can’t create ill-typed terms
+  val : Expr G TyBool
+  val = Val 42
+
   add : Expr G (TyFun TyInt (TyFun TyInt TyInt))
   add = Lam (Lam (Op (+) (Var Stop) (Var (Pop Stop))))
 
