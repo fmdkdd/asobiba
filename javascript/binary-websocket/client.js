@@ -1,5 +1,5 @@
 var WebSocket = new require('ws')
-var ws = new WebSocket('ws://localhost:8081')
+var ws = new WebSocket('ws://localhost:8081', {perMessageDeflate: true})
 
 ws.on('open', function open() {
   console.log('Connected to server, supports:', ws.supports)
@@ -10,19 +10,27 @@ ws.on('open', function open() {
   // Without compress:false, raises "TypeError: Invalid
   // non-string/buffer chunk".
   // binary:true is not needed, but it doesn’t hurt to be explicit.
-  ws.send(msg, {binary: true, compress: false}, afterSend)
+  ws.send(msg, {binary: true, compress: false})
 
-  // Payload is 8 bytes, as expected
+ // Payload (inspected on the wire) is 8 bytes.
+ // Total packet size is 80 bytes
 
   // Now sending the exact same number as a string
   msg = JSON.stringify(Math.PI)
 
-  ws.send(msg, {binary: false, compress:true}, afterSend)
-  // String is 17 chars, payload is 17 bytes.
+  ws.send(msg, {binary: false, compress:true})
+  // String is 17 chars, payload is 24 bytes.
 
-  ws.send(msg, {binary: false, compress:false}, afterSend)
-  // Still 17 bytes.  The compress option does not help, even with
-  // repetitive strings.
+  ws.send(msg, {binary: false, compress:false})
+  // Payload is 17 bytes.
+
+  msg = 'blablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablablabla'
+
+  ws.send(msg, {binary: false, compress:true})
+  // String is 1008 bytes, payload is 18 bytes
+
+  ws.send(msg, {binary: false, compress:false})
+  // Payload is 1008 bytes
 
   function afterSend() {
     console.log('message sent', msg) } })
