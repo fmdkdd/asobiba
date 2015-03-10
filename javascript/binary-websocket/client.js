@@ -32,6 +32,16 @@ ws.on('open', function open() {
   ws.send(msg, {binary: false, compress:false})
   // Payload is 1008 bytes
 
+  // 1 Float64 + 1 Uint32 = 12 bytes
+  var buff = new ArrayBuffer(12)
+  var f = new Float64Array(buff, 0, 1)
+  f[0] = 0xfeefbeebdeed
+  var d = new Uint32Array(buff, 8, 1)
+  d[0] = 0xdeadbeef
+
+  console.log(f[0], d[0])
+  ws.send(buff, {binary: true, compress: false})
+
   function afterSend() {
     console.log('message sent', msg) } })
 

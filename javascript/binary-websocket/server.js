@@ -8,8 +8,11 @@ wsserver.on('connection', function connection(ws) {
   ws.on('message', function incoming(message, flags) {
     console.log('received:', message, message.length, flags)
 
-    if (flags.binary)
+    if (flags.binary) {
       console.log(message.readDoubleLE(0))
+      if (message.length > 8)
+        console.log(message.readUInt32LE(8))
+    }
     else
       console.log(message)
 
