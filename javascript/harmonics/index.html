@@ -3,9 +3,39 @@
 <head>
   <meta charset="utf8">
   <title>Harmonics</title>
+  <style>
+    input {vertical-align: middle}
+  </style>
   <script src="harmonics.js"></script>
 </head>
 <body>
+  <label for="volume">Volume</label>
+  <input id="volume" type="range" min="0" max="3" step="0.1"
+         onchange="volume.gain.value = this.value / 10">
+
+  <fieldset>
+    <button onclick="acSquare.toggle()">AudioContext square</button>
+    <button onclick="sine.toggle()">AudioContext sine</button>
+    <button onclick="sinesSquare.toggle()">Odd harmonics square</button>
+    <button onclick="sinesSaw.toggle()">All harmonics saw</button>
+    <button onclick="sinesEven.toggle()">Even harmonics</button>
+    <button onclick="majorChordHarm.toggle()">Major chord harmonics</button>
+    <button onclick="offHarmonics.toggle()">Strange harmonics</button>
+  </fieldset>
+
+  <fieldset>
+    <button onclick="playC.toggle()">C</button>
+    <button onclick="playArp.toggle()">Major chord arp</button>
+    <button onclick="majorChord.toggle()">Major chord</button>
+    <button onclick="playScale.toggle()">Diatonic scale C</button>
+    <button onclick="playSquareArp.toggle()">Square arp</button>
+    <button onclick="playSawArp.toggle()">Saw arp</button>
+    <button onclick="monotonousScale.toggle()">Monotonous scale</button>
+  </fieldset>
+
+  <fieldset>
+    <button onclick="theme.toggle()">Theme</button>
+  </fieldset>
 
 </body>
 </html>
