@@ -50,6 +50,12 @@ object List {
     case Cons(x,xs) => Cons(x, init(xs))
   }
 
+  def map[A,B](as: List[A])(f: A => B): List[B] =
+    as match {
+      case Nil => Nil
+      case Cons(h,t) => Cons(f(h), map(t)(f))
+    }
+
   def foldRight[A,B](as: List[A], z: B)(f: (A,B) => B): B = as match {
     case Nil => z
     case Cons(x, xs) => f(x, foldRight(xs, z)(f))
@@ -69,7 +75,7 @@ object List {
   def reverse[A](as: List[A]): List[A] = foldLeft(as, Nil:List[A])((x,y) => Cons(y,x))
 
   def foldRight2[A,B](as: List[A], z: B)(f: (A,B) => B): B =
-    foldLeft(reverse(as), z)((b,a) => f(a,b)) 
+    foldLeft(reverse(as), z)((b,a) => f(a,b))
 }
 
 object Test {
