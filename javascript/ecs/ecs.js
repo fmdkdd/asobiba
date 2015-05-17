@@ -171,13 +171,22 @@ var I_ROTATE_LEFT  = 0,
     I_THRUST       = 2,
     I_FIRE         = 3
 
-function keyboardControl(world) {
+
+function clearInput(world) {
   for (var e = 0, n = world.mask.length; e < n; ++e) {
-    if ((world.mask[e] & C_INPUT_KEYBOARD) === C_INPUT_KEYBOARD) {
+    if ((world.mask[e] & C_INPUT) === C_INPUT) {
       var input = world.input[e]
 
       // Clear input
       for (var k in input) input[k] = false
+    }
+  }
+}
+
+function keyboardControl(world) {
+  for (var e = 0, n = world.mask.length; e < n; ++e) {
+    if ((world.mask[e] & C_INPUT_KEYBOARD) === C_INPUT_KEYBOARD) {
+      var input = world.input[e]
 
       if (keys[K_LEFT]) input[I_ROTATE_LEFT] = true
       if (keys[K_RIGHT]) input[I_ROTATE_RIGHT] = true
@@ -212,9 +221,6 @@ function gamepadControl(world) {
   for (var e = 0, n = world.mask.length; e < n; ++e) {
     if ((world.mask[e] & C_INPUT_GAMEPAD) === C_INPUT_GAMEPAD) {
       var input = world.input[e]
-
-      // Clear input
-      for (var k in input) input[k] = false
 
       if (axes[0] < -AXIS_THRESHOLD) input[I_ROTATE_LEFT] = true
       if (axes[0] > AXIS_THRESHOLD) input[I_ROTATE_RIGHT] = true
@@ -395,6 +401,7 @@ function createBullet(world, position, velocity) {
 // Main
 
 function loop() {
+  clearInput(world)
   keyboardControl(world)
   gamepadControl(world)
   tankControl(world)
@@ -410,7 +417,7 @@ function loop() {
 
 function init() {
   var s = createShip(world, 15, 15)
-  world.mask[s] |= C_INPUT_GAMEPAD
+  world.mask[s] |= C_INPUT_GAMEPAD | C_INPUT_KEYBOARD
 
   createAsteroid(world,
                  Math.random() * world.width,
