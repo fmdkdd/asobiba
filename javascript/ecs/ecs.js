@@ -10,6 +10,7 @@
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Engine
 
+// FIXME: this is getting out of hand
 var C_NONE                = 0b0,
     C_POSITION            = 0b1,
     C_VELOCITY            = 0b10,
@@ -21,7 +22,8 @@ var C_NONE                = 0b0,
     C_INPUT_GAMEPAD       = 0b10000000,
     C_ROTATOR             = 0b100000000,
     C_BULLET_CANNON       = 0b1000000000,
-    C_DESTROY_OUT_OF_VIEW = 0b10000000000
+    C_DESTROY_OUT_OF_VIEW = 0b10000000000,
+    C_DIRECT_CONTROL      = 0b100000000000
 
 // Make room for a few items.  FIXME: the array is not actually filled with data
 // until a create* function is called.
@@ -87,6 +89,29 @@ function tankControl(world) {
         var r = world.rotation[e]
         v.x += acceleration * Math.cos(r)
         v.y += acceleration * Math.sin(r)
+      }
+    }
+  }
+}
+
+var directControlMask = C_DIRECT_CONTROL | C_INPUT | C_ROTATION | C_VELOCITY
+
+var directControlSpeed = 4
+
+function directControl(world) {
+  for (var e = 0, n = world.mask.length; e < n; ++e) {
+    if ((world.mask[e] & directControlMask) === directControlMask) {
+      var input = world.input[e]
+
+      if (input[I_ROTATE_LEFT])
+        world.rotation[e] -= angularSpeed
+      if (input[I_ROTATE_RIGHT])
+        world.rotation[e] += angularSpeed
+      if (input[I_THRUST]) {
+        var v = world.velocity[e]
+        var r = world.rotation[e]
+        v.x = directControlSpeed * Math.cos(r)
+        v.y = directControlSpeed * Math.sin(r)
       }
     }
   }
@@ -405,6 +430,7 @@ function loop() {
   keyboardControl(world)
   gamepadControl(world)
   tankControl(world)
+  directControl(world)
   rotator(world)
   move(world)
   bulletCannon(world)
