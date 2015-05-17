@@ -9,28 +9,33 @@
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Engine
 
-var C_NONE           = 0b0,
-    C_POSITION       = 0b1,
-    C_VELOCITY       = 0b10,
-    C_RENDERABLE     = 0b100,
-    C_INPUT          = 0b1000,
-    C_ROTATION       = 0b10000,
-    C_TANK_CONTROL   = 0b100000,
-    C_INPUT_KEYBOARD = 0b1000000,
-    C_INPUT_GAMEPAD  = 0b10000000,
-    C_ROTATOR        = 0b100000000,
-    C_BULLET_CANNON  = 0b1000000000
+var C_NONE                = 0b0,
+    C_POSITION            = 0b1,
+    C_VELOCITY            = 0b10,
+    C_RENDERABLE          = 0b100,
+    C_INPUT               = 0b1000,
+    C_ROTATION            = 0b10000,
+    C_TANK_CONTROL        = 0b100000,
+    C_INPUT_KEYBOARD      = 0b1000000,
+    C_INPUT_GAMEPAD       = 0b10000000,
+    C_ROTATOR             = 0b100000000,
+    C_BULLET_CANNON       = 0b1000000000,
+    C_DESTROY_OUT_OF_VIEW = 0b10000000000
+
+// Make room for a few items.  FIXME: the array is not actually filled with data
+// until a create* function is called.
+var entities_count = 100
 
 var world = {
-  mask: [],
-  position: [],
-  velocity: [],
-  renderable: [],
-  input: [],
-  rotation: [],
-  rotatorSpeed: [],
-  size: [],
-  shape: [],
+  mask: new Array(entities_count),
+  position: new Array(entities_count),
+  velocity: new Array(entities_count),
+  renderable: new Array(entities_count),
+  input: new Array(entities_count),
+  rotation: new Array(entities_count),
+  rotatorSpeed: new Array(entities_count),
+  size: new Array(entities_count),
+  shape: new Array(entities_count),
 }
 
 function createEntity(world) {
@@ -130,6 +135,23 @@ function bulletCannon(world) {
   }
 }
 
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Engine
+
+var strayEntitiesCollectorMask = C_DESTROY_OUT_OF_VIEW | C_POSITION
+
+function strayEntitiesCollector(world) {
+  for (var e = 0, n = world.mask.length; e < n; ++e) {
+    if ((world.mask[e] & strayEntitiesCollectorMask)
+        === strayEntitiesCollectorMask) {
+      var p = world.position[e]
+
+      if (p.x < 0 || p.x > world.width || p.y < 0 || p.y > world.height)
+        destroyEntity(world, e)
+    }
+  }
+}
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Input
@@ -357,6 +379,7 @@ function createBullet(world, position, velocity) {
   world.mask[e] = C_POSITION
     | C_VELOCITY
     | C_RENDERABLE
+    | C_DESTROY_OUT_OF_VIEW
 
   world.position[e] = position
   world.velocity[e] = velocity
@@ -377,6 +400,7 @@ function loop() {
   rotator(world)
   move(world)
   bulletCannon(world)
+  strayEntitiesCollector(world)
 
   render(world, ctx)
 
