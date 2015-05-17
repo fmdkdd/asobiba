@@ -3,7 +3,8 @@
 
 // TODO: time-based updates rather than discrete increments.  Gameplay becomes
 // independent of frame rate.
-// TODO: DatGUI for changing the variables
+// TODO: DatGUI for changing the variables and toggling debug mode (hitboxes,
+// number of entities, etc.)
 // TODO: collision detection
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
