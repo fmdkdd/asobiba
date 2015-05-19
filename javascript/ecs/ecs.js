@@ -132,6 +132,7 @@ function rotator(world) {
 // Gameplay
 
 var bulletCannonMask = C_BULLET_CANNON | C_INPUT
+var bulletInitialSpeed = 5
 
 function bulletCannon(world) {
   for (var e = 0, n = world.mask.length; e < n; ++e) {
@@ -149,7 +150,7 @@ function bulletCannon(world) {
 
         var v = world.velocity[e]
         var speed = Math.sqrt(v.x * v.x + v.y * v.y)
-        var bulletSpeed = speed + 5
+        var bulletSpeed = speed + bulletInitialSpeed
         var bulletVelocity = {
           x: bulletSpeed * Math.cos(r),
           y: bulletSpeed * Math.sin(r)
@@ -438,12 +439,16 @@ function loop() {
 
   render(world, ctx)
 
+  if (debug) drawDebug(ctx)
+
   requestAnimationFrame(loop)
 }
 
+var ship = null;
+
 function init() {
-  var s = createShip(world, 15, 15)
-  world.mask[s] |= C_INPUT_GAMEPAD | C_INPUT_KEYBOARD
+  ship = createShip(world, 15, 15)
+  world.mask[ship] |= C_INPUT_GAMEPAD | C_INPUT_KEYBOARD
 
   createAsteroid(world,
                  Math.random() * world.width,
@@ -479,6 +484,42 @@ document.addEventListener('DOMContentLoaded', init)
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Debugging
+
+document.addEventListener('DOMContentLoaded', initGUI)
+
+var activateDirectControl = false;
+var debug = false;
+
+function initGUI() {
+  var gui = new dat.GUI()
+
+  gui.add(window, 'acceleration', -1, 1)
+  gui.add(window, 'angularSpeed', 0, 1)
+  gui.add(window, 'bulletInitialSpeed', 0, 20)
+  gui.add(window, 'activateDirectControl').onChange(function(value) {
+    if (value) {
+      world.mask[ship] &= ~C_TANK_CONTROL
+      world.mask[ship] |= C_DIRECT_CONTROL
+    }
+    else {
+      world.mask[ship] &= ~C_DIRECT_CONTROL
+      world.mask[ship] |= C_TANK_CONTROL
+    }
+  })
+  gui.add(window, 'directControlSpeed', 0, 20)
+  gui.add(window, 'debug')
+}
+
+function drawDebug(ctx) {
+  var c = 0;
+  for (var e = 0, n = world.mask.length; e < n; ++e) {
+    if (world.mask[e] !== C_NONE && world.mask[e] != null) {
+      ++c;
+    }
+  }
+
+  ctx.fillText('#entities: ' + c, 5, 10)
+}
 
 function printKey() {
   function print(ev) {
