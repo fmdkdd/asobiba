@@ -1,0 +1,33 @@
+* Applicatives
+
+** instance Maybe
+The definition from [[http://learnyouahaskell.com/functors-applicative-functors-and-monoids][Learn you a Haskell]] is:
+
+#+BEGIN_SRC haskell
+  instance Applicative Maybe where
+      pure = Just
+      Nothing <*> _ = Nothing
+      (Just g) <*> x = fmap g x
+#+END_SRC
+
+I would have written (wrongly):
+
+#+BEGIN_SRC haskell
+  instance Applicative Maybe where
+      pure = Just
+      Nothing <*> _ = Nothing
+      (Just g) <*> x = Just (g x)
+#+END_SRC
+
+But the correct equivalent version without fmap is:
+
+#+BEGIN_SRC haskell
+  instance Applicative Maybe where
+      pure = Just
+      Nothing <*> _ = Nothing
+      (Just g) <*> x = case x of
+                         (Just x’) -> Just (g x’)
+                         Nothing -> Nothing
+#+END_SRC
+
+This justifies to delegate to fmap.
