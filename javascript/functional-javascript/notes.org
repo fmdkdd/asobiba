@@ -1,0 +1,255 @@
+* Chapter 3
+** page 62, note 10
+“I go more in depth in Chapter 3” -> Chapter 4 is the one covering
+higher-order functions.
+
+** page 62, code example `makeAdder`
+Disagree on terminology for “free” variables.  Strachey and Wikipedia
+agree: a free variable is one that is not local.
+
+#+BEGIN_SRC js
+function makeAdder(CAPTURED) {
+  return function(free) {
+    return free + CAPTURED;
+  };
+}
+#+END_SRC
+
+`free` here is a parameter to the inner anonymous function, hence it
+is bound, not “free”.  `CAPTURED` is free in the inner anonymous
+function AND it is “captured” by the same function.
+
+“The basic principle behind closures is that if a function contains
+inner functions, then they can all see the variables declared therein;
+these variables are called “free” variables”.”
+
+It’s the other way around: free variables in inner functions are
+looked-up in the surrounding environment.
+
+** page 64, mid page
+“If you guessed the value returned value of `varShadow(108)`”
+
+* Chapter 4
+** page 69, bullet list
+A higher-order function does not have to be first-class (but it
+usually is).  So “first-class” does not /define/ “higher-order”, but
+it /enables/ it.
+
+Also, Chapter 2 (page 28, bottom bullets) says that a higher-order
+function can do one or both (taking and returning).  Here we just say
+“a specific definition”, which seems unnecessarily restricting.
+
+** page 72, very last line, and top of page 73, and top of page 74
+“use functions, not values”.
+
+Chapter 2, page 28, second paragraph states: “The term ‘first-class’
+means something is just a value”.  I agree, but this is a direct
+contradiction.
+
+The point here is that functions leave a hole to be filled in with any
+computation, while “values” (primitives, really) are like the `always`
+function, not customizable.
+
+** page 76, `invoker`
+Much shorter:
+
+#+BEGIN_SRC js
+var invoker = Function.prototype.bind.bind(Function.prototype.call);
+#+END_SRC
+
+Does not have the extra checks, but I don’t see the point of checking
+`METHOD === targetMethod` anyway.
+
+** page 81, first paragraph
+“One particularly interesting aspect of `fnull` is that the cost of
+mapping over the arguments to check for default values is incurred
+/only/ if the guarded function is called.”
+
+How would you map over the arguments /without/ calling the function?
+
+** page 83, `validator` example
+Maybe extract the function wrapper as a higher-order function, since
+it’s so commonly used?
+
+#+BEGIN_SRC js
+var f = function(/* args */) {
+  return fun.apply(fun, arguments);
+}
+#+END_SRC
+
+#+BEGIN_SRC js
+function wrap(fun) {
+  return function(/* args */) {
+    return fun.apply(fun, arguments);
+  }
+}
+
+function validator(message, fun) {
+  var f = wrap(fun);
+  f.message = message;
+  return f;
+}
+#+END_SRC
+
+Alternatively,
+
+: var f = partial(fun)
+
+or `partial0`.
+
+** page 83 (and in many other places), validator example
+`fun.apply(fun, ...)`
+
+Why pass `fun` as the context object?  I far as I looked, no function
+defined inside the book makes use of `this` to refer to itself.
+
+See also [[*page%20103,%20note%209][page 103, note 9]] for consistency.
+
+** page 84, top
+`aMap` is a predicate.  Prefer `isMap`?
+
+** page 84, `hasKeys` example
+I liked the convention of putting `/* args */` to indicate
+a varargs function.  They are missing for `hasKeys`.
+
+Also missing for `cat` page 39.
+
+Also, why not use the validator constructor?
+
+#+BEGIN_SRC js
+  function validator(message, fun) {
+    var f = wrap(fun);
+    f.message = message;
+    return f;
+  }
+
+  function hasKeys(/* keys */) {
+    var keys = _.toArray(arguments);
+
+    return validator(["Must have values for keys:", keys].join(""), function(obj) {
+      return _.every(keys, function(k) { return _.has(obj, k); });
+    });
+  }
+#+END_SRC
+
+And, `_.has` delegates to Object.hasOwnProperty -> prototype inherited
+properties fail to validate.
+
+* Chapter 5
+** page 88, dispatch example                                        :discuss:
+A word about prototype delegation in comparison to dispatch would be
+nice.
+
+In particular, `existy` will cause dispatch to not return on functions
+that return `undefined`.
+
+** page 91, fourth line
+“you would need to go in and changed the actual switch statement” ->
+s/changed/change/
+
+** page 98, `curry3` with `_.uniq` example                          :discuss:
+Less confusing would be to accept the fact that curry3 eats its
+arguments in reverse order.
+
+** page 103, note 9
+Why `div.bind(undefined)` when we seem to always pass the function as
+the context to `apply`.  The same logic would apply to bind.
+
+** page 103, `partial2`
+Missing `_.toArray` around `arguments` in `cat` call of the inner
+anonymous function.  (_.union instead of cat would have worked)
+
+** page 104, paragraph before section header                        :discuss:
+Adding the line
+
+: if (pargs.length > fun.length) throw "Too many arguments";
+
+would work.  Except for varargs functions.  If `fun` is a  vararg
+function, `fun.length` is the lower bound on arguments length.  So we
+can’t know if there are too many arguments.  This check is too
+restrictive.
+
+Short answer: deal with it.
+
+** page 108, example below `createLaunchCommand`
+s/createCommand/createLaunchCommand
+
+** page 109, third code example
+Replace
+: function(str) { return !str }
+by
+: function(x) { return !x }
+
+* Chapter 6
+** page 116, last line of second paragraph
+“the base case `zipped`” -> zipped1
+
+** page 118, figure 6-4
+Since there is not path from Lua to JS, it does not belong to
+“programming languages that have influenced JavaScript either directly
+or indirectly”.
+
+** page 123, note 4
+Since `orify` and `andify` are symmetric, `andify` can also be
+implemented using `_.every`.
+
+#+BEGIN_SRC js
+function andify2(/* preds */) {
+  var preds = arguments;
+
+	return function(/* args */) {
+    var args = arguments;
+
+    return _.every(args, function(a) { return _.every(preds, function(p) { return p(a); })});
+  };
+}
+#+END_SRC
+
+** page 126, second paragraph
+Should add note that deepClone is far from a complete solution to
+deep cloning objects in JS.  It doesn’t clone functions (even
+shallowly).
+
+** page 130                                                         :discuss:
+If the trampolined function /should/ return a function, `trampoline`
+will called it prematurely and without any arguments.
+
+How do you get around that? (Maybe it doesn’t make sense)
+
+* Chapter 7
+** page 141, top of page
+Unnecessary extra block with `expect(...)`.
+
+** page 150, Rich Hickey quote                                      :discuss:
+“As it turns out, the answer is yes.”  Yes to the second question in
+the quote, not to the first one.
+
+** page 153, deepFreeze example
+Why not follow the same structure as deepClone?  Or go even further,
+and extend the `visit` function to traverse a collection recursively?
+
+Also, Object.freeze is idempotent.  Not sure why we need the
+`Object.isFrozen` check.
+
+* Chapter 8
+** page 167, first line of second paragraph
+“With the use of _.result” -> _.value
+
+** page 168, last sentence of third paragraph
+“What I mean by what” -> What I mean by that
+
+** page 173, note 4
+ES6 will also include promises, and they already are in the latest
+versions of Chrome and FF.
+
+** pages 185--186, mSqr, mNote, mNeg examples
+Why the extra enclosing function that require a dumb call when passing
+them to `actions`?  Couldn’t they be simply defined:
+
+#+BEGIN_SRC js
+function mNeg(state) {
+  return {answer: -state, state: -state};
+}
+
+actions = [mNeg];
+#+END_SRC
