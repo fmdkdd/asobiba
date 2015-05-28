@@ -1,0 +1,573 @@
+#+PROPERTY: header-args:js :results output
+
+Trying to solve the problem of
+http://okmij.org/ftp/Scheme/monad-in-Scheme.html before actually
+seeing the solution.
+
+First, how to build a binary tree in JS?  With an object.
+
+#+BEGIN_SRC js
+  let node = (value, left, right) => ({value, left, right})
+  let isLeaf = ({left, right}) => left == null && right == null
+
+  let btree = depth => depth >= 0 ? node(depth, btree(depth - 1), btree(depth - 1)) : undefined
+
+  let pp = ({value, left, right}) =>
+  `(${[value, (left ? pp(left) : ''), (right ? pp(right) : '')].join(' ').trim()})`
+
+  print(pp(node(0)))
+  print(pp(node(1, node(0), node(0))))
+  print(pp(btree(3)))
+#+END_SRC
+
+#+RESULTS:
+: (0)
+: (1 (0) (0))
+: (3 (2 (1 (0) (0)) (1 (0) (0))) (2 (1 (0) (0)) (1 (0) (0))))
+
+Next, we would like to add a counter just by wrapping the call to
+=btree= with =runM=.
+
+: pp(runM(btree(3), 100))
+
+When =runM= is in the call stack, we would like =node= to create a
+numbered tree node.
+
+: node(0) //: [100, {value: 0, left: nil, right: nil}]
+
+How to proceed?  Change binding of node and wrap it?
+
+** Using modules and =with=
+#+BEGIN_SRC js
+  let countingNode = (node, counter) => ({node, counter})
+#+END_SRC
+
+But =btree= lexically binds =node=, so we would need =node= to be a
+dynamic binding.  The same transformation would be needed for any
+function susceptible to be modified by the monad.
+
+If we try to write:
+
+#+BEGIN_SRC js
+  print(pp(btree(3)))
+
+  with (counting(100) {
+    print(pp(btree(3)))}
+#+END_SRC
+
+Then we are still stuck, since =btree= is already defined.  Need to
+parameterize =btree= on the node creation function.
+
+#+BEGIN_SRC js
+  let node = (value, left, right) => ({value, left, right})
+  let btree = node => function btree1(depth) {
+    if (depth >= 0) return node(depth, btree1(depth - 1), btree1(depth - 1))}
+  let pp = ({value, left, right}) =>
+    `(${[value, (left ? pp(left) : ''), (right ? pp(right) : '')].join(' ').trim()})`
+
+  let counting = (base, counter) => {
+    let node = (...args) => ({node: base.node(...args), counter: counter++})
+    let pp = ({node: {value, left, right}, counter}) =>
+    `(${[counter, '.', value, (left ? pp(left) : ''), (right ? pp(right) : '')].join(' ').trim()})`
+
+    return {node, btree: base.btree(node), pp}}
+
+  with ({btree: btree(node)}) {
+    print(pp(btree(3)))}
+
+  with (counting({node, btree}, 100)) {
+    print(pp(btree(3)))}
+#+END_SRC
+
+#+RESULTS:
+: (3 (2 (1 (0) (0)) (1 (0) (0))) (2 (1 (0) (0)) (1 (0) (0))))
+: (114 . 3 (106 . 2 (102 . 1 (100 . 0) (101 . 0)) (105 . 1 (103 . 0) (104 . 0))) (113 . 2 (109 . 1 (107 . 0) (108 . 0)) (112 . 1 (110 . 0) (111 . 0))))
+
+Note the currified definition of =btree=.  We have to name the inner
+anonymous function =btree1= since this is the one we recurse on.
+
+Okay it works.  =counter= is a variable in the closure of
+=counting.node=, and the =btree= returned by =counting= uses
+=counting.node=.  The downside is that we have to be explicit about
+everything: =btree= is parameterized on =node=.  And the bindings of
+=node=, =btree= and =pp= are only replaced in the body of =with=, not
+in its dynamic extent (i.e., not in the bodies of calls made inside
+=with=).
+
+** Adding parameters
+A failed attempt: conceptually the construction of node now depends on
+the monad being present.  Add a parameter, then use syntactic sugar to
+hide it?  Then =btree=, or any caller of =node=, needs to pass a new
+argument: the current counter.
+
+#+BEGIN_SRC js
+  let node = (value, left, right, counter) => ({value, left, right, counter})
+  let btree = (depth, counter) => depth >= 0 ? node(depth, btree(depth - 1, ++counter), btree(depth - 1, ++counter), counter) : undefined
+
+  let pp = ({value, left, right, counter}) =>
+    `(${[counter, '.', value, (left ? pp(left) : ''), (right ? pp(right) : '')].join(' ').trim()})`
+
+  print(pp(btree(3, 100)))
+#+END_SRC
+
+#+RESULTS:
+: (102 . 3 (103 . 2 (104 . 1 (105 . 0) (106 . 0)) (105 . 1 (106 . 0) (107 . 0))) (104 . 2 (105 . 1 (106 . 0) (107 . 0)) (106 . 1 (107 . 0) (108 . 0))))
+
+Here nodes have the same counter.  Does not work as intended: the
+counter used in the construction of the right subtree should continue
+where the left subtree ended.  The counter cannot be a parameter to
+=btree=.
+
+A global variable would work.  Other way: continuation passing style
+to be explicit about the order of computation.
+
+** Trying the global variable
+#+BEGIN_SRC js
+  let counter = 0
+  let node = (value, left, right) => ({value, left, right, counter: counter++})
+  let btree = depth => depth >= 0 ? node(depth, btree(depth - 1), btree(depth - 1)) : undefined
+
+  let pp = ({value, left, right, counter}) =>
+    `(${[counter, '.', value, (left ? pp(left) : ''), (right ? pp(right) : '')].join(' ').trim()})`
+
+  let runM = (f, start) => {
+    let old = counter
+    counter = start
+    let r = f()
+    counter = old
+    return r }
+
+  print(pp(runM(() => btree(3), 100)))
+#+END_SRC
+
+#+RESULTS:
+: (114 . 3 (106 . 2 (102 . 1 (100 . 0) (101 . 0)) (105 . 1 (103 . 0) (104 . 0))) (113 . 2 (109 . 1 (107 . 0) (108 . 0)) (112 . 1 (110 . 0) (111 . 0))))
+
+No surprises, it works.  With all the downsides of a shared global
+variable.  The most annoying one being that the definition of =node=
+is tied to the counting side-effect.
+
+** Trying CPS
+=btree= is not a double recursion anymore, but uses CPS to linearize
+the thread of execution.
+
+#+BEGIN_SRC js
+  let node = (value, left, right, counter) => ({value, left, right, counter})
+
+  let btree_cps = (depth, counter, cc) =>
+    depth >= 0 ? btree_cps(depth - 1, counter, (left, counter) =>
+                           btree_cps(depth - 1, counter, (right, counter) =>
+                                     cc(node(depth, left, right, counter++), counter)))
+    : cc(undefined, counter)
+
+  let btree = (depth, counter) => {
+    try { btree_cps(depth, counter, t => {throw t})}
+    catch (t) {return t}}
+
+  let pp = ({value, left, right, counter}) =>
+    `(${[counter, '.', value, (left ? pp(left) : ''), (right ? pp(right) : '')].join(' ').trim()})`
+
+  print(pp(btree(3, 100)))
+#+END_SRC
+
+#+RESULTS:
+: (114 . 3 (106 . 2 (102 . 1 (100 . 0) (101 . 0)) (105 . 1 (103 . 0) (104 . 0))) (113 . 2 (109 . 1 (107 . 0) (108 . 0)) (112 . 1 (110 . 0) (111 . 0))))
+
+Note the use of the exception mechanism (try, throw, catch) to get a
+direct-style =btree= back (only works if =btree_cps= does not throw
+any exception).
+
+Still, the transformation done to =btree_cps= is not composable: what
+if the side effect is not counting?
+
+** Typing this in Haskell
+How do we build monads in Haskell?  We want to have an accompanying
+value that can be added to a program without interfering with its
+definition.
+
+#+BEGIN_SRC haskell :results verbatim
+  -- A function of [a] -> [a]
+  let f a = a ++ a
+  -- is lifted to ([a],b) -> ([a],b)
+  let lift f = \(a,b) -> (f a,b)
+  -- And with a function of (a,Int) -> (a,Int)
+  let inc (a,n) = (a, n + 1)
+  -- can be combined
+  (inc . (lift f)) ("a",0)
+
+  -- A pure function of Int -> Int
+  let incPure n = n+1
+  -- with the right lift
+  let liftRight f = \(a,b) -> (a, f b)
+  -- is thrown into the mix
+  ((liftRight incPure) . (lift f)) ("a",0)
+
+  -- We can have arguments
+  let add i = liftRight (\n -> n + i)
+
+  -- Or even play with the side value
+  let get f = \(a,n) -> (f n) (a,n)
+
+  -- Add a little sugar
+  let run p v n = (p (v,n))
+  let z f g = g . f
+
+  -- An imperative program you get
+  let prog = inc `z` add 2 `z` get (\n -> add n) `z` lift f
+  run prog "a" 0
+#+END_SRC
+
+#+RESULTS:
+: ("aa",6)
+
+That’s not actually how you build monads in Haskell.  A program in the
+counter monad waits for the initial counter value, then runs the pure
+program in a linear way.
+
+First, we have to define =btree= in a kind of CPS where the combinator
+=z= will act as a semicolon.
+
+#+BEGIN_SRC haskell :results verbatim
+  data Tree = Node Int Tree Tree | Nil deriving Show
+
+  let z a f = f a
+
+  let btree 0 = Nil; btree d = btree (d-1) `z` \left -> btree (d-1) `z` \right -> Node d left right
+
+  btree 3
+#+END_SRC
+
+#+RESULTS:
+: Node 3 (Node 2 (Node 1 Nil Nil) (Node 1 Nil Nil)) (Node 2 (Node 1 Nil Nil) (Node 1 Nil Nil))
+
+Then we can pack values with the current counter.
+
+#+BEGIN_SRC haskell :results verbatim
+  data Tree = Node Int Int Tree Tree | Nil deriving Show
+
+  type Counting a = Int -> (a,Int)
+
+  -- Pure values are easy to pack: just put it in the tuple
+  let pure :: a -> Counting a; pure v = \n -> (v,n)
+
+  -- f produces a couple, and g produces a couple after absorbing the
+  -- value produced by f.  We unpack the couple produced by f, apply g
+  -- to its value (t), we now expect the current counter, which we pass.
+  -- We can see that the counter n0 goes through f, the new value is n1
+  -- and goes through `g t`, which produces a third couple.
+  let z :: Counting a -> (a -> Counting b) -> Counting b; z f g = \n0 -> let (t,n1) = f n0 in g t n1
+
+  -- Side-effect functions produce no value.  When combining them with
+  -- `z`, we simply ignore their value.
+  let inc :: Counting (); inc = \n -> ((),n+1)
+
+  -- We can get back the current value of the counter using `get`.
+  let get :: Counting Int; get = \n -> (n,n)
+
+  let btree :: Int -> Counting Tree; btree (-1) = pure Nil; btree d = inc `z` \_ -> btree (d-1) `z` \left -> btree (d-1) `z` \right -> get `z` \n -> pure $ Node n d left right
+
+  (btree 3) 100
+#+END_SRC
+
+#+RESULTS:
+: (Node 115 3 (Node 108 2 (Node 105 1 (Node 104 0 Nil Nil) (Node 105 0 Nil Nil)) (Node 108 1 (Node 107 0 Nil Nil) (Node 108 0 Nil Nil))) (Node 115 2 (Node 112 1 (Node 111 0 Nil Nil) (Node 112 0 Nil Nil)) (Node 115 1 (Node 114 0 Nil Nil) (Node 115 0 Nil Nil))),115)
+
+In Haskell we have to:
+- add the type signature on =btree= indicating that we now return a
+  value with a counter.
+- add =pure= calls for wrapping pure values with the current counter.
+  This is how we “pass” the counter through a pure function.
+- transform =btree= in a pseudo-CPS style (which is an unavoidable
+  step, as we must fix the execution order of the side effects).
+- use the =z= combinator and anonymous lambdas.
+
+It is not an exaggeration to call the scaffolding of =pure=, =z=,
+=inc= and =get= “lightweight”.  The type alias is just for convenience
+(as is using a newtype to avoid confusion between other tuples).
+
+The counting side effect is part of the definition of =btree=.  But we
+could take it out and put it in a separate function =node= to create a
+node.
+
+#+BEGIN_SRC haskell :results verbatim
+  data Tree = Node Int Int Tree Tree | Nil deriving Show
+
+  type Counting a = Int -> (a,Int)
+
+  let pure :: a -> Counting a; pure v = \n -> (v,n)
+  let z :: Counting a -> (a -> Counting b) -> Counting b; z f g = \n0 -> let (t,n1) = f n0 in g t n1
+
+  let inc :: Counting (); inc = \n -> ((),n+1)
+  let get :: Counting Int; get = \n -> (n,n)
+
+  let node :: Int -> Tree -> Tree -> Counting Tree; node d left right = get `z` \n -> inc `z` \_ -> pure $ Node n d left right
+  let leaf :: Counting Tree; leaf = pure Nil
+
+  let btree :: Int -> Counting Tree; btree (-1) = leaf; btree d = btree (d-1) `z` \left -> btree (d-1) `z` \right -> node d left right
+
+  (btree 3) 100
+#+END_SRC
+
+#+RESULTS:
+: (Node 114 3 (Node 106 2 (Node 102 1 (Node 100 0 Nil Nil) (Node 101 0 Nil Nil)) (Node 105 1 (Node 103 0 Nil Nil) (Node 104 0 Nil Nil))) (Node 113 2 (Node 109 1 (Node 107 0 Nil Nil) (Node 108 0 Nil Nil)) (Node 112 1 (Node 110 0 Nil Nil) (Node 111 0 Nil Nil))),115)
+
+Now the parts specific to the side effect are in the constructors
+=node= and =leaf=.  It is easy to replace those by pure alternatives
+and leave the definition of =btree= intact, save for the types.
+
+#+BEGIN_SRC haskell :results verbatim
+  data Tree = Node Int Int Tree Tree | Nil deriving Show
+
+  let z a g = g a
+
+  let node :: Int -> Tree -> Tree -> Tree; node d left right = Node d d left right
+  let leaf :: Tree; leaf = Nil
+
+  let btree :: Int -> Tree; btree (-1) = leaf; btree d = btree (d-1) `z` \left -> btree (d-1) `z` \right -> node d left right
+
+  btree 3
+#+END_SRC
+
+#+RESULTS:
+: Node 3 3 (Node 2 2 (Node 1 1 (Node 0 0 Nil Nil) (Node 0 0 Nil Nil)) (Node 1 1 (Node 0 0 Nil Nil) (Node 0 0 Nil Nil))) (Node 2 2 (Node 1 1 (Node 0 0 Nil Nil) (Node 0 0 Nil Nil)) (Node 1 1 (Node 0 0 Nil Nil) (Node 0 0 Nil Nil)))
+
+The trouble is the types: all the types change.  Unless we create a
+trivial monad that does nothing.
+
+#+BEGIN_SRC haskell :results verbatim
+  data Tree = Node Int Int Tree Tree | Nil deriving Show
+
+  type M a = () -> (a, ())
+
+  let pure :: a -> M a; pure v = \_ -> (v,())
+  let z :: M a -> (a -> M b) -> M b; z f g = \_ -> let (t,()) = f () in g t ()
+  let runM :: M a -> a; runM p = fst $ p ()
+
+  let node :: Int -> Tree -> Tree -> M Tree; node d left right = pure $ Node d d left right
+  let leaf :: M Tree; leaf = pure $ Nil
+
+  let btree :: Int -> M Tree; btree (-1) = leaf; btree d = btree (d-1) `z` \left -> btree (d-1) `z` \right -> node d left right
+
+  runM (btree 3)
+#+END_SRC
+
+#+RESULTS:
+: Node 3 3 (Node 2 2 (Node 1 1 (Node 0 0 Nil Nil) (Node 0 0 Nil Nil)) (Node 1 1 (Node 0 0 Nil Nil) (Node 0 0 Nil Nil))) (Node 2 2 (Node 1 1 (Node 0 0 Nil Nil) (Node 0 0 Nil Nil)) (Node 1 1 (Node 0 0 Nil Nil) (Node 0 0 Nil Nil)))
+
+Then switching to a counting version can be done by redefining =M=,
+=pure=, =z= and =runM=, and =node=.
+
+#+BEGIN_SRC haskell :results verbatim
+  data Tree = Node Int Int Tree Tree | Nil deriving Show
+
+  type M a = Int -> (a, Int)
+
+  let pure :: a -> M a; pure v = \n -> (v,n)
+  let z :: M a -> (a -> M b) -> M b; z f g = \n0 -> let (t,n1) = f n0 in g t n1
+  let runM :: M a -> Int -> a; runM p n = fst $ p n
+
+  let inc :: M (); inc = \n -> ((),n+1)
+  let get :: M Int; get = \n -> (n,n)
+
+  let node :: Int -> Tree -> Tree -> M Tree; node d left right = get `z` \n -> inc `z` \_ -> pure $ Node n d left right
+
+  -- Unchanged, even the type
+  let leaf :: M Tree; leaf = pure $ Nil
+
+  let btree :: Int -> M Tree; btree (-1) = leaf; btree d = btree (d-1) `z` \left -> btree (d-1) `z` \right -> node d left right
+
+  -- Except the entry point
+  runM (btree 3) 100
+#+END_SRC
+
+#+RESULTS:
+: Node 114 3 (Node 106 2 (Node 102 1 (Node 100 0 Nil Nil) (Node 101 0 Nil Nil)) (Node 105 1 (Node 103 0 Nil Nil) (Node 104 0 Nil Nil))) (Node 113 2 (Node 109 1 (Node 107 0 Nil Nil) (Node 108 0 Nil Nil)) (Node 112 1 (Node 110 0 Nil Nil) (Node 111 0 Nil Nil)))
+
+In fact, at this point we are carrying around the unit value which
+does nothing.  So less changes would be necessary if =M= was already
+the counting monad, and we just used a version of =node= that did not
+do any counting.
+
+** Monads in JavaScript
+Seems the =z= combinator and pseudo-CPS are needed in Haskell because
+you want to simulate imperative programming in a pure language.  In
+fact, this is probably the most straightforward way to do it.
+
+JS has no such restrictions: you just want to make the threading of
+the counter value automatic.  So you are not obligated to use pure
+functions in this case.
+
+But first, let’s translate the Haskell code.
+
+#+BEGIN_SRC js
+  let pure = value => number => [value,number]
+  let z = (f, g) => n0 => { [t,n1] = f(n0); return g(t)(n1) }
+  let runM = (p, n = 0) => p(n)[0]
+
+  let inc = n => [undefined, n+1]
+  let get = n => [n,n]
+
+  let node = (value, left, right) => z(get, n => z(inc, _ => pure({n, value, left, right})))
+  let leaf = pure(undefined)
+
+  let btree = depth => depth >= 0 ? z(btree(depth-1), left => z(btree(depth-1), right => node(depth, left, right))) : leaf
+
+  let pp = ({n, value, left, right}) =>
+    `(${[n, '.', value, (left ? pp(left) : ''), (right ? pp(right) : '')].join(' ').trim()})`
+
+  print(pp(runM(node(0),100)))
+  // Cannot construct btree like that
+  // print(pp(runM(node(1, node(0), node(0)), 100)))
+  // Have to specify the order of execution
+  print(pp(runM(z(node(0), left => z(node(0), right => node(1, left, right))), 100)))
+  print(pp(runM(btree(3), 100)))
+#+END_SRC
+
+#+RESULTS:
+: (100 . 0)
+: (102 . 1 (100 . 0) (101 . 0))
+: (114 . 3 (106 . 2 (102 . 1 (100 . 0) (101 . 0)) (105 . 1 (103 . 0) (104 . 0))) (113 . 2 (109 . 1 (107 . 0) (108 . 0)) (112 . 1 (110 . 0) (111 . 0))))
+
+Rather straightforward, when paying attention to the fact that =g= is
+a curried function in =z= arguments.
+
+Now, using =z= is unnecessary since we don’t have to stay purely
+functional.
+
+#+BEGIN_SRC js
+  let n = 0
+  let get = _ => n
+  let inc = _ => { ++n }
+
+  let runM = (p, c) => { n = c; return p() }
+
+  let node = (value, left, right) => { let n = get(); inc(); return {n, value, left, right} }
+  let leaf = undefined
+
+  let btree = depth => depth >= 0 ? node(depth, btree(depth-1), btree(depth-1)) : leaf
+
+  let pp = ({n, value, left, right}) =>
+    `(${[n, '.', value, (left ? pp(left) : ''), (right ? pp(right) : '')].join(' ').trim()})`
+
+  print(pp(runM(() => node(0), 100)))
+  print(pp(runM(() => node(1, node(0), node(0)), 100)))
+  print(pp(runM(() => btree(3), 100)))
+#+END_SRC
+
+#+RESULTS:
+: (100 . 0)
+: (102 . 1 (100 . 0) (101 . 0))
+: (114 . 3 (106 . 2 (102 . 1 (100 . 0) (101 . 0)) (105 . 1 (103 . 0) (104 . 0))) (113 . 2 (109 . 1 (107 . 0) (108 . 0)) (112 . 1 (110 . 0) (111 . 0))))
+
+Here =get= and =inc= have to refer to some state, and since that state
+is not stored explicitly by =node=, it has to be somewhere.  And we
+get back a global variable situation.
+
+In Haskell, we avoid the global variable by turning our computation
+into a function of side effect; the initial counter is the argument to
+the whole computation.  Then, we thread this value by using couples.
+To make composition manageable, we have to use =z=, and define
+side-effect functions to handle this couple.
+
+So the issue is one of: where do we store the side effect?  Can we put
+it in the function itself?  Putting it in the function only makes
+sense because functions are objects in JS.  So we are actually putting
+state in the object.  Then considering this object as a function,
+since it responds to only one message.  But for =get= and =inc= to
+work, it should actually respond to these messages as well.
+
+And so we get back to objects to encapsulate state.
+
+** Transcription of Oleg’s solution
+
+#+BEGIN_SRC js
+let numbered = (n, v) => [v, n]
+let pure = value => number => numbered(number,value)
+let z = (f, g) => n0 => { [v,n1] = f(n0); return g(v)(n1) }
+
+let incr = n => numbered(n+1,n)
+let runM = (p, n = 0) => p(n)
+
+let node = (value, kids) => z(incr, n => pure([numbered(n, value), ...kids]))
+let btree = depth => depth <= 0 ? node(0, [])
+                                : z(btree(depth-1), left =>
+                                  z(btree(depth-1), right =>
+                                  node(depth, [left, right])))
+
+print(runM(node(0, []), 100))
+print(runM(btree(3), 100))
+#+END_SRC
+
+#+RESULTS:
+: 0,100,101
+: 3,114,2,106,1,102,0,100,0,101,1,105,0,103,0,104,2,113,1,109,0,107,0,108,1,112,0,110,0,111,115
+
+To change the monad we are interested in, use =with=.
+
+#+BEGIN_SRC js
+  let IO = {
+    numbered: (n, v) => [v, n]
+    ,pure: value => number => counting.numbered(number,value)
+    ,z: (f, g) => n0 => { [v,n1] = f(n0); return g(v)(n1) }
+    ,incr: n => counting.numbered(n+1,n) }
+
+  let runM = (p, n = 0) => p(n)
+
+  let node = (value, kids) => { with(counting) { return z(incr, n => pure([numbered(n, value), ...kids])) } }
+  let btree = depth => { with(counting) {
+    return depth <= 0 ? node(0, [])
+                      : z(btree(depth-1), left =>
+                        z(btree(depth-1), right =>
+                        node(depth, [left, right]))) }}
+
+  print(runM(node(0, []), 100))
+  print(runM(btree(3), 100))
+#+END_SRC
+
+#+RESULTS:
+: 0,100,101
+: 3,114,2,106,1,102,0,100,0,101,1,105,0,103,0,104,2,113,1,109,0,107,0,108,1,112,0,110,0,111,115
+
+
+** Other monads
+The State monad is maybe too specific.  How about some other common
+monads?
+
+*** Maybe monad
+#+BEGIN_SRC haskell :results verbatim
+  data M a = Just a | None deriving Show
+
+  let pure :: a -> M a; pure v = Just a
+  let z :: M a -> (a -> M b) -> M b; z (Just a) g = g a; z None g = None
+
+  let f n = if (n > 0) then Just "Positive" else None
+  f 10
+#+END_SRC
+
+#+RESULTS:
+: Just "Positive"
+
+*** List monad
+#+BEGIN_SRC haskell :results verbatim
+  type M a = [a]
+
+  let pure :: a -> M a; pure v = [v]
+  let z :: M a -> (a -> M b) -> M b; z as g = concat $ map g as
+
+  -- Monad laws
+  -- pure a `z` k = concat $ map k [a] = concat [k a] = k a
+  -- m `z` pure = concat $ map pure [a,b,...] = concat [[a],[b],...] = [a,b,...] = m
+  -- m `z` (\x -> k x `z` h) = m `z` (concat $ map h \x -> k x)
+  --                         = concat $ map (concat $ map h \x -> k x) [a,b,...]
+  --                         = ...
+
+  let pair (a:as) (b:bs) = [a,b] : pair as bs; pair [] _ = []; pair n [] = [n]
+  let f :: [a] -> [[a]]; f (n:ns) = [n] : pair (n:ns) ns
+  let r m = pure $ foldr (+) 0 m
+  let pascal m = f m `z` r
+
+  take 5 $ iterate pascal [1,1]
+#+END_SRC
+
+#+RESULTS:
+: [[1,1],[1,2,1],[1,3,3,1],[1,4,6,4,1],[1,5,10,10,5,1]]
