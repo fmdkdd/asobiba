@@ -1,0 +1,36 @@
+interpreter {
+  interpret-node (node) ->
+    rules[node.type](node)
+}
+
+rules {
+  identifier (node) ->
+    return Runtime.identifiers[node.value];
+
+  object (node) ->
+    var obj = {}
+    for-in (name m) node.methods
+      obj.methods[name] = interpret-node(m)
+    return obj
+
+  method (node) ->
+    return {
+      name: node.name
+      body: node.body
+      invoke (withSelf) ->
+        Runtime.identifiers.self = self
+        return interpreter.interpret-node(self.body)
+    }
+
+  method-call (node) ->
+    var r = interpret-node(node.receiver)
+    var m = node.method-name.value
+    var v = node.body
+
+    r[m] = v
+    return r
+}
+
+Runtime {
+  identifiers {}
+}
