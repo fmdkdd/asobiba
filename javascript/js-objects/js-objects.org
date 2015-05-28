@@ -1,0 +1,1069 @@
+#+PROPERTY: header-args :results output :noweb yes
+# C-c C-v C-b org-babel-execute-buffer
+
+* Letrec
+
+#+NAME: test-base
+#+BEGIN_SRC js
+function recursive(obj) {
+  return obj.a === 1 && obj.b === obj.a * 2;
+}
+
+function b_follows_a(obj) {
+  obj.a = 2;
+  return obj.b === 4;
+}
+
+function test(obj) {
+  print('recursive:', recursive(obj));
+  print('b follows a:', b_follows_a(obj));
+}
+#+END_SRC
+
+#+RESULTS: test-base
+
+#+NAME: test
+#+BEGIN_SRC js
+<<test-base>>
+
+test(obj);
+#+END_SRC
+
+#+RESULTS: test
+
+** Object literal 1
+Can't have recursive definitions, because we have no reference to the
+object we are defining.  =this= is free.
+
+#+BEGIN_SRC js
+  var obj = {
+    a: 1,
+    b: this.a * 2,
+  };
+
+  <<test>>
+#+END_SRC
+
+#+RESULTS:
+: recursive: false
+: b follows a: false
+
+** Object literal 2
+This does not work, because =obj= is not in scope when defining the
+property =b=.  This would be unhelpful for anonymous objects anyway.
+
+#+BEGIN_SRC js
+var obj = {
+  a: 1,
+  b: obj.a * 2,
+};
+
+<<test>>
+#+END_SRC
+
+#+RESULTS:
+: TypeError: obj is undefined
+
+** Outside object literal
+Have a reference after the object is created.  Definition is not
+self-contained.
+
+#+BEGIN_SRC js
+var obj = {
+  a: 1,
+};
+obj.b = obj.a * 2;
+
+<<test>>
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: b follows a: false
+
+*** Empty object literal
+Might as well create an empty object first, then define its properties
+afterwards.
+
+#+BEGIN_SRC js
+var obj = {};
+obj.a = 1;
+obj.b = obj.a * 2;
+
+<<test>>
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: b follows a: false
+
+*** Order of definition matters
+Must define properties in the correct dependency order, otherwise
+silent errors appear.
+
+#+BEGIN_SRC js
+var obj = {};
+obj.b = obj.a * 2;
+obj.a = 1;
+
+<<test>>
+print(obj.a, obj.b);
+#+END_SRC
+
+#+RESULTS:
+: recursive: false
+: b follows a: false
+: 2 NaN
+
+** Discussion: mathematical vs. computational languages
+The situation in Scheme is marginally better.  Defining =b= in terms
+of =a= and defining =a= afterwards triggers an error (unknown
+identifier), even in a =let*=.
+
+Does not work either in Java (illegal forward reference).  Compiles in
+Scala, but =b= equals 0 there, unless we define =b= as lazy (which
+creates a memoized thunk).
+
+This illustrates the fundamental difference between mathematically
+inspired-languages (e.g. Haskell), versus computer-inspired languages
+(e.g. JS).  In the former, we define relationships between names.  In
+the latter, we shift bits in a given sequence.  The choice of ‘=’ to
+means two very different things in these two paradigms is much
+unfortunate.
+
+In the former, we define a set of constraints for the names.  This set
+may be incoherent (no solution for all names that satisfies all the
+constraints).  Or finding a solution might be an NP-complete problem.
+
+In the latter, we give explicitly the steps to compute the value of
+each name.  While efficient, we might not always know the correct
+steps to compute the sets of names, or even if a solution exists.  For
+instance, we know that contraction mappings admit a unique
+fixed-point, and we know how to find it (Banach fixed-point theorem).
+But not all mappings that admit a fixed-point are contraction
+mappings.
+
+So circular definitions are out of the window.  But I doubt their
+usefulness in a strict language.
+
+** Criteria update
+1. Allow referring a (previously-defined) property of the object when
+   defining another.  Because this is a common use case (say,
+   aspect-ratio = this.width / this.height).
+
+2. The object definition should be self-contained (atomic).  Before
+   its creation, it did not exist, and after, it is fully formed and
+   functional (not in an inconsistent state).  Further modifications
+   of the object may or may not be allowed, but they clearly count as
+   extensions.
+
+** IIFE
+Self-contained recursive definitions.  Some syntax noise because of
+the IIFE.
+
+#+BEGIN_SRC js
+var obj = (function(self) {
+  self.a = 1;
+  self.b = self.a * 2;
+
+  return self;
+}({}));
+
+<<test>>
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: b follows a: false
+
+** IIFE.bind
+Remove the =self= parameter by binding =this= to the new object.
+Familiarity points for using =this= instead of =self=.
+
+#+BEGIN_SRC js
+var obj = (function() {
+  this.a = 1;
+  this.b = this.a * 2;
+
+  return this;
+}.bind({})());
+
+<<test>>
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: b follows a: false
+
+We still have an extra =return= call.
+
+*** IIFE.call
+=bind= is unnecessary here, as the function is lost after its
+invocation.  =call= or =apply= work just as well.
+
+#+BEGIN_SRC js
+var obj = (function() {
+  this.a = 1;
+  this.b = this.a * 2;
+
+  return this;
+}.call({}));
+
+<<test>>
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: b follows a: false
+
+** Function constructor
+Self-contained recursive definitions.  This only defines the
+_constructor_ of the object, not an object itself.
+
+#+BEGIN_SRC js
+function obj() {
+  this.a = 1;
+  this.b = this.a * 2;
+}
+
+<<test-base>>
+test(new obj());
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: b follows a: false
+
+** Immediately Invoked Function Constructor (IIFC)
+We can call =new= directly on an anonymous function to instantly
+create the object.
+
+#+BEGIN_SRC js
+var obj = new function() {
+  this.a = 1;
+  this.b = this.a * 2;
+};
+
+<<test>>
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: b follows a: false
+
+An interesting side-effect of this form: =obj.constructor= refers to
+the anonymous function, so we can actually call it later.  In the
+previous objects, the constructor code is lost.
+
+Also, all forms that use an arbitrary function as constructor can
+create temporary variables, or do arbitrary computation before
+assigning properties.
+
+** Discussion: returning =this=
+Mixing constructors that work with and without =new= can lead to
+errors.  Using a function constructor, we should always return a newly
+created object, even if =new= is forgotten.  Using =bind= and =return
+this= is the more robust option.
+
+But it is not sufficient for both forms to be equivalent, as =new=
+also sets the =constructor= property.
+
+#+BEGIN_SRC js
+var Obj = function() {
+  this.a = 1;
+  this.b = this.a * 2;
+
+  return this;
+};
+
+var obj1 = new Obj();
+var obj2 = Obj();
+
+print(obj1.a === obj2.a && obj2.b === obj2.b);
+print(obj1.constructor === Obj);
+print(obj2.constructor === Obj);
+print(obj2.constructor === Object);
+#+END_SRC
+
+#+RESULTS:
+: true
+: true
+: false
+: true
+
+** Object literal with constructor property
+Some boilerplate, but no need for =self= or =this=.  Actually, the
+fact that we need self-reference is not apparent at all here.
+
+#+BEGIN_SRC js
+var obj = {
+  new: function() {
+    var a = 1;
+    var b = a * 2;
+
+    return {a: a, b: b};
+  },
+};
+
+<<test-base>>
+test(obj.new());
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: b follows a: false
+
+** Object literal with getter
+Self-contained recursive definitions.  Using a getter to obtain the
+reference to =this= at a latter time.  Note that this is actually a
+different definition: =b= will always mean =a * 2=, even if =a=
+changes.  This was not the case in previous objects: =b= only took the
+value of =a * 2= at initialization.
+
+#+BEGIN_SRC js
+var obj = {
+  a: 1,
+  get b() { return this.a * 2; },
+};
+
+<<test>>
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: b follows a: true
+
+** Criteria update
+1. A property can be defined by the result of an arbitrary
+   computation.  This is always the case, as even if the syntax only
+   allows an expression, one can use an IIFE.
+2. Properties definitions can refer to previously-defined properties
+   of the object.
+3. The object definition should be self-contained.
+
+** Comparison chart
+
+| Form                | Recursive    | Self-contained | Observations         |
+|---------------------+--------------+----------------+----------------------|
+| Literal 1           | no           | yes            |                      |
+| Literal 2           | (type error) | (type error)   |                      |
+| Outside literal     | yes          | no             |                      |
+| IIFE                | yes          | yes            | syntax noise         |
+| Constructor         | yes          | yes            | only the constructor |
+| IIFC                | yes          | yes            | minimal syntax noise |
+| Getter              | yes          | yes            | different semantics  |
+| Literal/constructor | yes          | yes            | boilerplate          |
+
+Additionally, in all forms where ‘recursive’ definition is possible,
+the order of definition matters (a consequence of imperative
+programming).
+
+* Adding delegation
+
+#+NAME: test-delegation
+#+BEGIN_SRC js
+<<test-base>>
+
+var obj1 = (function(self) {
+  self.a = 1;
+  self.b = self.a * 2;
+
+  return self;
+}({}));
+
+function delegation(obj) {
+  return obj.a === obj1.a && obj.b === obj1.b && obj.c === obj1.a * 2;
+}
+
+function test(obj) {
+  print('recursive:', recursive(obj));
+  print('delegation:', delegation(obj));
+  print('b follows a:', b_follows_a(obj));
+}
+#+END_SRC
+
+#+RESULTS: test-delegation
+
+** New criteria
+1. The prototype of the object is set at definition time.
+
+** IIFE
+Can initialize prototype.  Syntax not of best legibility.
+
+#+BEGIN_SRC js
+<<test-delegation>>
+
+var obj = (function(self) {
+  self.c = self.a * 2;
+
+  return self;
+}({__proto__: obj1}));
+
+test(obj);
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: delegation: true
+: b follows a: false
+
+*** Mutating =__proto__= is (too) easy
+Beware to not write this, as it mutates the prototype.
+
+#+BEGIN_SRC js
+<<test-delegation>>
+
+var obj = (function(self) {
+  self.__proto__ = obj1;
+  self.c = self.a * 2;
+
+  return self;
+}({}));
+
+test(obj);
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: delegation: true
+: b follows a: false
+
+*** Object.create hides proto
+Might be best to stick to =Object.create= in this case.  We can still
+mutate the prototype afterwards, but in this form we are not tempted
+to add properties to the parent object.
+
+#+BEGIN_SRC js
+<<test-delegation>>
+
+var obj = (function(self) {
+  self.c = self.a * 2;
+
+  return self;
+}(Object.create(obj1)));
+
+test(obj);
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: delegation: true
+: b follows a: false
+
+*** Favoring =this= over =self=
+Is easily done by using =call=.
+
+#+BEGIN_SRC js
+<<test-delegation>>
+
+var obj = (function() {
+  this.c = this.a * 2;
+
+  return this;
+}.call(Object.create(obj1)));
+
+test(obj);
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: delegation: true
+: b follows a: false
+
+** Function constructor
+Syntax noise is reduced, but definition of the prototype is not
+self-contained.
+
+#+BEGIN_SRC js
+<<test-delegation>>
+
+function obj() {
+  this.c = this.a * 2;
+}
+
+obj.prototype = obj1;
+
+test(new obj());
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: delegation: true
+: b follows a: false
+
+*** IIFC does not work
+Because prototype assignment is not atomic, we cannot use the IIFC.
+The object is created before the prototype can be set.
+
+#+BEGIN_SRC js
+<<test-delegation>>
+
+var obj = new function() {
+  this.c = this.a * 2;
+};
+
+test(obj);
+#+END_SRC
+
+#+RESULTS:
+: recursive: false
+: delegation: false
+: b follows a: false
+
+** Object with getter
+Setting the prototype at definition time.  Still different semantics,
+since ‘c’ will follow ‘a’.
+
+#+BEGIN_SRC js
+<<test-delegation>>
+
+var obj = {
+  __proto__: obj1,
+  get c() { return this.a * 2; },
+};
+
+test(obj);
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: delegation: true
+: b follows a: false
+
+** Object literal with constructor property
+Sets the prototype.  Still cannot refer to =this=.
+
+#+BEGIN_SRC js
+  <<test-delegation>>
+
+  var obj = {
+    new: function() {
+      return {
+        __proto__: obj1,
+        c: obj1.a * 2,
+      };
+    },
+  };
+
+  test(obj.new());
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: delegation: true
+: b follows a: false
+
+Exactly the same as the more concise:
+
+#+BEGIN_SRC js
+  <<test-delegation>>
+
+  var obj = {
+    __proto__: obj1,
+    c: obj1.a * 2,
+  };
+
+  test(obj);
+#+END_SRC
+
+#+RESULTS:
+: recursive: true
+: delegation: true
+: b follows a: false
+
+Both are strongly coupled to the parent name, =obj1=.
+
+** Comparison chart
+
+| Form                | Recursive | Self-contained | Delegation | Observations          |
+|---------------------+-----------+----------------+------------+-----------------------|
+| IIFE                | yes       | yes            | yes        | syntax noise          |
+| Constructor         | yes       | no             | yes        | only the constructor  |
+| IIFC                | yes       | yes            | no         | minimal syntax noise  |
+| Getter              | yes       | yes            | yes        | different semantics   |
+| Literal/constructor | yes       | yes            | yes        | boilerplate; coupling |
+
+* Review of the language mechanisms
+** Create an object
+*** Object literal
+: var obj = {};
+
+Concise.  The object is not virgin, as it extends Object.prototype by default.
+
+#+BEGIN_SRC js
+var obj = {};
+
+print(obj.__proto__ === Object.prototype);
+#+END_SRC
+
+#+RESULTS:
+: true
+
+*** Object constructor
+Same semantics, more verbose.
+
+#+BEGIN_SRC js
+var obj = new Object();
+
+print(obj.__proto__ === Object.prototype);
+#+END_SRC
+
+#+RESULTS:
+: true
+: true
+
+Passing an argument to this constructor wraps the argument in an
+object.  Not usually what you want.
+
+#+BEGIN_SRC js
+var obj = new Object(1);
+
+print(obj);
+print(obj === 1);
+#+END_SRC
+
+#+RESULTS:
+: 1
+: false
+: undefined
+
+*** Object.create
+With =Object.create=, we can create an object by specifying its
+prototype, and even define properties via descriptors.
+
+#+BEGIN_SRC js
+var obj = Object.create(Object.prototype);
+
+print(obj.__proto__ === Object.prototype);
+#+END_SRC
+
+#+RESULTS:
+: true
+
+More verbose when defining objects that inherits from
+Object.prototype.  Easier to create a virgin object with a null
+prototype.
+
+** Assign a prototype to an object
+*** With Object.create
+Returns a new object with prototype set to argument.  We can also
+define additional properties on the returned object, but only via
+property descriptors; not worth the hassle in most cases.
+
+ECMAScript 5.1.
+
+#+BEGIN_SRC js
+var proto = {b : 1};
+
+var obj = Object.create(proto);
+obj.a = 2;
+#+END_SRC
+
+#+RESULTS:
+: [object Object]
+
+*** With =__proto__= in object literal
+Easier to define additional properties on the inheriting object.
+Looks scary because of the dunders.
+
+ECMAScript 6.
+
+#+BEGIN_SRC js
+var proto = {b : 1};
+
+var obj = {
+  __proto__: proto,
+  a: 2,
+};
+#+END_SRC
+
+Note that =__proto__= is definitely a special property.  It is
+configurable, but deleting it has no effect.
+
+#+BEGIN_SRC js
+var proto = {b : 1};
+
+var obj = {
+  __proto__: proto,
+};
+
+print(obj.b === 1);
+print(obj.__proto__ === proto);
+print(delete obj.__proto__);
+print(obj.b === 1);
+print(obj.__proto__ === proto);
+#+END_SRC
+
+#+RESULTS:
+: true
+: true
+: true
+: true
+: true
+
+*** With =new=
+The =new= operator creates a new object and assign its prototype to
+=Obj.prototype= behind the scenes.
+
+#+BEGIN_SRC js
+var proto = {b: 1};
+
+function Obj() {}
+Obj.prototype = proto;
+
+var obj = new Obj();
+
+print(obj.b === 1);
+print(obj.__proto__ === proto);
+#+END_SRC
+
+#+RESULTS:
+: true
+: true
+
+*** After object creation
+We can also change the prototype of an object at any time after its
+creation, via the deprecated =__proto__= property, or the ECMAScript 6
+=Object.setPrototypeOf=.
+
+While it can be useful (mode switching), it defeats optimization and
+thus should be avoided.
+
+#+BEGIN_SRC js
+var proto = {b: 1};
+
+var obj = {};
+obj.__proto__ = proto;
+
+print(obj.b === 1);
+#+END_SRC
+
+#+RESULTS:
+: true
+
+#+BEGIN_SRC js
+var proto = {b: 1};
+
+var obj = {};
+Object.setPrototypeOf(obj, proto);
+
+print(obj.b === 1);
+#+END_SRC
+
+#+RESULTS:
+: true
+
+* The holy grail form
+The characteristics of the holy grail form to define objects:
+- Atomic :: The object is defined in one point, with its eventual
+            prototype.
+- DRY :: Minimal syntax noise and DRY.
+- Templates :: Can define object templates with constructors
+- Animate :: Can define animate objects.
+- Let-rec :: Let-rec property definitions.
+- Arbitrary :: Arbitrary statements when initializing properties.
+- Accessors :: Sugar for defining getters and setters.
+- Prototype :: Can define a parent prototype.
+- Super :: Can call the constructor of the parent without knowing its name.
+
+We’ll use counters as a minimal example.  The first object is a
+bi-directional counter.
+
+#+BEGIN_EXAMPLE
+counter :=
+  c: 0
+  inc: () -> c += 1; return c;
+  dec: () -> c -= 1; return c;
+#+END_EXAMPLE
+
+The second is a bi-directional counter with the ability to reset its
+value to zero.  It also keeps track of the number of calls to reset.
+
+#+BEGIN_EXAMPLE
+reset-counter :=
+  c: 0,
+  resets: 0,
+  inc: () -> c += 1; return c;
+  dec: () -> c -= 1; return c;
+  reset: () -> c = 0; resets += 1;
+#+END_EXAMPLE
+
+#+NAME: test-grail
+#+BEGIN_SRC js
+    print('functionality:', c.inc() === 1
+          && c.inc() === 2
+          && c.dec() === 1
+          && r.inc() === 1
+          && r.inc() === 2
+          && (r.reset(), r.c) === 0
+          && r.resetCount === 1);
+
+    print('sharing:', c.hasOwnProperty('c')
+          && c.hasOwnProperty('inc') === false
+          && c.hasOwnProperty('dec') === false
+          && 'inc' in c
+          && 'dec' in c
+          && r.hasOwnProperty('resetCount')
+          && r.hasOwnProperty('reset') === false
+          && 'reset' in r);
+
+    print('delegation', r.hasOwnProperty('inc') === false
+          && r.hasOwnProperty('dec') === false
+          && 'inc' in r
+          && 'dec' in r
+          && r.inc === c.inc
+          && r.dec === c.dec);
+#+END_SRC
+
+** Function constructor
+The dominant pattern does not score well:
+
+- Atomic :: No.  The constructor is separated from the
+            methods.
+- DRY :: No. Counter.prototype is repetitive.
+- Templates :: Yes.  That’s the whole point.
+- Animate :: No.  You have to use =new= before getting an object.
+- Let-rec :: Yes.  Instance properties are defined in a function body.
+- Arbitrary :: Yes.  Instance properties are defined in a function body.
+- Accessors :: No.  Can only define them using Object.defineProperty
+               on Counter.prototype (standards-compliant).
+- Prototype :: Yes.  But not atomic and boilerplate.
+- Super :: Yes.  The syntax is ugly and hard to remember (walk the
+           prototype chain).
+
+The prototype chains for the two objects are:
+
+: c -> Counter.prototype -> Object.prototype -> null
+: r -> ResetCounter.prototype -> Counter.prototype -> Object.prototype -> null
+
+#+BEGIN_SRC js
+function Counter() {
+  this.c = 0;
+}
+
+Counter.prototype.inc = function() { return ++this.c; };
+Counter.prototype.dec = function() { return --this.c; };
+
+var c = new Counter();
+
+function ResetCounter() {
+  this.__proto__.__proto__.constructor.call(this);
+  this.resetCount = 0;
+}
+
+ResetCounter.prototype = Object.create(Counter.prototype);
+ResetCounter.prototype.constructor = ResetCounter;
+ResetCounter.prototype.reset = function() { this.resetCount++; this.c = 0; }
+
+var r = new ResetCounter();
+
+<<test-grail>>
+#+END_SRC
+
+#+RESULTS:
+: functionality: true
+: sharing: true
+: delegation true
+
+** IIFE
+Defining methods in this form is cumbersome, but we need to share
+methods between different counters.  We lose the ability to call the
+constructor at a later point.  This is problematic when wanting to
+call the constructor of the parent.
+
+- Atomic :: Yes.
+- DRY :: No.  Have to repeat the code of the super constructor; the
+         IIFE and =call= are noisy.
+- Templates :: No.  No reference to the constructor.
+- Animate :: Yes.  =c= is whole.
+- Let-rec :: Yes.  Property definition in function body.
+- Arbitrary :: Yes.  Property definition in function body.
+- Accessors :: Yes.  Sugar for accessors on the prototype.
+- Prototype :: Yes.  Boilerplate, syntax noise.
+- Super :: No.  The parent constructor is lost.
+
+#+BEGIN_SRC js
+var c = (function() {
+  this.c = 0;
+
+  return this;
+}.call({__proto__: {
+  inc: function() { return ++this.c; },
+  dec: function() { return --this.c; },
+}}));
+
+var r = (function() {
+  this.c = 0;
+  this.resetCount = 0;
+
+  return this;
+}.call({__proto__: {
+  __proto__: c.__proto__,
+  reset: function() { this.resetCount++; this.c = 0; },
+}}));
+
+<<test-grail>>
+#+END_SRC
+
+#+RESULTS:
+: functionality: true
+: sharing: true
+: delegation true
+
+** Literal with constructor
+Bundling the constructor inside a literal object is less verbose than
+an IIFE, and more versatile than the dominant pattern.  We still have
+a reference to the constructor.  The cost is two lines of boilerplate:
+first and last of =new=.
+
+- Atomic :: Yes.  Everything in one place.
+- DRY :: Yes.  Two lines of boilerplate but no syntax noise.  Much
+         pleasant to read.
+- Templates :: Yes.  Just call =new=.
+- Animate :: Yes.  Call =new= after the definition, and the object is
+             usable.
+- Let-rec :: Yes.  Property definition in function body.
+- Arbitrary :: Yes.  Property definition in function body.
+- Accessors :: Yes.  Sugar syntax from object literal.
+- Prototype :: Yes.  The only one way to do it is using =__proto__= in
+               the object literal (ES6).
+- Super :: Yes.  One less =__proto__=, but still boilerplate.
+
+The prototype chains for the two objects are:
+
+: c -> (Counter) -> Object.prototype -> null
+: r -> (ResetCounter) -> (Counter) -> Object.prototype -> null
+
+Parentheses denote the anonymous object defining the template of the
+animate objects.
+
+#+BEGIN_SRC js
+var c = {
+  new: function() {
+    var self = Object.create(this);
+
+    self.c = 0;
+
+    return self;
+  },
+
+  inc: function() { return ++this.c; },
+  dec: function() { return --this.c; },
+}.new();
+
+var r = {
+  __proto__: c.__proto__,
+
+  new: function() {
+    var self = this.__proto__.new.call(this);
+    self.resetCount = 0;
+
+    return self;
+  },
+
+  reset: function() { this.resetCount++; this.c = 0; },
+}.new();
+
+<<test-grail>>
+#+END_SRC
+
+#+RESULTS:
+: true
+: functionality: true
+: sharing: true
+: delegation true
+
+* Animate objects vs. object templates
+A class-based language, like Java, deals with /object templates/.  A
+class is a description of what an object should be, how it should act,
+once it is instantiated.
+
+On the other hand, in prototype-based languages like JS, we can deal
+with animate objects: objects that do not require a constructor;
+objects that are created when defined and fully operational.  Getting
+another object from the same cloth is just a matter of
+
+* Calling the contructor
+A constructor is not a necessity.  A constructor is only needed when
+an object cannot be made whole when it is defined.  For instance, a
+canvas wrapper needs to get a hold of a DOM canvas reference.  We must
+either delay its definition until we get a reference to canvas (if
+it’s a singleton), or define an object template and use a constructor.
+
+In what situations would it be useful to call the constructor of an
+already-created object?  You can reset the object to a known state.
+
+* Calling the parent constructor
+A common case when you want to do class-based programming.  It is
+however quite cumbersome to do, in all the present forms.  Only in ES6
+will it become bearable to write.
+
+In the mean time, we can question its necessity.
+
+* Syntax sugar
+Syntax sugar would be best, be if do not want to afford macro
+expansion, a simple function can do the job.  Without syntax
+extension, we cannot hide away the =__proto__= affectation.
+
+#+BEGIN_SRC js
+function O(def) {
+  def._constructor = def.new || function() {};
+
+  def.new = function() {
+    var self = Object.create(def);  // {__proto__: this}
+    def._constructor.apply(self, arguments);
+    return self;
+  };
+
+  def.zuper = function() {
+    Object.getPrototypeOf(def)._constructor.apply(this, arguments);
+  };
+
+  return def;
+}
+
+var c = O({
+  new: function() {
+    this.c = 0;
+  },
+
+  inc: function() { return ++this.c; },
+  dec: function() { return --this.c; },
+
+}).new();
+
+var r = O({
+  __proto__: c.__proto__,
+
+  new: function() {
+    this.zuper();
+    this.resetCount = 0;
+  },
+
+  reset: function() { this.c = 0; this.resetCount++; },
+}).new();
+
+<<test-grail>>
+#+END_SRC
+
+#+RESULTS:
+: functionality: true
+: sharing: true
+: delegation true
+
+* Reactive programming
+Obeying the equations at all times.
+
+* When properties depend on the results of asynchronous computation
+We can construct objects at any point in runtime.  However, if we were
+to create a whole new object after obtaining the result from some
+asynchronous computation, its definition would only exist in the scope
+of the function in which it was created.
+
+Defining objects at the top level might be a better practice: we give
+them a name, and define all the pieces of the program in the same
+place.
+
+# Local Variables:
+# org-confirm-babel-evaluate: nil
+# End:
