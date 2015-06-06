@@ -340,13 +340,13 @@ function renderBullet(e, ctx) {
 
   ctx.save()
 
-  ctx.fillStyle = 'hsl(180,70%,30%)'
+  ctx.strokeStyle = 'hsl(180,70%,30%)'
   ctx.translate(x, y)
   ctx.scale(3,3)
 
   ctx.beginPath()
   ctx.arc(0, 0, 1, 0, Math.PI * 2)
-  ctx.fill()
+  ctx.stroke()
 
   ctx.restore()
 }
