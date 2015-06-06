@@ -508,15 +508,43 @@ function initGUI() {
   gui.add(window, 'debug')
 }
 
-function drawDebug(ctx) {
-  var c = 0;
+function countEntities() {
+  var c = 0
   for (var e = 0, n = world.mask.length; e < n; ++e) {
     if (world.mask[e] !== C_NONE && world.mask[e] != null) {
-      ++c;
+      ++c
     }
   }
+  return c
+}
 
-  ctx.fillText('#entities: ' + c, 5, 10)
+function drawDebug(ctx) {
+  ctx.fillText('#entities: ' + countEntities(), 5, 10)
+
+  ctx.save()
+  ctx.translate(camera.vec().x, camera.vec().y)
+
+  drawAcceleration(ctx)
+  ctx.restore()
+}
+
+function drawAcceleration(ctx) {
+  var p = world.position[ship]
+  var v = world.velocity[ship]
+
+  ctx.save()
+
+  ctx.strokeStyle = 'orange'
+  ctx.translate(p.x, p.y)
+  ctx.scale(2,2)
+
+  ctx.beginPath()
+  ctx.moveTo(0, 0)
+  ctx.lineTo(v.x, v.y)
+  ctx.stroke()
+
+  ctx.restore()
+}
 }
 
 function printKey() {
