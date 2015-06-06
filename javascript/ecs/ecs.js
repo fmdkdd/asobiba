@@ -258,16 +258,49 @@ function gamepadControl(world) {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Rendering
 
+var fixedCamera = {
+  new(x, y) {
+    return {
+      __proto__: this,
+      x, y
+    }
+  },
+
+  vec() { return {x: this.x, y: this.y} },
+}.new(0,0)
+
+var focusedCamera = {
+  new(id) {
+    return {
+      __proto__: this,
+      id
+    }
+  },
+
+  vec() {
+    var p = world.position[this.id]
+    var cx = ctx.canvas.width / 2
+    var cy = ctx.canvas.height / 2
+    return { x: cx - p.x, y: cy - p.y }
+  },
+}
+
 var ctx
+var camera = fixedCamera
 
 function render(world, ctx) {
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+
+  ctx.save()
+  ctx.translate(camera.vec().x, camera.vec().y)
 
   for (var e = 0, n = world.mask.length; e < n; ++e) {
     if ((world.mask[e] & C_RENDERABLE) === C_RENDERABLE) {
       world.renderable[e](e, ctx)
     }
   }
+
+  ctx.restore()
 }
 
 function initCanvas() {
@@ -487,6 +520,7 @@ document.addEventListener('DOMContentLoaded', initGUI)
 
 var activateDirectControl = false
 var debug = false
+var cameraType = 'fixed'
 
 function initGUI() {
   var gui = new dat.GUI()
@@ -505,6 +539,12 @@ function initGUI() {
     }
   })
   gui.add(window, 'directControlSpeed', 0, 20)
+  gui.add(window, 'cameraType', ['fixed', 'centered', 'ahead']).onChange(function(value) {
+    if (value === 'fixed')
+      camera = fixedCamera
+    else if (value === 'centered')
+      camera = focusedCamera.new(ship)
+  })
   gui.add(window, 'debug')
 }
 
