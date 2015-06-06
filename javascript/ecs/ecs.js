@@ -149,11 +149,9 @@ function bulletCannon(world) {
         }
 
         var v = world.velocity[e]
-        var speed = Math.sqrt(v.x * v.x + v.y * v.y)
-        var bulletSpeed = speed + bulletInitialSpeed
         var bulletVelocity = {
-          x: bulletSpeed * Math.cos(r),
-          y: bulletSpeed * Math.sin(r)
+          x: v.x + bulletInitialSpeed * Math.cos(r),
+          y: v.y + bulletInitialSpeed * Math.sin(r)
         }
 
         createBullet(world, bulletPosition, bulletVelocity)
