@@ -442,7 +442,7 @@ function loop() {
   requestAnimationFrame(loop)
 }
 
-var ship = null;
+var ship = null
 
 function init() {
   ship = createShip(world, 15, 15)
@@ -485,8 +485,8 @@ document.addEventListener('DOMContentLoaded', init)
 
 document.addEventListener('DOMContentLoaded', initGUI)
 
-var activateDirectControl = false;
-var debug = false;
+var activateDirectControl = false
+var debug = false
 
 function initGUI() {
   var gui = new dat.GUI()
