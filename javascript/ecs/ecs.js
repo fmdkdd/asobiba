@@ -23,7 +23,8 @@ var C_NONE                = 0b0,
     C_ROTATOR             = 0b100000000,
     C_BULLET_CANNON       = 0b1000000000,
     C_DESTROY_OUT_OF_VIEW = 0b10000000000,
-    C_DIRECT_CONTROL      = 0b100000000000
+    C_DIRECT_CONTROL      = 0b100000000000,
+    C_BOUNDING_BOX        = 0b1000000000000
 
 // Make room for a few items.  FIXME: the array is not actually filled with data
 // until a create* function is called.
@@ -39,7 +40,11 @@ var world = {
   rotatorSpeed: new Array(entities_count),
   size: new Array(entities_count),
   shape: new Array(entities_count),
+  boundingBox: new Array(entities_count),
+  hits: new Array(entities_count),
 }
+
+var grid = spatialHash.new(100)
 
 function createEntity(world) {
   var i = 0
@@ -66,6 +71,12 @@ function move(world) {
       var v = world.velocity[e]
       p.x += v.x
       p.y += v.y
+
+      if ((world.mask[e] & C_BOUNDING_BOX) === C_BOUNDING_BOX) {
+        var b = world.boundingBox[e]
+        b.x += v.x
+        b.y += v.y
+      }
     }
   }
 }
@@ -177,6 +188,38 @@ function strayEntitiesCollector(world) {
     }
   }
 }
+
+var collisionDetectionMask = C_BOUNDING_BOX
+
+function collisionDetection(world) {
+  grid.clearAllCells()
+
+  for (var e = 0, n = world.mask.length; e < n; ++e) {
+    if ((world.mask[e] & collisionDetectionMask)
+        === collisionDetectionMask) {
+      var b = world.boundingBox[e]
+      grid.insertObjectWithBoundingBox(e, b)
+      world.hits[e].clear()
+    }
+  }
+
+  for (var objSet of grid.map.values()) {
+    var objs = Array.from(objSet)
+    for (var i = 0; i < objs.length; ++i) {
+      var e1 = objs[i]
+      var b1 = world.boundingBox[e1]
+      for (var j = i+1; j < objs.length; ++j) {
+        var e2 = objs[j]
+        var b2 = world.boundingBox[e2]
+        if (do_boxes_collide(b1, b2)) {
+          world.hits[e1].add(e2)
+          world.hits[e2].add(e1)
+        }
+      }
+    }
+  }
+}
+
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Input
@@ -398,6 +441,7 @@ function createShip(world, x, y) {
     | C_TANK_CONTROL
     | C_INPUT
     | C_BULLET_CANNON
+    | C_BOUNDING_BOX
 
   world.position[e] = {x, y}
   world.velocity[e] = {x: 0, y: 0}
@@ -405,6 +449,11 @@ function createShip(world, x, y) {
   world.input[e] = Object.create(null)
 
   world.renderable[e] = renderShip
+
+  var size = 25
+  world.boundingBox[e] = {x: x - size/2, y: y - size/2,
+                          width: size, height: size}
+  world.hits[e] = new Set()
 
   return e
 }
@@ -417,13 +466,15 @@ function createAsteroid(world, x, y) {
     | C_ROTATION
     | C_ROTATOR
     | C_RENDERABLE
+    | C_BOUNDING_BOX
 
   world.position[e] = {x, y}
   world.velocity[e] = {x: 0, y: 0}
   world.rotation[e] = 0
 
-  world.size[e] = 40 + Math.random() * 100
-  world.rotatorSpeed[e] = 1 / world.size[e]
+  var s = 40 + Math.random() * 100
+  world.size[e] = s
+  world.rotatorSpeed[e] = 1 / s
 
   world.shape[e] = []
   for (var i = 0, a = 0; i < 6; ++i, a += Math.PI /3) {
@@ -432,6 +483,10 @@ function createAsteroid(world, x, y) {
   }
 
   world.renderable[e] = renderAsteroid
+
+  world.boundingBox[e] = {x: x - s/2, y: y - s/2,
+                          width: s, height: s}
+  world.hits[e] = new Set()
 
   return e
 }
@@ -444,11 +499,18 @@ function createBullet(world, position, velocity) {
     | C_VELOCITY
     | C_RENDERABLE
     | C_DESTROY_OUT_OF_VIEW
+    | C_BOUNDING_BOX
 
   world.position[e] = position
   world.velocity[e] = velocity
 
   world.renderable[e] = renderBullet
+
+  var s = 6
+  world.boundingBox[e] = {x: position.x - s/2,
+                          y: position.y - s/2,
+                          width: s, height: s}
+  world.hits[e] = new Set()
 
   return e
 }
@@ -466,6 +528,7 @@ function loop() {
   rotator(world)
   move(world)
   bulletCannon(world)
+  collisionDetection(world)
   strayEntitiesCollector(world)
 
   render(world, ctx)
@@ -564,8 +627,25 @@ function drawDebug(ctx) {
   ctx.save()
   ctx.translate(camera.vec().x, camera.vec().y)
 
+  drawBoundingBox(ctx)
   drawAcceleration(ctx)
   ctx.restore()
+}
+
+function drawBoundingBox(ctx) {
+  for (var e = 0, n = world.mask.length; e < n; ++e) {
+    if ((world.mask[e] & C_BOUNDING_BOX)
+        === C_BOUNDING_BOX) {
+      var b = world.boundingBox[e]
+      var h = world.hits[e]
+      if (h.size > 0)
+        ctx.strokeStyle = '#1c1'
+      else
+        ctx.strokeStyle = '#c11'
+
+      ctx.strokeRect(b.x, b.y, b.width, b.height)
+    }
+  }
 }
 
 function drawAcceleration(ctx) {
