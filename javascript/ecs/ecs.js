@@ -3,9 +3,6 @@
 
 // TODO: time-based updates rather than discrete increments.  Gameplay becomes
 // independent of frame rate.
-// TODO: DatGUI for changing the variables and toggling debug mode (hitboxes,
-// number of entities, etc.)
-// TODO: collision detection
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Engine
@@ -44,7 +41,8 @@ var world = {
   hits: new Array(entities_count),
 }
 
-var grid = spatialHash.new(100)
+var spatialHashCellSize = 100
+var grid = spatialHash.new(spatialHashCellSize)
 
 function createEntity(world) {
   var i = 0
@@ -582,7 +580,7 @@ document.addEventListener('DOMContentLoaded', init)
 document.addEventListener('DOMContentLoaded', initGUI)
 
 var activateDirectControl = false
-var debug = false
+var debug = true
 var cameraType = 'fixed'
 
 function initGUI() {
@@ -629,6 +627,9 @@ function drawDebug(ctx) {
 
   drawBoundingBox(ctx)
   drawAcceleration(ctx)
+  drawGrid(ctx, spatialHashCellSize, spatialHashCellSize)
+  drawSpatialHashInfo(ctx)
+
   ctx.restore()
 }
 
@@ -665,6 +666,40 @@ function drawAcceleration(ctx) {
 
   ctx.restore()
 }
+
+function drawGrid(ctx, xstep, ystep) {
+  var w = ctx.canvas.width
+  var h = ctx.canvas.height
+
+  ctx.strokeStyle = '#ccc'
+
+  for (var x=0; x < w; x += xstep) {
+    ctx.beginPath()
+    ctx.moveTo(x, 0)
+    ctx.lineTo(x, h)
+    ctx.stroke()
+  }
+
+  for (var y=0; y < h; y += ystep) {
+    ctx.beginPath()
+    ctx.moveTo(0, y)
+    ctx.lineTo(w, y)
+    ctx.stroke()
+  }
+}
+
+function drawSpatialHashInfo(ctx) {
+  ctx.fillStyle = '#ccc'
+
+  for (var kv of grid.map) {
+    var cell = kv[0].split('%')
+    var objs = kv[1]
+    var x = parseInt(cell[0], 10) * spatialHashCellSize
+    var y = parseInt(cell[1], 10) * spatialHashCellSize
+    ctx.fillText(`${x},${y}`, x + 2, y + 11)
+    ctx.fillText(objs.size, x + 2, y + 21)
+  }
+
 }
 
 function printKey() {
