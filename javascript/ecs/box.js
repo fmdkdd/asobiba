@@ -47,10 +47,11 @@ function is_point_inside_box(point, box) {
  * Return true if and only if BOX1 and BOX2 have some overlap.
  */
 function do_boxes_collide(box1, box2) {
-  return box1.x <= box2.x + box2.width
-      && box1.x + box1.width >= box2.x
-      && box1.y <= box2.y + box2.height
-      && box1.y + box1.height >= box2.y
+  // Consequence of the Separation Axis Theorem (SAT): if the two boxes overlap,
+  // their projections on the two axis overlap as well.  Conversely, if there is
+  // a gap in one axis, then the boxes do not overlap.
+  return box1.x <= box2.x + box2.width && box1.x + box1.width >= box2.x
+      && box1.y <= box2.y + box2.height && box1.y + box1.height >= box2.y
 }
 
 
@@ -58,10 +59,36 @@ function do_boxes_collide(box1, box2) {
 
  * Spatial hashing.
 
- We divide the game area in a grid.  Each objet is inserted in all the cells
- intersecting with its axis-aligned bounding box.
+ We divide the game area in a grid of cells.  Each object is inserted in all the
+ cells intersecting with its axis-aligned bounding box.
 
  A cell is a couple of coordinates {x, y}.  All cells have the same size.
+
+ Spatial hashing helps avoiding the exponential complexity of checking all
+ objects against each other for collisions.  Instead, objects are checked for
+ collisions only if they reside in the same spatial hash cell.  This is called a
+ /broad phase collision detection/.
+
+ Choosing the cell size is a compromise: small cells will allocate more memory,
+ but lookups in each cell will be faster.  However, a global lookup of
+ collisions through all the cells will not benefit much if objects are
+ duplicated in many cells.  Large cells may contain too many objects, and thus
+ we may lose the benefit of spatial hashing.
+
+ Ideally objects should appear in the fewest cells possible.  This implies that
+ cells should be larger than the average object, but not too much.  Assuming the
+ objects do not deviate wildly from the average, between 1 and 2 times the
+ average object size is a good value for the cell size.
+
+ Positions of objects in the hash are not tracked: clients of the hash should
+ remove and reinsert objects that move.
+
+ Objects that do not move, but can collide, need to be inserted in the hash only
+ once.
+
+ Spatial hashing is best for game areas without wild variations of object
+ density.  Alternatives that might be better suited to these variations:
+ quad-trees or r-trees.
 
  */
 
