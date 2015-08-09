@@ -335,6 +335,34 @@ var focusedCamera = {
   },
 }
 
+var aheadCamera = {
+  new(id) {
+    return {
+      __proto__: this,
+      id
+    }
+  },
+
+  vec() {
+    var cx = ctx.canvas.width / 2
+    var cy = ctx.canvas.height / 2
+    var p = world.position[this.id]
+    var v = world.velocity[this.id]
+    var r = world.rotation[this.id]
+
+    var vm = Math.sqrt(v.x * v.x + v.y * v.y)
+    var vr = Math.atan2(v.y, v.x)
+
+    var mag = vm * 10
+    var rot = vr
+
+    return {
+      x: cx - (p.x + mag * Math.cos(rot)),
+      y: cy - (p.y + mag * Math.sin(rot))
+    }
+  }
+}
+
 var ctx
 var camera = fixedCamera
 
@@ -648,6 +676,8 @@ function initGUI() {
       camera = fixedCamera
     else if (value === 'centered')
       camera = focusedCamera.new(ship)
+    else if (value === 'ahead')
+      camera = aheadCamera.new(ship)
   })
   gui.add(window, 'debug')
 }
