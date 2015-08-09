@@ -144,13 +144,17 @@ function rotator(world) {
 
 var bulletCannonMask = C_BULLET_CANNON | C_INPUT
 var bulletInitialSpeed = 5
+var cannonHeat = 0
+var maxCannonHeat = 10
 
 function bulletCannon(world) {
   for (var e = 0, n = world.mask.length; e < n; ++e) {
     if ((world.mask[e] & bulletCannonMask) === bulletCannonMask) {
       var input = world.input[e]
 
-      if (input[I_FIRE]) {
+      cannonHeat = Math.max(0, cannonHeat - 1)
+
+      if (cannonHeat === 0 && input[I_FIRE]) {
         var p = world.position[e]
         var r = world.rotation[e]
 
@@ -166,6 +170,7 @@ function bulletCannon(world) {
         }
 
         createBullet(world, bulletPosition, bulletVelocity)
+        cannonHeat = maxCannonHeat
       }
     }
   }
@@ -637,6 +642,7 @@ function initGUI() {
   })
   gui.add(window, 'directControlSpeed', 0, 20)
   gui.add(window, 'minAsteroidSize', 10, 100)
+  gui.add(window, 'maxCannonHeat', 1, 100)
   gui.add(window, 'cameraType', ['fixed', 'centered', 'ahead']).onChange(function(value) {
     if (value === 'fixed')
       camera = fixedCamera
