@@ -21,7 +21,9 @@ var C_NONE                = 0b0,
     C_BULLET_CANNON       = 0b1000000000,
     C_DESTROY_OUT_OF_VIEW = 0b10000000000,
     C_DIRECT_CONTROL      = 0b100000000000,
-    C_BOUNDING_BOX        = 0b1000000000000
+    C_BOUNDING_BOX        = 0b1000000000000,
+    C_ASTEROID            = 0b10000000000000,
+    C_BULLET              = 0b100000000000000
 
 // Make room for a few items.  FIXME: the array is not actually filled with data
 // until a create* function is called.
@@ -173,15 +175,17 @@ function bulletCannon(world) {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Engine
 
-var strayEntitiesCollectorMask = C_DESTROY_OUT_OF_VIEW | C_POSITION
+var strayEntitiesCollectorMask = C_DESTROY_OUT_OF_VIEW | C_BOUNDING_BOX
 
 function strayEntitiesCollector(world) {
+  var screen = {x:0, y:0, width: ctx.canvas.width, height: ctx.canvas.height}
+
   for (var e = 0, n = world.mask.length; e < n; ++e) {
     if ((world.mask[e] & strayEntitiesCollectorMask)
         === strayEntitiesCollectorMask) {
-      var p = world.position[e]
+      var b = world.boundingBox[e]
 
-      if (p.x < 0 || p.x > world.width || p.y < 0 || p.y > world.height)
+      if (!do_boxes_collide(b, screen))
         destroyEntity(world, e)
     }
   }
@@ -456,7 +460,7 @@ function createShip(world, x, y) {
   return e
 }
 
-function createAsteroid(world, x, y) {
+function createAsteroid(world, x, y, size, velx, vely) {
   var e = createEntity(world)
 
   world.mask[e] = C_POSITION
@@ -465,14 +469,17 @@ function createAsteroid(world, x, y) {
     | C_ROTATOR
     | C_RENDERABLE
     | C_BOUNDING_BOX
+    | C_DESTROY_OUT_OF_VIEW
+    | C_ASTEROID
 
   world.position[e] = {x, y}
-  world.velocity[e] = {x: 0, y: 0}
+  world.velocity[e] = {x: velx || 0, y: vely || 0}
   world.rotation[e] = 0
 
-  var s = 40 + Math.random() * 100
-  world.size[e] = s
-  world.rotatorSpeed[e] = 1 / s
+  if (size == null)
+    size = 40 + Math.random() * 100
+  world.size[e] = size
+  world.rotatorSpeed[e] = 1 / size
 
   world.shape[e] = []
   for (var i = 0, a = 0; i < 6; ++i, a += Math.PI /3) {
@@ -482,13 +489,29 @@ function createAsteroid(world, x, y) {
 
   world.renderable[e] = renderAsteroid
 
-  world.boundingBox[e] = {x: x - s/2, y: y - s/2,
-                          width: s, height: s}
+  world.boundingBox[e] = {x: x - size/2, y: y - size/2,
+                          width: size, height: size}
   world.hits[e] = new Set()
 
   return e
 }
 
+var minAsteroidSize = 30
+var asteroidSpeedFactor = 100
+
+function fragmentAsteroid(e) {
+  var p = world.position[e]
+  var s = world.size[e]
+
+  destroyEntity(world, e)
+
+  if (s > minAsteroidSize) {
+    var r = {x: Math.random() * asteroidSpeedFactor / s,
+             y: Math.random() * asteroidSpeedFactor / s}
+    createAsteroid(world, p.x, p.y, s/2, r.x, r.y)
+    createAsteroid(world, p.x, p.y, s/2, r.y, -r.x)
+  }
+}
 
 function createBullet(world, position, velocity) {
   var e = createEntity(world)
@@ -498,6 +521,7 @@ function createBullet(world, position, velocity) {
     | C_RENDERABLE
     | C_DESTROY_OUT_OF_VIEW
     | C_BOUNDING_BOX
+    | C_BULLET
 
   world.position[e] = position
   world.velocity[e] = velocity
@@ -528,6 +552,18 @@ function loop() {
   bulletCannon(world)
   collisionDetection(world)
   strayEntitiesCollector(world)
+
+  for (var e1 = 0, n = world.mask.length; e1 < n; ++e1) {
+    if (world.mask[e1] & C_ASTEROID) {
+      var h = world.hits[e1]
+      for (var e2 of h) {
+        if (world.mask[e2] & C_BULLET) {
+          destroyEntity(world, e2)
+          fragmentAsteroid(e1)
+        }
+      }
+    }
+  }
 
   render(world, ctx)
 
@@ -600,6 +636,7 @@ function initGUI() {
     }
   })
   gui.add(window, 'directControlSpeed', 0, 20)
+  gui.add(window, 'minAsteroidSize', 10, 100)
   gui.add(window, 'cameraType', ['fixed', 'centered', 'ahead']).onChange(function(value) {
     if (value === 'fixed')
       camera = fixedCamera
