@@ -1,2 +1,5 @@
 node_modules/
 .tern-port
+c/vm/mac
+scala/target
+scala/project
