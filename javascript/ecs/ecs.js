@@ -574,6 +574,8 @@ function createBullet(world, position, velocity) {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Main
 
+var requestFrameId
+
 function loop() {
   clearInput(world)
   keyboardControl(world)
@@ -602,7 +604,7 @@ function loop() {
 
   if (debug) drawDebug(ctx)
 
-  requestAnimationFrame(loop)
+  requestFrameId = requestAnimationFrame(loop)
 }
 
 var ship = null
@@ -634,6 +636,10 @@ function init() {
                  Math.random() * world.height)
 
   loop()
+}
+
+function stop() {
+  cancelAnimationFrame(requestFrameId)
 }
 
 document.addEventListener('DOMContentLoaded', init)
