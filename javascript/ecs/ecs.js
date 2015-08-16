@@ -42,8 +42,8 @@ var world = {
   shape: new Array(entities_count),
   boundingBox: new Array(entities_count),
   hitBox: new Array(entities_count),
-  hits: new Array(entities_count),
-  trueHits: new Array(entities_count),
+  boundingBoxHit: new Array(entities_count),
+  hitBoxHit: new Array(entities_count),
 }
 
 var spatialHashCellSize = 100
@@ -200,20 +200,24 @@ function strayEntitiesCollector(world) {
 }
 
 var collisionDetectionMask = C_BOUNDING_BOX
+var hitQueue = []
 
 function collisionDetection(world) {
   grid.clearAllCells()
+  clearCheckedPairs()
+  hitQueue.length = 0
 
   for (var e = 0, n = world.mask.length; e < n; ++e) {
     if (world.mask[e] & C_BOUNDING_BOX) {
       var b = world.boundingBox[e]
       grid.insertObjectWithBoundingBox(e, b)
-      world.hits[e].clear()
+      world.boundingBoxHit[e] = false
     }
 
     if (world.mask[e] & C_HIT_BOX)
-      world.trueHits[e].clear()
+      world.hitBoxHit[e] = false
   }
+
 
   for (var objSet of grid.map.values()) {
     var objs = Array.from(objSet)
@@ -221,24 +225,67 @@ function collisionDetection(world) {
       var e1 = objs[i]
       var b1 = world.boundingBox[e1]
       for (var j = i+1; j < objs.length; ++j) {
+        if (alreadyChecked(e1, e2))
+          continue
+
         var e2 = objs[j]
         var b2 = world.boundingBox[e2]
         if (do_boxes_collide(b1, b2)) {
-          world.hits[e1].add(e2)
-          world.hits[e2].add(e1)
+          world.boundingBoxHit[e1] =  world.boundingBoxHit[e2] = true
 
           if ((world.mask[e1] & C_HIT_BOX) && (world.mask[e2] & C_HIT_BOX)) {
             var h1 = adjust_entity_hitbox(e1)
             var h2 = adjust_entity_hitbox(e2)
             if (do_polygons_collide(h1, h2)) {
-              world.trueHits[e1].add(e2)
-              world.trueHits[e2].add(e1)
+              world.hitBoxHit[e1] = world.hitBoxHit[e2] = true
+              hitQueue.push([e1, e2])
+              checkPair(e1, e2)
             }
           }
         }
       }
     }
   }
+}
+
+var checkedPairs = new Map()
+
+function alreadyChecked(e1, e2) {
+  return (checkedPairs.has(e1) && checkedPairs.get(e1).has(e2))
+    || (checkedPairs.has(e2) && checkedPairs.get(e2).has(e1))
+}
+
+function checkPair(e1, e2) {
+  if (!checkedPairs.has(e1))
+    checkedPairs.set(e1, new Set())
+  checkedPairs.get(e1).add(e2)
+}
+
+function clearCheckedPairs() {
+  for (var p of checkedPairs.values())
+    p.clear()
+}
+
+function resolveCollisions(world) {
+  for (var h of hitQueue) {
+    var e1 = h[0]
+    var e2 = h[1]
+    var m1 = world.mask[e1]
+    var m2 = world.mask[e2]
+
+    for (var c of collisionHandlers) {
+      if (m1 & c.type1 && m2 & c.type2)
+        c.handler(e1, e2)
+      else if (m1 & c.type2 && m2 & c.type1)
+        c.handler(e2, e1)
+    }
+  }
+}
+
+var collisionHandlers = []
+
+function addCollisionHandler(type1, type2, handler) {
+  collisionHandlers.push({type1, type2, handler})
 }
 
 // Adjust hitboxes for actual position and angle of entity.  Hitboxes
@@ -515,8 +562,8 @@ function createShip(world, x, y) {
                      {x: -10, y: -8},
                      {x: -10, y: +8}]
 
-  world.hits[e] = new Set()
-  world.trueHits[e] = new Set()
+  world.boundingBoxHit[e] = false
+  world.hitBoxHit[e] = false
 
   return e
 }
@@ -560,8 +607,8 @@ function createAsteroid(world, x, y, size, velx, vely) {
   world.boundingBox[e] = {x: x - max * size, y: y - max * size,
                           width: 2*max*size, height: 2*max*size}
 
-  world.hits[e] = new Set()
-  world.trueHits[e] = new Set()
+  world.boundingBoxHit[e] = false
+  world.hitBoxHit[e] = false
 
   return e
 }
@@ -610,8 +657,8 @@ function createBullet(world, position, velocity) {
     world.hitBox[e].push(p)
   }
 
-  world.hits[e] = new Set()
-  world.trueHits[e] = new Set()
+  world.boundingBoxHit[e] = false
+  world.hitBoxHit[e] = false
 
   return e
 }
@@ -632,19 +679,8 @@ function loop() {
   move(world)
   bulletCannon(world)
   collisionDetection(world)
+  resolveCollisions(world)
   strayEntitiesCollector(world)
-
-  for (var e1 = 0, n = world.mask.length; e1 < n; ++e1) {
-    if (world.mask[e1] & C_ASTEROID) {
-      var h = world.trueHits[e1]
-      for (var e2 of h) {
-        if (world.mask[e2] & C_BULLET) {
-          destroyEntity(world, e2)
-          fragmentAsteroid(e1)
-        }
-      }
-    }
-  }
 
   render(world, ctx)
 
@@ -680,6 +716,11 @@ function init() {
   createAsteroid(world,
                  Math.random() * world.width,
                  Math.random() * world.height)
+
+  addCollisionHandler(C_ASTEROID, C_BULLET, function(e1, e2) {
+    destroyEntity(world, e2)
+    fragmentAsteroid(e1)
+  })
 
   loop()
 }
@@ -763,8 +804,8 @@ function drawBoundingBox(ctx) {
   for (var e = 0, n = world.mask.length; e < n; ++e) {
     if (world.mask[e] & C_BOUNDING_BOX) {
       var b = world.boundingBox[e]
-      var h = world.hits[e]
-      if (h.size > 0)
+      var h = world.boundingBoxHit[e]
+      if (h)
         ctx.strokeStyle = '#1c1'
       else
         ctx.strokeStyle = '#c11'
@@ -777,12 +818,12 @@ function drawBoundingBox(ctx) {
 function drawHitBox(ctx) {
   for (var e = 0, n = world.mask.length; e < n; ++e) {
     if (world.mask[e] & C_HIT_BOX) {
-      var h = world.trueHits[e]
+      var h = world.hitBoxHit[e]
       var p = (world.mask[e] & C_POSITION) ? world.position[e] : point(0,0)
       var r = (world.mask[e] & C_ROTATION) ? world.rotation[e] : 0
       var b = adjust_hitbox(world.hitBox[e], p, r)
 
-      if (h.size > 0)
+      if (h)
         ctx.strokeStyle = '#1c1'
       else
         ctx.strokeStyle = '#c11'
