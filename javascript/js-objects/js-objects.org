@@ -1051,6 +1051,16 @@ var r = O({
 : sharing: true
 : delegation true
 
+* Use-cases for object creation
+- Singleton object
+- Multiple instances from a template
+- Differential description from an existing template
+- Namespace object
+
+* Other patterns
+- Module pattern (for singletons)
+- Mixins (as in [[https://github.com/magwo/elevatorsaga/blob/714856593bd32975ab7fd26efdd467fdf2b2ded2/elevator.js][Elevator Saga]])
+
 * Reactive programming
 Obeying the equations at all times.
 
