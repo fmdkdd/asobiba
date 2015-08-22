@@ -225,10 +225,11 @@ function collisionDetection(world) {
       var e1 = objs[i]
       var b1 = world.boundingBox[e1]
       for (var j = i+1; j < objs.length; ++j) {
+        var e2 = objs[j]
+
         if (alreadyChecked(e1, e2))
           continue
 
-        var e2 = objs[j]
         var b2 = world.boundingBox[e2]
         if (do_boxes_collide(b1, b2)) {
           world.boundingBoxHit[e1] =  world.boundingBoxHit[e2] = true
