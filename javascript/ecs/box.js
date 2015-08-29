@@ -1,4 +1,8 @@
-/** Utilities for testing collisions between axis-aligned bounding boxes. */
+
+// Axis-aligned bounding boxes
+// Utilities for testing collisions between axis-aligned bounding boxes.
+
+// [[file:box.org::*Axis-aligned%20bounding%20boxes][Axis-aligned\ bounding\ boxes:1]]
 
 /**
  * Return a point of coordinates (X,Y).
@@ -53,6 +57,12 @@ function do_boxes_collide(box1, box2) {
   return box1.x <= box2.x + box2.width && box1.x + box1.width >= box2.x
       && box1.y <= box2.y + box2.height && box1.y + box1.height >= box2.y
 }
+
+// Axis-aligned\ bounding\ boxes:1 ends here
+
+// SAT collision detection for convex polygons
+
+// [[file:box.org::*SAT%20collision%20detection%20for%20convex%20polygons][SAT\ collision\ detection\ for\ convex\ polygons:1]]
 
 /**
  * Return true if convex polygons POLY1 and POLY2 overlap.  Both arguments are
@@ -131,44 +141,17 @@ function overlap(proj1, proj2) {
   return proj1.min <= proj2.max && proj1.max >= proj2.min
 }
 
-function vec_length(v) {
-  return Math.sqrt(v.x*v.x + v.y*v.y)
-}
+// SAT\ collision\ detection\ for\ convex\ polygons:1 ends here
 
-function vec_unit(v) {
-  var l = vec_length(v)
-  return point(v.x / l, v.y / l)
-}
+// Hitbox projection
+// Useful for projecting hitboxes of rotating, moving objects which store their
+// hitboxes as relative coordinates.
 
-function vec_perp(v) {
-  return point(-v.y, v.x)
-}
-
-function vec_plus(u, v) {
-  return point(u.x + v.x, u.y + v.y)
-}
-
-function vec_minus(u, v) {
-  return point(u.x - v.x, u.y - v.y)
-}
-
-function vec_dot(u, v) {
-  return u.x * v.x + u.y * v.y
-}
-
-function vec_rotate(v, a) {
-  var cos = Math.cos(a)
-  var sin = Math.sin(a)
-  return point(v.x * cos - v.y * sin,
-               v.x * sin + v.y * cos)
-}
+// [[file:box.org::*Hitbox%20projection][Hitbox\ projection:1]]
 
 /**
  * Rotate POLY along ANGLE, then translate it along VEC, and return the result
  * as a new polygon.
- *
- * Useful for projecting hitboxes of rotating, moving objects which store their
- * hitboxes as relative coordinates.
  */
 function adjust_hitbox(poly, vec, angle) {
   var p = []
@@ -178,43 +161,41 @@ function adjust_hitbox(poly, vec, angle) {
   return p
 }
 
+// Hitbox\ projection:1 ends here
 
-/**
+// Spatial hashing
+//  We divide the game area in a grid of cells.  Each object is inserted in all the
+//  cells intersecting with its axis-aligned bounding box.
 
- * Spatial hashing.
+//  A cell is a couple of coordinates {x, y}.  All cells have the same size.
 
- We divide the game area in a grid of cells.  Each object is inserted in all the
- cells intersecting with its axis-aligned bounding box.
+//  Spatial hashing helps avoiding the exponential complexity of checking all
+//  objects against each other for collisions.  Instead, objects are checked for
+//  collisions only if they reside in the same spatial hash cell.  This is called a
+//  /broad phase collision detection/.
 
- A cell is a couple of coordinates {x, y}.  All cells have the same size.
+//  Choosing the cell size is a compromise: small cells will allocate more memory,
+//  but lookups in each cell will be faster.  However, a global lookup of
+//  collisions through all the cells will not benefit much if objects are
+//  duplicated in many cells.  Large cells may contain too many objects, and thus
+//  we may lose the benefit of spatial hashing.
 
- Spatial hashing helps avoiding the exponential complexity of checking all
- objects against each other for collisions.  Instead, objects are checked for
- collisions only if they reside in the same spatial hash cell.  This is called a
- /broad phase collision detection/.
+//  Ideally objects should appear in the fewest cells possible.  This implies that
+//  cells should be larger than the average object, but not too much.  Assuming the
+//  objects do not deviate wildly from the average, between 1 and 2 times the
+//  average object size is a good value for the cell size.
 
- Choosing the cell size is a compromise: small cells will allocate more memory,
- but lookups in each cell will be faster.  However, a global lookup of
- collisions through all the cells will not benefit much if objects are
- duplicated in many cells.  Large cells may contain too many objects, and thus
- we may lose the benefit of spatial hashing.
+//  Positions of objects in the hash are not tracked: clients of the hash should
+//  remove and reinsert objects that move.
 
- Ideally objects should appear in the fewest cells possible.  This implies that
- cells should be larger than the average object, but not too much.  Assuming the
- objects do not deviate wildly from the average, between 1 and 2 times the
- average object size is a good value for the cell size.
+//  Objects that do not move, but can collide, need to be inserted in the hash only
+//  once.
 
- Positions of objects in the hash are not tracked: clients of the hash should
- remove and reinsert objects that move.
+//  Spatial hashing is best for game areas without wild variations of object
+//  density.  Alternatives that might be better suited to these variations:
+//  quad-trees or r-trees.
 
- Objects that do not move, but can collide, need to be inserted in the hash only
- once.
-
- Spatial hashing is best for game areas without wild variations of object
- density.  Alternatives that might be better suited to these variations:
- quad-trees or r-trees.
-
- */
+// [[file:box.org::*Spatial%20hashing][Spatial\ hashing:1]]
 
 var emptySet = new Set()
 
@@ -236,14 +217,14 @@ var spatialHash = {
 
   /** Return the hash value of CELL, used as a key into the grid map. */
   hashCell(cell) {
-    return cell.x + '%' + cell.y
+    return `${cell.x}%${cell.y}`
   },
 
   /** Return an array of the cells overlapping with the given axis-aligned
       bounding BOX. */
   cellsIntersectingWith(box) {
     var cells = []
-    var start = this.cellFromPoint(box)
+    var start = this.cellFromPoint(point(box.x, box.y))
     var end = this.cellFromPoint({x: box.x + box.width,
                                   y: box.y + box.height})
 
@@ -316,3 +297,46 @@ var spatialHash = {
     console.log('Average objects per cell', avg)
   }
 }
+
+// Spatial\ hashing:1 ends here
+
+// Vector utilities
+// These are all straightforward definitions from geometry.
+
+// All of these functions do not mutate their arguments.
+
+// [[file:box.org::*Vector%20utilities][Vector\ utilities:1]]
+
+function vec_length(v) {
+  return Math.sqrt(v.y*v.x + v.y*v.y)
+}
+
+function vec_unit(v) {
+  var l = vec_length(v)
+  return point(v.x / l, v.y / l)
+}
+
+function vec_perp(v) {
+  return point(-v.y, v.x)
+}
+
+function vec_plus(u, v) {
+  return point(u.x + v.x, u.y + v.y)
+}
+
+function vec_minus(u, v) {
+  return point(u.x - v.x, u.y - v.y)
+}
+
+function vec_dot(u, v) {
+  return u.x * v.x + u.y * v.y
+}
+
+function vec_rotate(v, a) {
+  var cos = Math.cos(a)
+  var sin = Math.sin(a)
+  return point(v.x * cos - v.y * sin,
+               v.x * sin + v.y * cos)
+}
+
+// Vector\ utilities:1 ends here
