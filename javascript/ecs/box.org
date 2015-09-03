@@ -161,36 +161,42 @@ function adjust_hitbox(poly, vec, angle) {
 #+END_SRC
 
 * Spatial hashing
- We divide the game area in a grid of cells.  Each object is inserted in all the
- cells intersecting with its axis-aligned bounding box.
+We divide the game area in a grid of cells.  Each object is inserted in all the
+cells intersecting with its axis-aligned bounding box.
 
- A cell is a couple of coordinates {x, y}.  All cells have the same size.
+A cell is a couple of coordinates {x, y}.  All cells have the same size.
 
- Spatial hashing helps avoiding the exponential complexity of checking all
- objects against each other for collisions.  Instead, objects are checked for
- collisions only if they reside in the same spatial hash cell.  This is called a
- /broad phase collision detection/.
+Spatial hashing helps avoiding the exponential complexity of checking all
+objects against each other for collisions.  Instead, objects are checked for
+collisions only if they reside in the same spatial hash cell.  This is called a
+/broad phase collision detection/.
 
- Choosing the cell size is a compromise: small cells will allocate more memory,
- but lookups in each cell will be faster.  However, a global lookup of
- collisions through all the cells will not benefit much if objects are
- duplicated in many cells.  Large cells may contain too many objects, and thus
- we may lose the benefit of spatial hashing.
+Here the area is divided into four cells of same size.  Boxes in cells 1 and 2
+cannot collide, so they are not checked for collisions.  Only one test between
+the two green boxes is needed, instead of 3.
 
- Ideally objects should appear in the fewest cells possible.  This implies that
- cells should be larger than the average object, but not too much.  Assuming the
- objects do not deviate wildly from the average, between 1 and 2 times the
- average object size is a good value for the cell size.
+[[file:img/spatial-hash1.png]]
 
- Positions of objects in the hash are not tracked: clients of the hash should
- remove and reinsert objects that move.
+Choosing the cell size is a compromise: small cells will allocate more memory,
+but lookups in each cell will be faster.  However, a global lookup of collisions
+through all the cells will not benefit much if objects are duplicated in many
+cells.  Large cells may contain too many objects, and thus we may lose the
+benefit of spatial hashing.
 
- Objects that do not move, but can collide, need to be inserted in the hash only
- once.
+Ideally objects should appear in the fewest cells possible.  This implies that
+cells should be larger than the average object, but not too much.  Assuming the
+objects do not deviate wildly from the average, between 1 and 2 times the
+average object size is a good value for the cell size.
 
- Spatial hashing is best for game areas without wild variations of object
- density.  Alternatives that might be better suited to these variations:
- quad-trees or r-trees.
+Positions of objects in the hash are not tracked: clients of the hash should
+remove and reinsert objects that move.
+
+Objects that do not move, but can collide, need to be inserted in the hash only
+once.
+
+Spatial hashing is best for game areas without wild variations of object
+density.  Alternatives that might be better suited to these variations:
+quad-trees or r-trees.
 
 #+BEGIN_SRC js
   var emptySet = new Set()
@@ -238,15 +244,23 @@ function adjust_hitbox(poly, vec, angle) {
 
       this.map.get(h).add(obj)
     },
+#+END_SRC
 
-    /** Insert OBJECT in the grid, based on the coordinates of the axis-aligned
-        bounding BOX.  As the bounding box can overlap multiple grid cells, we
-        insert the object into all the intersecting cells. */
-    insertObjectWithBoundingBox(obj, box) {
-      for (var c of this.cellsIntersectingWith(box))
-          this.insertObjectInCell(obj, c)
-    },
+Here the green box overlaps cells 1 and 2, so it has to be inserted into both.
+The worst case is the red box which must be inserted into four cells.
 
+[[file:img/spatial-hash2.png]]
+
+#+BEGIN_SRC js
+  /** Insert OBJECT in the grid, based on the coordinates of the axis-aligned
+      bounding BOX. */
+  insertObjectWithBoundingBox(obj, box) {
+        for (var c of this.cellsIntersectingWith(box))
+            this.insertObjectInCell(obj, c)
+      },
+#+END_SRC
+
+#+BEGIN_SRC js
     /** Return the set of objects present in CELL. */
     objectsInCell(cell) {
       return this.map.get(this.hashCell(cell))
