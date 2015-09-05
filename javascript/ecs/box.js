@@ -316,9 +316,11 @@ insertObjectWithBoundingBox(obj, box) {
 
 // Spatial\ hashing:1 ends here
 
-// TODO Constructors
+// Constructors
 // A vector is a couple of coordinates (x,y) which indicates its displacement from
 // the origin (0,0).
+
+// [[file:vector.png]]
 
 // We store the coordinates in a JavaScript object with two properties =x= and
 // =y=.
@@ -348,12 +350,12 @@ function point(x, y) { return {x, y}}
 
 // point ends here
 
-// TODO Adding and subtracting vectors
+// Adding and subtracting vectors
 // To add two vectors, add their coordinates.
 
 // [[file:vec_plus.png]]
 
-// This is used for translating a vector.
+// This is used for translating a vector, or a point.
 
 // #+NAME: vec_plus
 
@@ -368,8 +370,8 @@ function vec_plus(u, v) {
 // Subtraction is the same as adding a negated vector.  We redefine it more
 // directly rather than using [[vec_dot][vec_dot]].
 
-// Subtraction is useful for finding the vector between two points:
-
+// Subtraction is useful for finding the vector between two points, since the
+// vector from point A to point B is =vec_minus(B,A)=.
 
 // #+NAME: vec_minus
 
@@ -383,6 +385,8 @@ function vec_minus(u, v) {
 
 // Scaling a vector
 // To scale a vector, multiply each of its coordinates.
+
+// [[file:vec_mult.png]]
 
 // #+NAME: vec_mult
 
@@ -409,6 +413,22 @@ function vec_rotate(v, a) {
 // vec_rotate ends here
 
 // TODO Dot product
+// The dot product is defined as:
+
+// : length(u) * length(v) * cos(\theta)
+
+// where \theta is the angle from u to v.
+
+// Two vectors are orthogonal if and only if the dot product is zero.  That’s one
+// desirable property of the dot product.
+
+// The other is that the dot product of u with a unit vector v will give the
+// projection of u on v.  This is useful for the [[#SAT][SAT algorithm]].
+
+// There is also an equivalent algebraic definition as the sum of the product of
+// each coordinate.  We choose this one for the implementation, as it requires less
+// operations.
+
 // #+NAME: vec_dot
 
 // [[file:box.org::*Dot%20product][vec_dot]]
