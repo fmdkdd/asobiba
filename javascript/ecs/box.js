@@ -5,13 +5,6 @@
 // [[file:box.org::*Axis-aligned%20bounding%20boxes][Axis-aligned\ bounding\ boxes:1]]
 
 /**
- * Return a point of coordinates (X,Y).
- */
-function point(x, y) {
-  return {x, y}
-}
-
-/**
  * Create a box with from the coordinates of its TOP_LEFT corner, its
  * WIDTH and its HEIGHT.
  */
@@ -61,6 +54,9 @@ function do_boxes_collide(box1, box2) {
 // Axis-aligned\ bounding\ boxes:1 ends here
 
 // SAT collision detection for convex polygons
+// :PROPERTIES:
+// :CUSTOM_ID: SAT
+// :END:
 
 // [[file:box.org::*SAT%20collision%20detection%20for%20convex%20polygons][SAT\ collision\ detection\ for\ convex\ polygons:1]]
 
@@ -164,15 +160,15 @@ function adjust_hitbox(poly, vec, angle) {
 // Hitbox\ projection:1 ends here
 
 // Spatial hashing
-// We divide the game area in a grid of cells.  Each object is inserted in all the
-// cells intersecting with its axis-aligned bounding box.
-
-// A cell is a couple of coordinates {x, y}.  All cells have the same size.
-
 // Spatial hashing helps avoiding the exponential complexity of checking all
 // objects against each other for collisions.  Instead, objects are checked for
 // collisions only if they reside in the same spatial hash cell.  This is called a
 // /broad phase collision detection/.
+
+// We divide the game area in a grid of cells.  Each object is inserted in all the
+// cells intersecting with its axis-aligned bounding box.
+
+// A cell is a couple of coordinates {x, y}.  All cells have the same size.
 
 // Here the area is divided into four cells of same size.  Boxes in cells 1 and 2
 // cannot collide, so they are not checked for collisions.  Only one test between
@@ -251,21 +247,21 @@ var spatialHash = {
 
 // Spatial\ hashing:1 ends here
 
-// Insert OBJECT in the grid, based on the coordinates of the axis-aligned bounding
-// BOX.  As the bounding box can overlap multiple grid cells, we insert the object
-// into all the intersecting cells.
+// #+RESULTS:
 
 // Here the green box overlaps cells 1 and 2, so it has to be inserted into both.
-// The worst case is the red box which must be inserted into four cells.
+// The worst case is the orange box which must be inserted into four cells.
 
 // [[file:spatial-hash2.png]]
 
 // [[file:box.org::*Spatial%20hashing][Spatial\ hashing:1]]
 
+/** Insert OBJECT in the grid, based on the coordinates of the axis-aligned
+    bounding BOX. */
 insertObjectWithBoundingBox(obj, box) {
-  for (var c of this.cellsIntersectingWith(box))
-      this.insertObjectInCell(obj, c)
-},
+      for (var c of this.cellsIntersectingWith(box))
+          this.insertObjectInCell(obj, c)
+    },
 
 // Spatial\ hashing:1 ends here
 
@@ -320,37 +316,88 @@ insertObjectWithBoundingBox(obj, box) {
 
 // Spatial\ hashing:1 ends here
 
-// Vector utilities
-// These are all straightforward definitions from geometry.
+// TODO Constructors
+// A vector is a couple of coordinates (x,y) which indicates its displacement from
+// the origin (0,0).
 
-// All of these functions do not mutate their arguments.
+// We store the coordinates in a JavaScript object with two properties =x= and
+// =y=.
 
-// [[file:box.org::*Vector%20utilities][Vector\ utilities:1]]
+// #+NAME: vector
 
-function vec_length(v) {
-  return Math.sqrt(v.y*v.x + v.y*v.y)
-}
+// [[file:box.org::*Constructors][vector]]
 
-function vec_unit(v) {
-  var l = vec_length(v)
-  return point(v.x / l, v.y / l)
-}
+/** Return a vector of coordinates (X,Y). */
+function vector(x, y) { return {x, y}}
 
-function vec_perp(v) {
-  return point(-v.y, v.x)
-}
+// vector ends here
+
+// A point is also a couple of coordinates (x,y).  As such, the constructor is
+// identical to that of a vector.
+
+// The resulting objects are exactly the same, so we can use both constructors
+// interchangeably.  However, we try use the point constructor when it is more
+// semantically appropriate (e.g., [[is_point_inside_box][is_point_inside_box]]).
+
+// #+NAME: point
+
+// [[file:box.org::*Constructors][point]]
+
+/** Return a point of coordinates (X,Y). */
+function point(x, y) { return {x, y}}
+
+// point ends here
+
+// TODO Adding and subtracting vectors
+// To add two vectors, add their coordinates.
+
+// [[file:vec_plus.png]]
+
+// This is used for translating a vector.
+
+// #+NAME: vec_plus
+
+// [[file:box.org::*Adding%20and%20subtracting%20vectors][vec_plus]]
 
 function vec_plus(u, v) {
   return point(u.x + v.x, u.y + v.y)
 }
 
+// vec_plus ends here
+
+// Subtraction is the same as adding a negated vector.  We redefine it more
+// directly rather than using [[vec_dot][vec_dot]].
+
+// Subtraction is useful for finding the vector between two points:
+
+
+// #+NAME: vec_minus
+
+// [[file:box.org::*Adding%20and%20subtracting%20vectors][vec_minus]]
+
 function vec_minus(u, v) {
   return point(u.x - v.x, u.y - v.y)
 }
 
-function vec_dot(u, v) {
-  return u.x * v.x + u.y * v.y
+// vec_minus ends here
+
+// Scaling a vector
+// To scale a vector, multiply each of its coordinates.
+
+// #+NAME: vec_mult
+
+// [[file:box.org::*Scaling%20a%20vector][vec_mult]]
+
+function vec_mult(v, s) {
+  return point(v.x * s, v.y * s)
 }
+
+// vec_mult ends here
+
+// TODO Rotating a vector
+// #+NAME: vec_rotate
+
+// [[file:box.org::*Rotating%20a%20vector][vec_rotate]]
 
 function vec_rotate(v, a) {
   var cos = Math.cos(a)
@@ -359,4 +406,76 @@ function vec_rotate(v, a) {
                v.x * sin + v.y * cos)
 }
 
-// Vector\ utilities:1 ends here
+// vec_rotate ends here
+
+// TODO Dot product
+// #+NAME: vec_dot
+
+// [[file:box.org::*Dot%20product][vec_dot]]
+
+function vec_dot(u, v) {
+  return u.x * v.x + u.y * v.y
+}
+
+// vec_dot ends here
+
+// Vector length
+// Vector length, or magnitude, is the distance between the vector coordinates and
+// the origin.
+
+// To obtain it, we apply Pythagoras’ theorem.
+
+// [[file:vec_length.png]]
+
+// #+NAME: vec_length
+
+// [[file:box.org::*Vector%20length][vec_length]]
+
+function vec_length(v) {
+  return Math.sqrt(v.x*v.x + v.y*v.y)
+}
+
+// vec_length ends here
+
+// Unit vector
+// Unit vectors are vectors of length 1.  Trivial examples are (0,1) and (1,0).
+
+// We /normalize/ a vector when we adjust its magnitude to 1 (without changing its
+// direction).
+
+// To normalize a vector, we scale it by the inverse of its magnitude.
+
+// #+NAME: vec_unit
+
+// [[file:box.org::*Unit%20vector][vec_unit]]
+
+function vec_unit(v) {
+  var l = vec_length(v)
+  return point(v.x / l, v.y / l)
+}
+
+// vec_unit ends here
+
+// Normal vector
+// Rotating a vector by 90° gives its /normal/ vector, which is perpendicular.
+
+// [[file:vec_perp.png]]
+
+// The normal vector is useful for finding the axis of projection in the [[#SAT][SAT
+// algorithm]].
+
+// As this is a common operation, we do not want to use [[vec_rotate][vec_rotate]].
+// Instead, we can plug the values of cos and sin for 90°.
+
+// : cos(90°) = 0
+// : sin(90°) = 1
+
+// #+NAME: vec_perp
+
+// [[file:box.org::*Normal%20vector][vec_perp]]
+
+function vec_perp(v) {
+  return point(-v.y, v.x)
+}
+
+// vec_perp ends here

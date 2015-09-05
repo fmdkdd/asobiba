@@ -3,7 +3,7 @@
 
 .PHONY: all
 
-all: box.js img/spatial-hash1.png img/spatial-hash2.png
+all: box.js img/spatial-hash1.png img/spatial-hash2.png img/vec_length.png img/vec_perp.png img/vec_plus.png
 
 %.js: %.org
   # Tangle

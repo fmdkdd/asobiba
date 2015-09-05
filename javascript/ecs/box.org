@@ -1,3 +1,4 @@
+#+OPTIONS: ^:{}
 #+PROPERTY: header-args :tangle box.js :comments both
 
 * Axis-aligned bounding boxes
@@ -5,31 +6,24 @@ Utilities for testing collisions between axis-aligned bounding boxes.
 
 #+BEGIN_SRC js
   /**
-   ,* Return a point of coordinates (X,Y).
-   ,*/
-  function point(x, y) {
-    return {x, y}
-  }
-
-  /**
-   ,* Create a box with from the coordinates of its TOP_LEFT corner, its
-   ,* WIDTH and its HEIGHT.
-   ,*/
+   * Create a box with from the coordinates of its TOP_LEFT corner, its
+   * WIDTH and its HEIGHT.
+   */
   function box(top_left, width, height) {
     return {x: top_left.x, y: top_left.y, width, height}
   }
 
   /**
-   ,* Return the center point of BOX.
-   ,*/
+   * Return the center point of BOX.
+   */
   function box_center(box) {
     return point(box.x + box.width  / 2,
                  box.y + box.height / 2)
   }
 
   /**
-   ,* Return all the corners of BOX as an array of points.
-   ,*/
+   * Return all the corners of BOX as an array of points.
+   */
   function box_corners(box) {
     return [
       point(box.x, box.y),
@@ -40,16 +34,16 @@ Utilities for testing collisions between axis-aligned bounding boxes.
   }
 
   /**
-   ,* Return true if and only if POINT lies inside BOX.
-   ,*/
+   * Return true if and only if POINT lies inside BOX.
+   */
   function is_point_inside_box(point, box) {
     return point.x >= box.x && point.x <= box.x + box.width
         && point.y >= box.y && point.y <= box.y + box.height
   }
 
   /**
-   ,* Return true if and only if BOX1 and BOX2 have some overlap.
-   ,*/
+   * Return true if and only if BOX1 and BOX2 have some overlap.
+   */
   function do_boxes_collide(box1, box2) {
     // Consequence of the Separation Axis Theorem (SAT): if the two boxes overlap,
     // their projections on the two axes overlap as well.  Conversely, if there is
@@ -57,10 +51,12 @@ Utilities for testing collisions between axis-aligned bounding boxes.
     return box1.x <= box2.x + box2.width && box1.x + box1.width >= box2.x
         && box1.y <= box2.y + box2.height && box1.y + box1.height >= box2.y
   }
-
 #+END_SRC
 
 * SAT collision detection for convex polygons
+:PROPERTIES:
+:CUSTOM_ID: SAT
+:END:
 
 #+BEGIN_SRC js
 /**
@@ -161,15 +157,15 @@ function adjust_hitbox(poly, vec, angle) {
 #+END_SRC
 
 * Spatial hashing
-We divide the game area in a grid of cells.  Each object is inserted in all the
-cells intersecting with its axis-aligned bounding box.
-
-A cell is a couple of coordinates {x, y}.  All cells have the same size.
-
 Spatial hashing helps avoiding the exponential complexity of checking all
 objects against each other for collisions.  Instead, objects are checked for
 collisions only if they reside in the same spatial hash cell.  This is called a
 /broad phase collision detection/.
+
+We divide the game area in a grid of cells.  Each object is inserted in all the
+cells intersecting with its axis-aligned bounding box.
+
+A cell is a couple of coordinates {x, y}.  All cells have the same size.
 
 Here the area is divided into four cells of same size.  Boxes in cells 1 and 2
 cannot collide, so they are not checked for collisions.  Only one test between
@@ -246,8 +242,10 @@ quad-trees or r-trees.
     },
 #+END_SRC
 
+#+RESULTS:
+
 Here the green box overlaps cells 1 and 2, so it has to be inserted into both.
-The worst case is the red box which must be inserted into four cells.
+The worst case is the orange box which must be inserted into four cells.
 
 [[file:img/spatial-hash2.png]]
 
@@ -307,7 +305,6 @@ The worst case is the red box which must be inserted into four cells.
       console.log('Average objects per cell', avg)
     }
   }
-
 #+END_SRC
 
 * Vector utilities
@@ -315,36 +312,138 @@ These are all straightforward definitions from geometry.
 
 All of these functions do not mutate their arguments.
 
+** TODO Constructors
+A vector is a couple of coordinates (x,y) which indicates its displacement from
+the origin (0,0).
+
+We store the coordinates in a JavaScript object with two properties =x= and
+=y=.
+
+#+NAME: vector
 #+BEGIN_SRC js
-  function vec_length(v) {
-    return Math.sqrt(v.y*v.x + v.y*v.y)
-  }
+  /** Return a vector of coordinates (X,Y). */
+  function vector(x, y) { return {x, y}}
+#+END_SRC
 
-  function vec_unit(v) {
-    var l = vec_length(v)
-    return point(v.x / l, v.y / l)
-  }
+A point is also a couple of coordinates (x,y).  As such, the constructor is
+identical to that of a vector.
 
-  function vec_perp(v) {
-    return point(-v.y, v.x)
-  }
+The resulting objects are exactly the same, so we can use both constructors
+interchangeably.  However, we try use the point constructor when it is more
+semantically appropriate (e.g., [[is_point_inside_box][is_point_inside_box]]).
 
+#+NAME: point
+#+BEGIN_SRC js
+  /** Return a point of coordinates (X,Y). */
+  function point(x, y) { return {x, y}}
+#+END_SRC
+
+** TODO Adding and subtracting vectors
+To add two vectors, add their coordinates.
+
+[[file:img/vec_plus.png]]
+
+This is used for translating a vector.
+
+#+NAME: vec_plus
+#+BEGIN_SRC js
   function vec_plus(u, v) {
     return point(u.x + v.x, u.y + v.y)
   }
+#+END_SRC
 
+Subtraction is the same as adding a negated vector.  We redefine it more
+directly rather than using [[vec_dot][vec_dot]].
+
+Subtraction is useful for finding the vector between two points:
+
+
+#+NAME: vec_minus
+#+BEGIN_SRC js
   function vec_minus(u, v) {
     return point(u.x - v.x, u.y - v.y)
   }
+#+END_SRC
 
-  function vec_dot(u, v) {
-    return u.x * v.x + u.y * v.y
+** Scaling a vector
+To scale a vector, multiply each of its coordinates.
+
+#+NAME: vec_mult
+#+BEGIN_SRC js
+  function vec_mult(v, s) {
+    return point(v.x * s, v.y * s)
   }
+#+END_SRC
 
+** TODO Rotating a vector
+#+NAME: vec_rotate
+#+BEGIN_SRC js
   function vec_rotate(v, a) {
     var cos = Math.cos(a)
     var sin = Math.sin(a)
     return point(v.x * cos - v.y * sin,
                  v.x * sin + v.y * cos)
+  }
+#+END_SRC
+
+** TODO Dot product
+#+NAME: vec_dot
+#+BEGIN_SRC js
+  function vec_dot(u, v) {
+    return u.x * v.x + u.y * v.y
+  }
+#+END_SRC
+
+** Vector length
+Vector length, or magnitude, is the distance between the vector coordinates and
+the origin.
+
+To obtain it, we apply Pythagoras’ theorem.
+
+[[file:img/vec_length.png]]
+
+#+NAME: vec_length
+#+BEGIN_SRC js
+  function vec_length(v) {
+    return Math.sqrt(v.x*v.x + v.y*v.y)
+  }
+#+END_SRC
+
+** Unit vector
+Unit vectors are vectors of length 1.  Trivial examples are (0,1) and (1,0).
+
+We /normalize/ a vector when we adjust its magnitude to 1 (without changing its
+direction).
+
+To normalize a vector, we scale it by the inverse of its magnitude.
+
+#+NAME: vec_unit
+#+BEGIN_SRC js
+  function vec_unit(v) {
+    var l = vec_length(v)
+    return point(v.x / l, v.y / l)
+  }
+#+END_SRC
+
+We could call [[vec_mult][vec_mult]], but I believe (maybe wrongly) that this is faster.
+
+** Normal vector
+Rotating a vector by 90° gives its /normal/ vector, which is perpendicular.
+
+[[file:img/vec_perp.png]]
+
+The normal vector is useful for finding the axis of projection in the [[#SAT][SAT
+algorithm]].
+
+As this is a common operation, we do not want to use [[vec_rotate][vec_rotate]].
+Instead, we can plug the values of cos and sin for 90°.
+
+: cos(90°) = 0
+: sin(90°) = 1
+
+#+NAME: vec_perp
+#+BEGIN_SRC js
+  function vec_perp(v) {
+    return point(-v.y, v.x)
   }
 #+END_SRC
