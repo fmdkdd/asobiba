@@ -1,0 +1,474 @@
+# -*- org-confirm-babel-evaluate: nil; org-babel-use-quick-and-dirty-noweb-expansion: t -*-
+#+PROPERTY: header-args :results output :noweb yes
+
+* First try
+Mixing big/small step, call by value/name.
+
+Main trouble seems to be that substitution must be applied deeply, but we would
+like it to stay outside closures.
+
+The idea to unify syntax and values is enticing.  It should allow for greater
+composition and uniformity.
+
+However, it is tricky to resolve.
+
+#+NAME: ast
+#+BEGIN_SRC js
+function app(e1, e2) { return {type: 'app', e1, e2, toString() { return `(${e1} ${e2})`}}}
+function fun(x, e) { return {type: 'fun', x, e, toString() { return `(\\${x}. ${e})`}}}
+function v(x) { return {type: 'v', x, toString() { return x}}}
+function c(e) { return {type: 'c', e, toString() { return e}}}
+function subst(e1, x, e2) { return {type: 'subst', e1, x, e2, toString() { return `(${e1} [${x}=${e2}])`}}}
+function R(e1, x, e2) { return {type: 'R', e1, x, e2, toString() { return `(${e1} <${x}=${e2}>)`}}}
+#+END_SRC
+
+#+NAME: main
+#+BEGIN_SRC js
+var depth = 0
+
+function indent(depth) {
+  var w = ''
+  for (var i = 0; i < depth; ++i) {w += '  '}
+  return w
+}
+
+function interp(node) {
+  var f = nodes[node.type]
+
+  if (f) {
+    print(`${indent(depth++)}${node}`)
+    var r = f(node)
+    depth--
+    return r
+  }
+  else throw 'Unknown node type ' + node.type
+}
+
+function run(prog) {
+  var r = interp(prog)
+  print(`=> ${r}`)
+  return r.toString()
+}
+#+END_SRC
+
+#+NAME: nodes
+#+BEGIN_SRC js
+var nodes = {
+  c({e}) {
+    return c(e)
+  },
+
+  v({x}) {
+    return v(x)
+    // or
+    // throw 'Unknown variable ' + x
+  },
+
+  fun({x, e}) {
+    return fun(x, e)
+  },
+
+  app({e1, e2}) {
+    var f = interp(e1)
+    var x = interp(e2)
+
+    if (f.type !== 'fun') return 'Not a function ' + f
+    return interp(subst(f.e, f.x, x))
+  },
+
+  subst({e1, x, e2}) {
+    if (e1.type === 'c') {
+      return e1
+    }
+
+    else if (e1.type === 'v') {
+      if (e1.x === x) return e2
+      else return e1
+    }
+
+    else if (e1.type === 'fun') {
+      if (e1.x === x) return e1 // Shadowing
+      else return fun(e1.x, subst(e1.e, x, e2))
+    }
+
+    else if (e1.type === 'app') {
+      return interp(app(subst(e1.e1, x, e2), subst(e1.e2, x, e2)))
+    }
+
+    else if (e1.type === 'subst') {
+      if (e1.x === x) {
+        throw 'HAHA'
+      }
+      else {
+        var t = interp(e1)
+        return interp(subst(t, x, e2))
+      }
+    }
+
+    else
+      return 'Non-exhaustive subst: ' + e1.type
+  },
+
+  R({e1, x, e2}) {
+    print(e1, e2)
+    var s = interp(e1)
+    var y = interp(e2)
+
+    if (s.type === 'fun') {
+      return interp(fun(s.x, R(s.e, x, e2)))
+    }
+
+    if (s.type === 'subst') {
+      if (x === s.x) {
+        return interp(subst(s.e1, s.x, y))
+      }
+      else return "Don't know watodo -_O_-"
+    }
+
+    else
+      return 'Non-exhaustive R: ' + s.type
+  },
+}
+#+END_SRC
+
+#+NAME: all
+#+BEGIN_SRC js
+<<ast>>
+<<main>>
+<<nodes>>
+#+END_SRC
+
+** Tests
+#+BEGIN_SRC js
+<<all>>
+run(app(fun('x', v('x')), c(42)))
+#+END_SRC
+
+#+RESULTS:
+: ((\x. x) 42)
+:   (\x. x)
+:   42
+:   (x [x=42])
+: => 42
+
+The next one is my main interest.  It shows that a partially applied function
+has /not/ reduced completely.  The substitution is suspended.
+
+So, it should be possible to compose this closure with an operator that
+substitutes the binding for ~x~.
+
+#+BEGIN_SRC js
+<<all>>
+run(app(fun('x', fun('y', v('x'))), c(42)))
+#+END_SRC
+
+#+RESULTS:
+: ((\x. (\y. x)) 42)
+:   (\x. (\y. x))
+:   42
+:   ((\y. x) [x=42])
+: => (\y. (x [x=42]))
+
+I’ve tried using ~subst~ itself as the operator, since it /seems/ intuitively
+the same thing.
+
+Except there is an issue of order of evaluation of a ~subst~ containing a
+~subst~.
+
+So, why not use a separate operator at first?  Then later see if we can use
+~subst~ for the same thing.
+
+#+BEGIN_SRC js
+<<all>>
+run(app(R(app(fun('x', fun('y', v('x'))), c(42)), 'x', c(2)), c(0)))
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+((((\x. (\y. x)) 42) <x=2>) 0)
+  (((\x. (\y. x)) 42) <x=2>)
+((\x. (\y. x)) 42) 2
+    ((\x. (\y. x)) 42)
+      (\x. (\y. x))
+      42
+      ((\y. x) [x=42])
+    2
+    (\y. ((x [x=42]) <x=2>))
+  0
+  (((x [x=42]) <x=2>) [y=0])
+=> Non-exhaustive subst: R
+#+end_example
+
+
+#+BEGIN_SRC js
+// run(app(app(fun('x', fun('y', v('x'))), c(42)), c(0))) //: 42
+// run(app(app(fun('x', fun('y', v('y'))), c(42)), c(0))) //: 0
+
+//run(subst(c(0), 'x', c(1))) //: "Unknown node type undefined"
+//run(subst(v('x'), 'x', c(1))) //: "Unknown node type undefined"
+//run(subst(v('y'), 'x', c(1))) //: "Unknown node type undefined"
+// run(subst(fun('x', c(0)), 'x', c(1))) //: "Unknown node type undefined"
+// run(subst(fun('y', c(0)), 'x', c(1))) //: "Unknown node type undefined"
+#+END_SRC
+
+* Small step
+Mixing small/big step and call by value/name is fuzzy.
+
+Use a small step in order to carefully say exactly what happens.
+
+Potential issue: since values are unified with syntax, can’t use values to
+advance the reduction?
+
+* Keep values separate
+The original issue is simply to be able to change the bindings of a closure.
+
+Using the substitution for that is icing on the cake.
+
+A less elegant, but maybe more straightforward solution would then be to use an
+interpreter which produces closures, and add an operator to change the bindings.
+
+#+NAME: straight/ast
+#+BEGIN_SRC js
+function app(e1, e2) {
+  return {type: 'app', e1, e2,
+          toString() { return `(${this.e1} ${this.e2})`}}}
+function fun(x, e) {
+  return {type: 'fun', x, e,
+          toString() { return `(\\${this.x}. ${this.e})`}}}
+function v(x) {
+  return {type: 'v', x, toString() { return this.x}}}
+function c(e) {
+  return {type: 'c', e, toString() { return this.e}}}
+function R(e1, x, e2) {
+  return {type: 'R', e1, x, e2,
+          toString() { return `(${this.e1} <${this.x}=${this.e2}>)`}}}
+function plus(e1, e2) {
+  return {type: 'plus', e1, e2,
+          toString() { return `(${this.e1} + ${this.e2})`}}}
+
+// Values
+function clos(x, e, env) {
+  return {type: 'clos', x, e, env,
+          toString() {
+            return `<\\${this.x} ${this.e} ${envToString(this.env)}>`}}}
+#+END_SRC
+
+#+NAME: straight/env
+#+BEGIN_SRC js
+function env_set(env, x, v) {
+  return [[x,v]].concat(env)
+}
+
+function env_has(env, x) {
+  for (var i in env) {
+    if (env[i][0] === x)
+      return true
+  }
+  return false
+}
+
+function env_get(env, x) {
+  for (var i in env) {
+    if (env[i][0] === x)
+      return env[i][1]
+  }
+}
+
+function env_new(env) {
+  return env.slice(0)
+}
+
+function envToString(env) {
+  var s = []
+  for (var i in env) {
+    s.push(`${env[i][0]}=${env[i][1]}`)
+  }
+  return `[${s.join()}]`
+}
+#+END_SRC
+
+#+NAME: straight/main
+#+BEGIN_SRC js
+var depth = 0
+
+function indent(depth) {
+  var w = ''
+  for (var i = 0; i < depth; ++i) {w += '  '}
+  return w
+}
+
+function interp(node, env) {
+  var f = nodes[node.type]
+
+  if (f) {
+    print(`${indent(depth++)}${node}`)
+    var r = f(node, env)
+    depth--
+    return r
+  }
+  else return 'Unknown node type ' + node.type
+}
+
+function run(prog) {
+  var r = interp(prog, [])
+  print(`=> ${r}`)
+  return r.toString()
+}
+#+END_SRC
+
+#+NAME: straight/nodes
+#+BEGIN_SRC js
+var nodes = {
+  c({e}, env) {
+    return e
+  },
+
+  v({x}, env) {
+    if (!env_has(env, x))
+      return 'Unknown variable ' + x
+    else return env_get(env, x)
+  },
+
+  fun({x, e}, env) {
+    print(x, e, envToString(env))
+    return clos(x, e, env_new(env))
+  },
+
+  app({e1, e2}, env) {
+    var f = interp(e1, env)
+    var v = interp(e2, env)
+
+    if (f.type !== 'clos') return 'Not a closure ' + f
+    return interp(f.e, env_set(f.env, f.x, v))
+  },
+
+  R({e1, x, e2}, env) {
+    var f = interp(e1, env)
+    var v = interp(e2, env)
+
+    if (f.type !== 'clos') return 'Not a closure ' + f
+    f.env = env_set(f.env, x, v)
+    return f
+  },
+
+  plus({e1, e2}, env) {
+    var a = interp(e1, env)
+    var b = interp(e2, env)
+
+    return a + b
+  }
+}
+#+END_SRC
+
+#+NAME: straight/all
+#+BEGIN_SRC js
+<<straight/ast>>
+<<straight/main>>
+<<straight/env>>
+<<straight/nodes>>
+#+END_SRC
+
+** Tests
+
+#+BEGIN_SRC js
+<<straight/all>>
+run(app(fun('x', fun('y', v('x'))), c(42)))
+#+END_SRC
+
+#+RESULTS:
+: ((\x. (\y. x)) 42)
+:   (\x. (\y. x))
+:   42
+:   (\y. x)
+: => <\y x [x=42]>
+
+#+BEGIN_SRC js
+<<straight/all>>
+run(app(app(fun('x', fun('y', v('x'))), c(42)), c(0)))
+#+END_SRC
+
+#+RESULTS:
+: (((\x. (\y. x)) 42) 0)
+:   ((\x. (\y. x)) 42)
+:     (\x. (\y. x))
+:     42
+:     (\y. x)
+:   0
+:   x
+: => 42
+
+~R~ simply substitutes the environment of the closure to which it is applied.
+
+#+BEGIN_SRC js
+<<straight/all>>
+run(R(app(fun('x', fun('y', v('x'))), c(42)), 'x', c(2)))
+#+END_SRC
+
+#+RESULTS:
+: (((\x. (\y. x)) 42) <x=2>)
+:   ((\x. (\y. x)) 42)
+:     (\x. (\y. x))
+:     42
+:     (\y. x)
+:   2
+: => <\y x [x=2,x=42]>
+
+We can then apply the closure, having changed its bindings.
+
+#+BEGIN_SRC js
+<<straight/all>>
+run(app(R(app(fun('x', fun('y', v('x'))), c(42)), 'x', c(2)), c(0)))
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+((((\x. (\y. x)) 42) <x=2>) 0)
+  (((\x. (\y. x)) 42) <x=2>)
+    ((\x. (\y. x)) 42)
+      (\x. (\y. x))
+      42
+      (\y. x)
+    2
+  0
+  x
+=> 2
+#+end_example
+
+So, module example.
+
+#+BEGIN_SRC js
+<<straight/all>>
+
+var f = fun('x', plus(v('x'), v('a')))
+var g = fun('x', app(v('f'), v('x')))
+
+//run(app(fun('a', fun('f', fun('g', v('g')))), c(1)))
+//run(app(app(fun('a', fun('f', fun('g', v('g')))), c(1)), f))
+//run(app(app(app(fun('a', fun('f', fun('g', v('g')))), c(1)), f), g))
+run(app(app(app(app(fun('a', fun('f', fun('g', v('g')))), c(1)), f), g), c(0)))
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+(((((\a. (\f. (\g. g))) 1) (\x. (x + a))) (\x. (f x))) 0)
+  ((((\a. (\f. (\g. g))) 1) (\x. (x + a))) (\x. (f x)))
+    (((\a. (\f. (\g. g))) 1) (\x. (x + a)))
+      ((\a. (\f. (\g. g))) 1)
+        (\a. (\f. (\g. g)))
+a (\f. (\g. g)) []
+        1
+        (\f. (\g. g))
+f (\g. g) [a=1]
+      (\x. (x + a))
+x (x + a) []
+      (\g. g)
+g g [f=<\x (x + a) []>,a=1]
+    (\x. (f x))
+x (f x) []
+    g
+  0
+  (f x)
+    f
+    x
+=> Not a closure Unknown variable f
+#+end_example
