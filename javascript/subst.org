@@ -219,7 +219,133 @@ Use a small step in order to carefully say exactly what happens.
 Potential issue: since values are unified with syntax, can’t use values to
 advance the reduction?
 
+#+BEGIN_SRC js
+if (!this.print) this.print = function(...args) { console.log(...args) }
+
+function up(o) { return Object.getPrototypeOf(o) }
+
+function app(e1, e2) {
+  return {type: 'app', e1, e2,
+          toString() { return `(${this.e1} ${this.e2})`}}}
+function fun(x, e) {
+  return {type: 'fun', x, e,
+          toString() { return `(\\${this.x}. ${this.e})`}}}
+function v(x) {
+  return {type: 'v', x, toString() { return this.x}}}
+function c(e) {
+  return {type: 'c', e, toString() { return this.e}}}
+function subst(e1, x, e2) {
+  return {type: 'subst', e1, x, e2,
+          toString() { return `(${this.e1} [${this.x}=${this.e2}])`}}
+}
+
+var depth = 0
+
+function indent(depth) {
+  var w = ''
+  for (var i = 0; i < depth; ++i) {w += '  '}
+  return w
+}
+
+function interp(node) {
+  var f = nodes[node.type]
+
+  if (f) {
+    //print(`${indent(depth++)}${node}`)
+    var r = f(node)
+    depth--
+    return r
+  }
+  else throw 'Unknown node type ' + node.type
+}
+
+function run(prog) {
+  var r
+
+    r = interp(prog)
+    //print(`=> ${r}`)
+
+  return r.toString()
+}
+
+var nodes = {
+  c({e}) {
+    return c(e)
+  },
+
+  v({x}) {
+    return v(x)
+  },
+
+  fun({x, e}) {
+    return fun(x, e)
+  },
+
+  app({e1, e2}) {
+    if (e2.type !== 'c' && e2.type !== 'v' && e2.type !== 'fun') {
+      return app(e1, interp(e2))
+    }
+
+    if (e1.type !== 'c' && e1.type !== 'v' && e1.type !== 'fun') {
+      return app(interp(e1), e2)
+    }
+
+    if (e1.type !== 'fun') throw 'Not a function: ' + e1
+    return subst(e1.e, e1.x, e2)
+  },
+
+  subst({e1, x, e2}) {
+    if (e1.type === 'fun') {
+      if (e1.x === x) return e1
+      else return fun(e1.x, subst(e1.e, x, e2))
+    }
+
+    else throw 'Non-exhaustive subst: ' + e1.type
+  },
+}
+
+var p = app(fun('x', fun('y', v('x'))), c(42))
+p.toString() //: "((\x. (\y. x)) 42)"
+p = interp(p)
+p.toString() //: "((\y. x) [x=42])"
+p = interp(p)
+p.toString() //: "(\y. (x [x=42]))"
+p = interp(p)
+p.toString() //: "(\y. (x [x=42]))"
+
+p = app(app(fun('x', fun('y', v('x'))), c(42)), c(0))
+p.toString() //: "(((\x. (\y. x)) 42) 0)"
+p = interp(p)
+p.toString() //: "(((\y. x) [x=42]) 0)"
+p = interp(p)
+p.toString() //: "((\y. (x [x=42])) 0)"
+p = interp(p)
+p.toString() //: "((x [x=42]) [y=0])"
+p = interp(p)
+p.toString() //: "Non-exhaustive subst: subst"
+
+p = R(app(fun('x', fun('y', v('x'))), c(42)), 'x', c(2))
+p.toString() //: "Non-exhaustive subst: subst"
+run(p) //: "Non-exhaustive subst: subst"
+
+p = app(R(app(fun('x', fun('y', v('x'))), c(42)), 'x', c(2)), c(0))
+p.toString() //: "Non-exhaustive subst: subst"
+run(p) //: "Non-exhaustive subst: subst"
+#+END_SRC
+
+This is small step alright.  The issue seems to be: since substitution is not an
+atomic operation, how do we guide it?
+
+We could add a ‘reduce’ operation, which evaluates the final term after applying
+all substitutions.
+
+In any case, at this point the value of the term is undecided.  So we can add an
+operator to change the bindings.
+
 * Keep values separate
+:PROPERTIES:
+:header-args: :tangle straight.js
+:END:
 The original issue is simply to be able to change the bindings of a closure.
 
 Using the substitution for that is icing on the cake.
@@ -376,11 +502,6 @@ run(app(fun('x', fun('y', v('x'))), c(42)))
 #+END_SRC
 
 #+RESULTS:
-: ((\x. (\y. x)) 42)
-:   (\x. (\y. x))
-:   42
-:   (\y. x)
-: => <\y x [x=42]>
 
 #+BEGIN_SRC js
 <<straight/all>>
@@ -472,3 +593,205 @@ x (f x) []
     x
 => Not a closure Unknown variable f
 #+end_example
+
+* Another try
+This works, but ~R~ is somewhat convoluted.
+
+I’ve had to return to objects as environments, as I actually needed the sharing
+of parents to mimic the scope behavior of JS.
+
+Still, there is the issue that the definitions do not share a ‘variable
+environment’ as in JS, so manipulating bindings is not as simple as pushing
+~a=2~ in front of the scope.
+
+Suggesting that I may need to mimic more closely JS semantics.
+
+But I have not gained any composition from the ~R~ operator yet.
+
+#+BEGIN_SRC js
+if (!this.print) this.print = function(...args) { console.log(...args) }
+
+function up(o) { return Object.getPrototypeOf(o) }
+
+function app(e1, e2) {
+  return {type: 'app', e1, e2,
+          toString() { return `(${this.e1} ${this.e2})`}}}
+function fun(x, e) {
+  return {type: 'fun', x, e,
+          toString() { return `(\\${this.x}. ${this.e})`}}}
+function v(x) {
+  return {type: 'v', x, toString() { return this.x}}}
+function c(e) {
+  return {type: 'c', e, toString() { return this.e}}}
+function R(e1, x, e2) {
+  return {type: 'R', e1, x, e2,
+          toString() { return `(${this.e1} <${this.x}=${this.e2}>)`}}}
+function plus(e1, e2) {
+  return {type: 'plus', e1, e2,
+          toString() { return `(${this.e1} + ${this.e2})`}}}
+function letin(x, v, e) {
+  return {type: 'letin', x, v, e,
+          toString() { return `let ${this.x}=${this.v} in ${this.e}`}}}
+
+// Values
+function clos(x, e, env) {
+  return {type: 'clos', x, e, env,
+          toString() {
+            return `<\\${this.x}. ${this.e} ${envToString(this.env)}>`}}}
+
+function env_set(env, x, v) {
+  env[x] = v
+  return env
+//   return [[x,v]].concat(env)
+}
+
+function env_has(env, x) {
+  return x in env
+//   for (var i in env) {
+//     if (env[i][0] === x)
+//       return true
+//   }
+//   return false
+}
+
+function env_get(env, x) {
+  return env[x]
+//   for (var i in env) {
+//     if (env[i][0] === x)
+//       return env[i][1]
+//   }
+}
+
+function env_new(env) {
+  if (env == null) return Object.create(null)
+  return Object.create(env)
+}
+
+function envToString(env) {
+  var s = []
+  for (var p in env) {
+    s.push(`${p}=${env[p]}`)
+  }
+  return `[${s.join()}]`
+}
+
+var depth = 0
+
+function indent(depth) {
+  var w = ''
+  for (var i = 0; i < depth; ++i) {w += '  '}
+  return w
+}
+
+function interp(node, env) {
+  var f = nodes[node.type]
+
+  if (f) {
+    //print(`${indent(depth++)}${node}`)
+    var r = f(node, env)
+    depth--
+    return r
+  }
+  else return 'Unknown node type ' + node.type
+}
+
+function run(prog) {
+  var r = interp(prog, env_new())
+  //print(`=> ${r}`)
+  return r.toString()
+}
+
+var nodes = {
+  c({e}, env) {
+    return e
+  },
+
+  v({x}, env) {
+    if (!env_has(env, x))
+      return 'Unknown variable ' + x
+    else return env_get(env, x)
+  },
+
+  fun({x, e}, env) {
+    return clos(x, e, env_new(env))
+  },
+
+  app({e1, e2}, env) {
+    var f = e1.type === 'clos' ? e1 : interp(e1, env)
+    var v = interp(e2, env)
+
+    if (f.type !== 'clos') return 'Not a closure ' + f
+    return interp(f.e, env_set(f.env, f.x, v))
+  },
+
+  R({e1, x, e2}, env) {
+    var f = interp(e1, env)
+    var v = interp(e2, env)
+
+    if (f.type !== 'clos') return 'Not a closure ' + f
+    var e = f.env
+    while (up(e) && !Object.hasOwnProperty.call(e, x))
+      e = up(e)
+//    print(e)
+    e[x] = v
+//    print(e)
+    //f.env = env_set(f.env, x, v)
+    return f
+  },
+
+  plus({e1, e2}, env) {
+    var a = interp(e1, env)
+    var b = interp(e2, env)
+
+    return a + b
+  },
+
+  letin({x, v, e}, env) {
+    return interp(app(fun(x, e), v), env)
+  },
+}
+
+var p = app(fun('x', fun('y', v('x'))), c(42))
+p.toString() //: "((\x. (\y. x)) 42)"
+run(p) //: "<\y. x [x=42]>"
+
+p = app(app(fun('x', fun('y', v('x'))), c(42)), c(0))
+p.toString() //: "(((\x. (\y. x)) 42) 0)"
+run(p) //: "42"
+
+p = R(app(fun('x', fun('y', v('x'))), c(42)), 'x', c(2))
+p.toString() //: "(((\x. (\y. x)) 42) <x=2>)"
+run(p) //: "<\y. x [x=2]>"
+
+p = app(R(app(fun('x', fun('y', v('x'))), c(42)), 'x', c(2)), c(0))
+p.toString() //: "((((\x. (\y. x)) 42) <x=2>) 0)"
+run(p) //: "2"
+
+
+var f = fun('x', plus(v('x'), v('a')))
+var g = fun('x', app(v('f'), v('x')))
+
+p = letin('a', c(1),
+    letin('f', f,
+    letin('g', g,
+    v('g'))))
+p.toString() //: "let a=1 in let f=(\x. (x + a)) in let g=(\x. (f x)) in g"
+run(p) //: "<\x. (f x) [f=<\x. (x + a) [a=1]>,a=1]>"
+
+run(app(p, c(0))) //: "1"
+
+p = R(letin('a', c(1),
+      letin('f', f,
+      letin('g', g,
+      v('g')))), 'a', c(2))
+p.toString() //: "(let a=1 in let f=(\x. (x + a)) in let g=(\x. (f x)) in g <a=2>)"
+var p2 = interp(p, env_new())
+p2.toString() //: "<\x. (f x) [f=<\x. (x + a) [a=2]>,a=2]>"
+
+up(up(p2.env).f.env) === up(up(p2.env)) //: true
+//delete p2.env.a //: true
+//p2.env.f.env.a = 2 //: 2
+p2.env.a //: 2
+
+run(app(p2, c(0))) //: "2"
+#+END_SRC
