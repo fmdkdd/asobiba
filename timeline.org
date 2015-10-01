@@ -1,0 +1,196 @@
+* [2015-09-30 mer.]
+:PROPERTIES:
+:header-args: :results none
+:END:
+Trying to come up with a fast equivalent to ~which-func-mode~ under Spacemacs.
+The most naive implementation would be to lookup backward for the first heading.
+
+#+BEGIN_SRC elisp
+(spacemacs|define-mode-line-segment which-org-headline-segment
+  (fmdkdd/org-current-headline)
+  :when (eq major-mode 'org-mode))
+
+(add-to-list 'spacemacs|define-mode-line-segment 'which-org-headline-segment t)
+
+(defun fmdkdd/org-current-headline ()
+  (save-excursion
+    (re-search-backward org-complex-heading-regexp nil t)
+    (match-string-no-properties 4)))
+#+END_SRC
+
+That does not give you the full current hierarchy (bread crumbs).
+Actually, there is an ~org-get-heading~.
+
+#+BEGIN_SRC elisp
+(spacemacs|define-mode-line-segment which-org-headline-segment
+  (org-get-heading)
+  :when (eq major-mode 'org-mode))
+#+END_SRC
+
+It even gives us the font-lock properties.
+
+There is also a ~org-get-outline-path~ that gives the rest of the crumbs.
+
+#+BEGIN_SRC elisp
+(spacemacs|define-mode-line-segment which-org-headline-segment
+  (fmdkdd/org-current-headline)
+  :when (eq major-mode 'org-mode))
+
+(defun fmdkdd/org-current-headline ()
+  (let ((path (append (org-get-outline-path)
+                      (cons (org-get-heading t t) nil))))
+    (org-format-outline-path path 40)))
+#+END_SRC
+
+Removing the text properties can be achieved by calling
+~substring-no-properties~.  Though I rather like the effect as is.
+
+Another, longer (but more proper?) way of removing them is the following:
+
+#+BEGIN_SRC elisp
+(defun fmdkdd/org-current-headline ()
+  (let* ((path (append (org-get-outline-path)
+                      (cons (org-get-heading t t) nil)))
+        (formatted (org-format-outline-path path 40)))
+    (set-text-properties 0 (length formatted) nil formatted)
+    formatted))
+#+END_SRC
+
+* [2015-10-01 jeu.]
+I would like to be able to use Emacs for collaborative editing.  I have light
+requirements:
+
+- over local network would suffice.  I just want to be able to share a buffer
+  with someone next to me, each with their own computer.  For pair programming
+  or teaching.
+- I don’t care much about security: I trust the other person since she is right
+  next to me.  When we finish, the computer should not be left in a vulnerable
+  state however.
+- I prefer to stay with my own Spacemacs config, rather than having to use the
+  config of the peer.
+- it should be painless to setup, and stable.
+
+This [[http://stackoverflow.com/questions/12546722/using-emacs-server-and-emacsclient-on-other-machines-as-other-users][SO thread]] is a good start.
+
+The scenario is as follows.  Host is where the files to be modified reside.
+Host has an Emacs session and buffer on file A.  Client wants to drop in Host
+and take control of Emacs from his machine, and edit the same buffer.  He can
+also split windows, switch buffers, etc.
+
+** Using tramp and ssh
+Client needs ssh access to Host.  Client can browse to file A from his Emacs.
+
+However, Host will not see the changes until Client saves.  This is
+insufficient.
+
+** Using ~make-frame-on-display~
+Emacs can spawn a frame on another X display.
+
+The requirements:
+
+- Allow X to listen to TCP connections.
+
+  Under Ubuntu, X is spawned by lightdm, so, in =/etc/lightdm/lightdm.conf=
+  : xserver-allow-tcp=true
+
+  and restart lightdm.
+
+- After that, allow the Host to access the X server with xhost
+  : xhost +host
+
+  In Ubuntu, my LAN machines can be accessed via =host.local=.
+
+  One can also use ~xauth~ here, as described in the SO thread.  Deauthorize the
+  Host with ~xhost -host~.
+
+- Finally, the Host can spawn a frame from its Emacs on the client display
+  server with
+  : make-frame-on-display client.local:0
+
+Now, Client can write in the buffer, and Host can see the changes.  Both can
+even edit at the same time.
+
+Seems stable.  There is the issue that if any of the peer starts a modal action
+(helm lookup, M-x minibuffer spawn), the other cannot type anymore.  When the
+modal action is over, the input will be sent to the frame however.
+
+This is a distinct frame, so Client cannot control the Emacs frame on Host.
+Splitting windows should be done on both machines.  Client can browse the Host
+files.
+
+Host only has one command to spawn.  But Client needs to restart X before
+pairing, because tcplisten seems like a fun backdoor to leave open.
+
+Alas, Client is stuck with the Emacs configuration from Host.  This cannot be
+avoided, since there is only one Emacs process.
+
+** Using tmux
+As suggested [[http://www.emacswiki.org/emacs/tmux_for_collaborative_editing][there]].  However, I could not make the socket sharing work.
+
+Rather, sharing the same tmux session is simple:
+
+- Host does ~tmux new -s pp~ to create a new session named ‘pp’.
+- Client does (connected on Host) ~tmux attach -t pp~ to join the session.
+
+With tmux, Client can connect to Host using ssh, and join a tmux session.  Both
+share the same cursor.
+
+Since tmux is terminal-based, Emacs runs in tty mode.  Functionality is the
+same, but can be unfamiliar for Host.  Using frames would be possible through
+ssh X forwarding, but that would not give us more than the previous solution.
+
+Client has to use Host Emacs config, again.  The setup is also slightly more
+involved with Host.
+
+But, sharing through tmux is useful beyond Emacs.  So there is that.  And this
+solution should work well over the network (if you can ssh to Host).
+
+There is even a wrapper around tmux called [[https://github.com/zolrath/wemux/][wemux]] which simplifies the setup and
+provides relevant options for multiple peers.
+
+** Using floobits
+A proprietary web service.  Use a Github account, create a workspace (?) and
+share files.  Other users you have authorized can then access the workspace, and
+you can see the changes in realtime in your editor if you are viewing the same
+file.
+
+Rather nice is that every peer is using his own machine and editor.
+
+However, it goes through the Floobits server, thus it’s pretty slow compared to
+the previous solutions.
+
+And there is the requirement of going through a workspace.  It might make sense
+for collaborative realtime editing of a project, though I’d rather use Git then.
+But it’s cumbersome to setup when playing on a throwaway file.
+
+The nail in the coffin is of course having to go through a third-party.  If the
+server software was at least available as open source, I could run a local
+instance and that would be a pretty good solution.  Alas, that does not appear
+to be the case.
+
+** Using rudel
+[[http://rudel.sourceforge.net/][Rudel]] is an Emacs package which share functionality with Floobits.
+
+One Emacs must host a rudel session.  Others can join.  The host does not take
+part in collaborative editing.  The host passes editing data from one peer to
+another using an open protocol.  Other clients can join.
+
+Users in a session can publish a buffer, and others can subscribe to it.  When
+you subscribe to a buffer, Rudel opens a new window with the buffer text
+inside.  You can then edit the text with your own cursor, and editor.  Changes
+are highlighted with the color of each user (that can be disabled through the
+menu option, thankfully).
+
+Rudel is intended to work with menu-bar-mode on, it seems.
+
+I don’t know what data Rudel sends, but from the project website, it seems it
+can break the functionality of some modes like EShell.  This behavior can be
+troubling.
+
+I’m not sure what exactly is the buffer a client edits: does it have a local
+copy?  Does it exist only temporarily?
+
+Speed is alright, but slower than tmux and xhost.
+
+Also, the setup is a bit more involved, and the package is in dire need of
+maintenance.
