@@ -1,6 +1,14 @@
 # -*- org-confirm-babel-evaluate: nil; org-babel-use-quick-and-dirty-noweb-expansion: t -*-
 #+PROPERTY: header-args :results output :noweb yes
 
+An abstract view of the open scope pattern.  Rather than dealing with full
+JavaScript, the concept boils down to manipulating closures.  Let’s try that
+with a lambda calculus interpreter.
+
+Trying to reify the substitution of parameter names to their values that happen
+during function application.  The substitution is done by the interpreter.  What
+if we could push the substitution into the language, as an operator?
+
 * First try
 Mixing big/small step, call by value/name.
 
@@ -341,6 +349,12 @@ all substitutions.
 
 In any case, at this point the value of the term is undecided.  So we can add an
 operator to change the bindings.
+
+One issue with this approach: terms are independent of one another.  In the
+module example, I need to call ~g~ twice, each time with different bindings.
+The open scope trick relies on shared environments.  In λ-calculus, nothing is
+shared.  I would be able to show a /similar/ trick in pure λ-calculus, but not
+explain the open scope trick faithfully.
 
 * Keep values separate
 :PROPERTIES:
@@ -795,3 +809,101 @@ p2.env.a //: 2
 
 run(app(p2, c(0))) //: "2"
 #+END_SRC
+
+* Equivalence with ~this~
+In JS at least, the relation of open scope with ~this~ can be quickly
+demonstrated.
+
+#+BEGIN_SRC js
+var m = (function(){
+  var scope = Object.create(null)
+  with (scope) {
+    var a = 1
+    function f(x) { return x + a }
+    function g(x) { return f(x) }
+  }
+  return {g, scope}
+}())
+
+print(m.g(0))
+m.scope.a = 2
+print(m.g(0))
+delete m.scope.a
+print(m.g(0))
+#+END_SRC
+
+#+RESULTS:
+: 1
+: 2
+: 1
+
+Standard object idiom.  We can override the value of ~this~, and put our changes
+in front /without altering the object itself/.
+
+#+BEGIN_SRC js
+var m = {
+  a: 1,
+  f(x) { return x + this.a },
+  g(x) { return this.f(x) },
+}
+
+print(m.g(0))
+print(m.g.call({__proto__: m, a:2}, 0))
+print(m.g(0))
+#+END_SRC
+
+#+RESULTS:
+: 1
+: 2
+: 1
+
+We can dispense of ~this~ by creating our own binding environments.  Two layers
+are needed to be able to override and delete bindings without affecting the
+original definitions.
+
+#+BEGIN_SRC js
+var m = (function(){
+  var env = Object.create(null)
+  var scope = Object.create(env)
+  env.a = 1
+  env.f = function(x) { return x + scope.a }
+  env.g = function(x) { return scope.f(x) }
+  return {g: env.g, scope}
+}())
+
+print(m.g(0))
+m.scope.a = 2
+print(m.g(0))
+delete m.scope.a
+print(m.g(0))
+#+END_SRC
+
+#+RESULTS:
+: 1
+: 2
+: 1
+
+Which can also write using an object literal syntax:
+
+#+BEGIN_SRC js
+var m = (function(){
+  var env = {
+    a: 1,
+    f(x) { return x + scope.a },
+    g(x) { return scope.f(x) },
+  }
+  var scope = Object.create(env)
+  return {g: env.g, scope}
+}())
+
+print(m.g(0))
+m.scope.a = 2
+print(m.g(0))
+delete m.scope.a
+print(m.g(0))
+#+END_SRC
+
+#+RESULTS:
+: 1
+: 2
+: 1
