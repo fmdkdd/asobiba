@@ -194,3 +194,76 @@ Speed is alright, but slower than tmux and xhost.
 
 Also, the setup is a bit more involved, and the package is in dire need of
 maintenance.
+* [2015-10-21 mer.]
+** Explanations
+In web apps, I find it would be useful to be able to ask why a value is 0, or
+NaN.  E.g., why a DOM element has its ‘left’ property to ‘12px’.  I would like
+to find the culprit code immediately.  Alas, there are no ‘conditional
+breakpoints’ in Firefox or Chrome.
+
+Wait, there are!  You can break on attribute modification by right-clicking a
+DOM in the Elements panel in Chrome.  In FF, you can conditionally /stop/ a
+breakpoint, but not break conditionally.
+
+Anyway, jumping into the debugger when a value is modified is only one part of
+the workflow.  That gives you the place where the value is set, but not how the
+right-hand side was computed.  You have to backtrack through the call stack to
+get this information.
+
+Instead, if a value contains its history, the explanation is always available.
+See [[file:javascript/explanation.js][explanation.js]] for a minimal proof of concept.
+
+** Interactive value inspector in s3c
+Trying to add interactive value inspectors into s3c.
+
+*** Rationale
+Instead of plain text, the editor should put an HTML element that represents the
+full object, like in Firefox or Chrome consoles.  Each property can be
+inspected.
+
+- Why do you need that?  The current behavior of displaying serialized objects
+  is good enough for small programs.  At least you have all the properties on
+  display at once.  With an “interactive” object, you have to click to view
+  further properties...
+
+- The current behavior is nice and simple, true.  But for larger objects, it
+  is unwieldy.  Also, an interactive value inspector opens the door for
+  interactive “explanations” of values: backtrack through the code that created
+  some value in order to understand why it’s a NaN, or 0, or ...
+
+- Do you really need explanations?  I mean, in a full application it could be
+  nice (provided a good signal-to-noise ratio), but s3c is for simple JavaScript
+  code for beginners.  To find out why a value is NaN, just add more //: to
+  track the flow.
+
+*** Implementation
+CodeMirror provides two functions: ~addWidget~ and ~addLineWidget~.  ~addWidget~
+puts an HTML element on a line with absolute positioning.  So I can create HTML
+to inspect an object, and put it after the delimiter.  It does not matter if the
+element is larger than the line: with a positive z-index, it will appear as if
+floating over the text.
+
+To do that, in ~write~, instead of replacing, I can call:
+
+: editor.addWidget({line: l}, p, false, "above")
+
+The last argument is undocumented, but it puts the element /on/ the given line
+rather than below (the default).
+
+However, the element is absolutely positioned.  It does not move when the line
+does, which breaks the illusion that it gives a view of the value to the left of
+the delimiter.
+
+To sync the widget, I would need to listen on changes on the document, and move
+all markers that are potentially affected.  It is not sufficient to listen to
+the ~change~ event of a line, as when a line is moved as a side-effect of
+inserting a new line above, no change event is fired.
+
+The ~addLineWidget~ is quite different, as it inserts the element below the line
+and appears to be inset /in/ the text.  The lines it takes are not numbered, and
+are skipped by the cursor.  It behaves correctly when inserting new lines.  Bit
+of a space hog currently, as it eats vertical space rather than making use of
+the usually empty space at the right of the screen.
+
+Hacking the DOM created by CodeMirror sounds like a bad idea, if only for
+forward compatibility.
