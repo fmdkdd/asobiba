@@ -1,0 +1,18 @@
+start:
+  trace 1
+  load r0 4
+  load r1 1
+  load r3 -1
+
+loop:
+  turn r2
+  move r0
+  add r2 r1
+  turn r2
+  move r0
+  add r0 r3
+  add r2 r1
+  bne r0 r4 loop
+
+stop:
+  halt
