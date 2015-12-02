@@ -267,3 +267,11 @@ the usually empty space at the right of the screen.
 
 Hacking the DOM created by CodeMirror sounds like a bad idea, if only for
 forward compatibility.
+* [2015-12-02 mer.]
+** Free monad for interpreters
+Reading up on free monads.  Again.  And discussing them with Ronan.
+
+Beyond [[http://programmers.stackexchange.com/questions/242795/what-is-the-free-monad-interpreter-pattern][this blog post]], [[http://programmers.stackexchange.com/questions/242795/what-is-the-free-monad-interpreter-pattern][this SO answer]] is particularly helpful.
+
+On a related note, even setting up a Free monad can be seen as boilerplate.
+[[http://okmij.org/ftp/Computation/free-monad.html][Okmij shows]] how to eliminate the noise.
