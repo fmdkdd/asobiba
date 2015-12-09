@@ -267,6 +267,7 @@ the usually empty space at the right of the screen.
 
 Hacking the DOM created by CodeMirror sounds like a bad idea, if only for
 forward compatibility.
+
 * [2015-12-02 mer.]
 ** Free monad for interpreters
 Reading up on free monads.  Again.  And discussing them with Ronan.
@@ -275,3 +276,28 @@ Beyond [[http://programmers.stackexchange.com/questions/242795/what-is-the-free-
 
 On a related note, even setting up a Free monad can be seen as boilerplate.
 [[http://okmij.org/ftp/Computation/free-monad.html][Okmij shows]] how to eliminate the noise.
+
+* [2015-12-09 mer.]
+** GameBoy Sound player
+The sound component of Boyo is a mess.  It sort-of works, but there are weird
+artifacts coming out after a while.  And it’s eating at least 20% CPU.  And it
+doesn’t even pass blargg’s tests!
+
+I want to start from a clean state, and understand how the damn thing works.
+Maybe writing a player for GBS files would be a more appropriate target?  I’m
+curious as to what these files store anyway.  Can’t be samples, or they would
+directly be in a sound format.  So they must be instructions directly from the
+ROM, but probably only the instructions relevant to the audio?
+
+Found a [[http://ocremix.org/info/GBS_Format_Specification][spec]] for GBS files.  At that point, eww does not seem capable of
+downloading a sample GBS from Zophar.
+
+Got some GBS.  They are indeed smaller than the ROM file from which they are
+extracted.  Pokemon Red ROM is 376K while the GBS is 48K for instance.
+
+Looking at the source for gbsplay, it seems indeed that playing the files means
+emulating the CPU and the audio unit.
+
+Maybe what would be nice is if we could compile the output from a GBS into audio
+instructions only.  To get an output similar to what MOD file looks like for
+trackers.  GBS to MOD converter.
