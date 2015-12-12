@@ -301,3 +301,10 @@ emulating the CPU and the audio unit.
 Maybe what would be nice is if we could compile the output from a GBS into audio
 instructions only.  To get an output similar to what MOD file looks like for
 trackers.  GBS to MOD converter.
+
+* [2015-12-11 ven.]
+** GameBoy Sound player
+Will try to go with rust-lang.  Why not make it harder on myself?  At least if I
+don’t complete the project, I’ll have learned the basics of a new language.
+
+Someone already did a library for [[https://github.com/emu-rs/spc][reading spc]] in Rust!  This will help.
