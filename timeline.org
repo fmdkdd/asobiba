@@ -308,3 +308,12 @@ Will try to go with rust-lang.  Why not make it harder on myself?  At least if I
 don’t complete the project, I’ll have learned the basics of a new language.
 
 Someone already did a library for [[https://github.com/emu-rs/spc][reading spc]] in Rust!  This will help.
+
+* [2015-12-12 sam.]
+** Learning Rust
+The proof of concept code I wrote yesterday worked, but some pieces went over my
+head.  Today I went over the [[https://doc.rust-lang.org/stable/book/][Rust book]] to RTFM.
+
+Now, I know how I should use result types to avoid deconstructing with match so
+much.  And also how to put my utility functions in a module for better
+organization in the long term.
