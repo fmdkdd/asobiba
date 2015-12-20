@@ -317,3 +317,19 @@ head.  Today I went over the [[https://doc.rust-lang.org/stable/book/][Rust book
 Now, I know how I should use result types to avoid deconstructing with match so
 much.  And also how to put my utility functions in a module for better
 organization in the long term.
+
+* [2015-12-19 sam.]
+** Filling instruction is boooring
+Revamped the instructions macros a bit.  Leaner, and now matching the order of
+[[https://code.google.com/p/game-music-emu/source/browse/trunk/gme/Gb_Cpu.cpp?r=40&spec=svn40][Blargg’s emulator]].  Though I don’t really know if there is a performance payoff
+for that, since it could be optimized by the compiler as a jump table anyway.
+
+Not sure what I want to do with flags tests after operations.  Seems like lot of
+duplicate code.  Unless I use a ~test_flags~ macro...
+
+* [2015-12-20 dim.]
+** Overflow are safe in Rust
+Which means ... that 0xFF + 1 triggers a panic!  But only in debug builds, since
+these checks are removed on release builds.  However, the right way to go about
+that is to use ~wrapping_add~ instead to /explicitly/ signal overflow is
+intended.
