@@ -333,3 +333,60 @@ Which means ... that 0xFF + 1 triggers a panic!  But only in debug builds, since
 these checks are removed on release builds.  However, the right way to go about
 that is to use ~wrapping_add~ instead to /explicitly/ signal overflow is
 intended.
+* [2015-12-23 mer.]
+** Improving s3c
+Was looking to improve the error feedback of s3c.  But I realized that I could
+fix the O(n^2) complexity of code evaluation.
+
+Since we have only one worker when evaluating the whole file, and since the
+worker evaluates all its code in the global context, we don’t need to
+re-evaluate the previous blocks.  We can just send each block of code to the
+worker by resetting the current code string.
+
+So, evaluation is back O(n) with a one-line change.  D’oh.  And this also fixes
+the multiple console.log calls!
+
+But, it also changes the behavior of error output.  Previously, the first error
+encountered in the evaluation would propagate as the result to all the following
+evaluation markers.
+
+: throw 1 //: 1
+: 1 + 1   //: 1
+
+Now, even a syntax error will affect only the next marker.
+
+: throw 1 //: 1
+: 1 + 1   //: 2
+
+Is this ... better?  I’m not sure.  On the one hand, errors don’t propagate
+anymore.  So you can go on with your code and still get feedback, even if a
+previous definition triggers an error.
+
+On the other hand, it’s now easy to miss an error up in the file and continue
+working, and then wonder why something doesn’t work down the road.  Syntax
+errors are signaled by the linter.  But other errors, like:
+
+: fn f(a) { return a.b(a) }
+: f(12) //: TypeError: a.b is not a function
+
+are not.
+
+For beginners, it might be a good idea to make runtime error more noticeable.
+
+Okay, marked the lines in inverted red.  Can’t miss them now.
+
+-----
+
+Also added visual feedback for triggering evaluation.  Just erase the text after
+//: at the time of sending the code to the worker is enough to /see/ that the
+editor is doing something even when the results are the same.
+
+-----
+
+Made console calls to not trigger any linting error or warning, since they can
+be used to step through a block.
+
+-----
+
+Maybe using a forEach on each /block/ rather than line would be faster than the
+current way.  Another time.
