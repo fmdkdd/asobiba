@@ -390,3 +390,48 @@ be used to step through a block.
 
 Maybe using a forEach on each /block/ rather than line would be faster than the
 current way.  Another time.
+* [2016-01-06 mer.]
+** Decoding opcodes in GBS
+The decoding opcode part of GBS is a bit redundant:
+
+#+BEGIN_SRC
+0x41 => ld!(b, c),
+0x42 => ld!(b, d),
+0x43 => ld!(b, e),
+0x44 => ld!(b, h),
+0x45 => ld!(b, l),
+0x47 => ld!(b, a),
+#+END_SRC
+
+There is a way to factor that by just looking at how the opcode is composed.
+For the ‘ld’ instruction, there is a pattern:
+
+: ld r,q = 01rrrqqq
+: ld r,n = 00rrr110 nnnnnnnn
+
+With r and q being one of:
+
+| Register | Code |
+|----------+------|
+| B        |  000 |
+| C        |  001 |
+| D        |  010 |
+| E        |  011 |
+| H        |  100 |
+| L        |  101 |
+| HL       |  110 |
+| A        |  111 |
+
+So, we already have the register information from the opcodes.  No need to spell
+it out.  But this means additional work at runtime (decoding the opcode), and
+decreased legibility of source code.  As of now, the code is very
+straightforward, save for the organization of the opcodes.
+
+We could decode the opcode at compile time using a macro, but I’m not sure we
+would gain in legibility.
+
+And unfortunately, the pattern breaks down for other opcodes:
+
+: ld A,BC = 0000 1010
+
+At least the tedious way to spell it out is homogeneous.
