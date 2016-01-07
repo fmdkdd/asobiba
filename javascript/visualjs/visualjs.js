@@ -74,7 +74,7 @@ function is_draggable($elem) {
 
 function find_draggable($elem) {
   var e = $elem
-  while (!is_draggable(e) && e.parentElement) {
+  while (e && !is_draggable(e)) {
     e = e.parentElement
   }
   return e
