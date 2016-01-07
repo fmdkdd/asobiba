@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+  <head>
+    <script src="visualjs.js"></script>
+    <style>
+     #box-area {
+       position: relative;
+       height: 500px;
+       width: 500px;
+       border: 1px solid #333;
+     }
+
+     .box {
+       position: absolute;
+       box-sizing: border-box;
+       border: 2px solid black;
+     }
+
+     [data-draggable]:hover {
+       cursor: grab;
+     }
+
+     [data-draggable].dragged {
+       opacity: 0.5;
+       cursor: grabbing;
+     }
+    </style>
+  </head>
+  <body>
+    <section id="box-area"></section>
+
+    <section id="toolbar">
+      <button id="add-box">Add box</button>
+    </section>
+
+
+
+    <template id="template-box">
+      <div class="box" data-draggable></div>
+    </template>
+
+  </body>
+</html>
