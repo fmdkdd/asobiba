@@ -12,32 +12,38 @@ function init() {
 }
 
 function add_box() {
-  var b = box(10, 10, 100, 40)
+  var b = box(10, 10)
 
   document.querySelector('#box-area')
     .appendChild(b)
 }
 
-function box(x, y, width, height) {
+function box(x, y) {
   var $box = fromTemplate('#template-box').querySelector('.box')
-  $box.setAttribute('width', width)
-  $box.setAttribute('height', height)
-  $box.setAttribute('x', x)
-  $box.setAttribute('y', y)
+  $box.setAttribute('transform', `translate(${x} ${y})`)
   return $box
 }
+
+function box_x(b) {return b.transform.baseVal[0].matrix.e}
+function box_y(b) {return b.transform.baseVal[0].matrix.f}
+function box_x_set(b, x) {b.transform.baseVal[0].matrix.e = x}
+function box_y_set(b, y) {b.transform.baseVal[0].matrix.f = y}
 
 
 
 function handle_draggables($area) {
   var mouse_start = {x: 0, y: 0}
+  var elem_start = {x: 0, y: 0}
   var draggable = null
 
   $area.addEventListener('mousedown', function(e) {
-    if (e.buttons === 1 && is_draggable(e.target)) {
+    var d
+    if (e.buttons === 1 && (d = find_draggable(e.target))) {
       mouse_start.x = e.clientX
       mouse_start.y = e.clientY
-      draggable = e.target
+      draggable = d
+      elem_start.x = box_x(draggable)
+      elem_start.y = box_y(draggable)
       draggable.classList.add('dragged')
       e.preventDefault()
     }
@@ -47,20 +53,14 @@ function handle_draggables($area) {
     if (draggable) {
       var dx = e.clientX - mouse_start.x
       var dy = e.clientY - mouse_start.y
-      draggable.setAttribute('transform', `translate(${dx} ${dy})`)
+      box_x_set(draggable, elem_start.x + dx)
+      box_y_set(draggable, elem_start.y + dy)
       e.preventDefault()
     }
   })
 
   $area.addEventListener('mouseup', function(e) {
     if (draggable) {
-      var dx = e.clientX - mouse_start.x
-      var dy = e.clientY - mouse_start.y
-      var x = parseInt(draggable.getAttribute('x')) + dx
-      var y = parseInt(draggable.getAttribute('y')) + dy
-      draggable.setAttribute('x', x)
-      draggable.setAttribute('y', y)
-      draggable.removeAttribute('transform')
       draggable.classList.remove('dragged')
       draggable = null
       e.preventDefault()
@@ -70,6 +70,14 @@ function handle_draggables($area) {
 
 function is_draggable($elem) {
   return $elem.hasAttribute('data-draggable')
+}
+
+function find_draggable($elem) {
+  var e = $elem
+  while (!is_draggable(e) && e.parentElement) {
+    e = e.parentElement
+  }
+  return e
 }
 
 
