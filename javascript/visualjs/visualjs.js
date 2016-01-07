@@ -29,6 +29,12 @@ function box_y(b) {return b.transform.baseVal[0].matrix.f}
 function box_x_set(b, x) {b.transform.baseVal[0].matrix.e = x}
 function box_y_set(b, y) {b.transform.baseVal[0].matrix.f = y}
 
+function path_between_boxes(b1, b2) {
+  var $arc = fromTemplate('#template-arc').querySelector('.arc')
+  $arc.setAttribute('d', 'M 0 0 L 10 10')
+  return $arc
+}
+
 
 
 function handle_draggables($area) {
