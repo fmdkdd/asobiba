@@ -435,3 +435,29 @@ And unfortunately, the pattern breaks down for other opcodes:
 : ld A,BC = 0000 1010
 
 At least the tedious way to spell it out is homogeneous.
+
+* [2016-01-07 jeu.]
+** Dragging boxes around
+For a prototype visualizer of the JS heap.  I need to move boxes, representing
+objects, around, and link them with arcs.
+
+Started with a simple div box absolutely positioned and a homebrew drag’n’drop.
+Works.
+
+** Cloning SVG in a template tag
+But for arcs, I need to switch to SVG.  First suprise: using HTML templates to
+clone SVG elements needs namespacing.  So I wrap the elements (like ~rect~) in a
+~svg~ tag with explicit namespacing.  Works!
+
+** Slow drag in Firefox
+Chrome is perfectly happy using the CSS transform property for dragging the
+SVG boxes around.  Firefox is choppy.
+
+[[https://jakearchibald.com/2013/solving-rendering-perf-puzzles/][This post]] is helpful on the subject.  Changing the x and y attribute of the rect
+is definitely worse.  Using the transform property of the SVG (rather than CSS
+transform) seems okay.  Certainly not as fast as Chrome, but looking at the
+numerous bug report on SVG performance on Bugzilla, I’m gonna assume that SVG
+animations in Firefox are just slower.
+
+Hmm, closing the DevTools /is/ a definite improvement however.  Good thing to
+keep in mind.

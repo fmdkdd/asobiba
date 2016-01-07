@@ -20,53 +20,50 @@ function add_box() {
 
 function box(x, y, width, height) {
   var $box = fromTemplate('#template-box').querySelector('.box')
-  $box.style.width = `${width}px`
-  $box.style.height = `${height}px`
-  $box.style.left = `${x}px`
-  $box.style.top = `${y}px`
-  $box.setAttribute('data-x', x)
-  $box.setAttribute('data-y', y)
+  $box.setAttribute('width', width)
+  $box.setAttribute('height', height)
+  $box.setAttribute('x', x)
+  $box.setAttribute('y', y)
   return $box
 }
 
 
 
 function handle_draggables($area) {
-  var drag_start = {x: 0, y: 0}
+  var mouse_start = {x: 0, y: 0}
   var draggable = null
-  var dx = 0
-  var dy = 0
 
   $area.addEventListener('mousedown', function(e) {
     if (e.buttons === 1 && is_draggable(e.target)) {
-      drag_start.x = e.clientX
-      drag_start.y = e.clientY
-      dx = 0
-      dy = 0
+      mouse_start.x = e.clientX
+      mouse_start.y = e.clientY
       draggable = e.target
       draggable.classList.add('dragged')
+      e.preventDefault()
     }
   })
 
   $area.addEventListener('mousemove', function(e) {
     if (draggable) {
-      dx = e.clientX - drag_start.x
-      dy = e.clientY - drag_start.y
-      draggable.style.transform = `translate(${dx}px, ${dy}px)`
+      var dx = e.clientX - mouse_start.x
+      var dy = e.clientY - mouse_start.y
+      draggable.setAttribute('transform', `translate(${dx} ${dy})`)
+      e.preventDefault()
     }
   })
 
   $area.addEventListener('mouseup', function(e) {
     if (draggable) {
-      var x = parseInt(draggable.getAttribute('data-x')) + dx
-      var y = parseInt(draggable.getAttribute('data-y')) + dy
-      draggable.setAttribute('data-x', x)
-      draggable.setAttribute('data-y', y)
-      draggable.style.transform = ''
-      draggable.style.left = `${x}px`
-      draggable.style.top = `${y}px`
+      var dx = e.clientX - mouse_start.x
+      var dy = e.clientY - mouse_start.y
+      var x = parseInt(draggable.getAttribute('x')) + dx
+      var y = parseInt(draggable.getAttribute('y')) + dy
+      draggable.setAttribute('x', x)
+      draggable.setAttribute('y', y)
+      draggable.removeAttribute('transform')
       draggable.classList.remove('dragged')
       draggable = null
+      e.preventDefault()
     }
   })
 }

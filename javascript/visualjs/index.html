@@ -10,12 +10,6 @@
        border: 1px solid #333;
      }
 
-     .box {
-       position: absolute;
-       box-sizing: border-box;
-       border: 2px solid black;
-     }
-
      [data-draggable]:hover {
        cursor: grab;
      }
@@ -27,7 +21,10 @@
     </style>
   </head>
   <body>
-    <section id="box-area"></section>
+    <svg id="box-area" xmlns="http://www.w3.org/2000/svg" version="1.1"
+         width="500" height="500"
+         style="position: relative; border: 1px solid #333;">
+    </svg>
 
     <section id="toolbar">
       <button id="add-box">Add box</button>
@@ -35,8 +32,12 @@
 
 
 
-    <template id="template-box">
-      <div class="box" data-draggable></div>
+    <template id="template-box" >
+      <svg xmlns="http://www.w3.org/2000/svg" version="1.1">
+        <rect class="box" data-draggable
+              stroke-width="2" stroke="black" fill="white">
+        </rect>
+      </svg
     </template>
 
   </body>
