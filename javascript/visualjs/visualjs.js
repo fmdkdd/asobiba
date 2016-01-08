@@ -4,96 +4,80 @@ document.addEventListener("DOMContentLoaded", init)
 // TODO: Feature 2: link boxes with arcs
 
 function init() {
-  document.querySelector('#add-box')
-    .addEventListener('click', add_box)
+  d3.select('#add-box')
+    .on('click', spawn_box)
 
-  var $box_area = document.querySelector('#box-area')
-  handle_draggables($box_area)
+  spawn_box()
 }
 
-function add_box() {
-  var b = box(10, 10)
 
-  document.querySelector('#box-area')
-    .appendChild(b)
-}
+
+// Heap model
 
-function box(x, y) {
-  var $box = fromTemplate('#template-box').querySelector('.box')
-  $box.setAttribute('transform', `translate(${x} ${y})`)
-  return $box
-}
+var heap = []
 
-function box_x(b) {return b.transform.baseVal[0].matrix.e}
-function box_y(b) {return b.transform.baseVal[0].matrix.f}
-function box_x_set(b, x) {b.transform.baseVal[0].matrix.e = x}
-function box_y_set(b, y) {b.transform.baseVal[0].matrix.f = y}
+var box = {
+  parent: null,
+  label: 'a',
+  value: 1,
+  next: null,  // next property, if any
 
-function path_between_boxes(b1, b2) {
-  var $arc = fromTemplate('#template-arc').querySelector('.arc')
-  $arc.setAttribute('d', 'M 0 0 L 10 10')
-  return $arc
+  x: 10, y: 10,
 }
 
 
+// Heap view
 
-function handle_draggables($area) {
-  var mouse_start = {x: 0, y: 0}
-  var elem_start = {x: 0, y: 0}
-  var draggable = null
-
-  $area.addEventListener('mousedown', function(e) {
-    var d
-    if (e.buttons === 1 && (d = find_draggable(e.target))) {
-      mouse_start.x = e.clientX
-      mouse_start.y = e.clientY
-      draggable = d
-      elem_start.x = box_x(draggable)
-      elem_start.y = box_y(draggable)
-      draggable.classList.add('dragged')
-      e.preventDefault()
-    }
-  })
-
-  $area.addEventListener('mousemove', function(e) {
-    if (draggable) {
-      var dx = e.clientX - mouse_start.x
-      var dy = e.clientY - mouse_start.y
-      box_x_set(draggable, elem_start.x + dx)
-      box_y_set(draggable, elem_start.y + dy)
-      e.preventDefault()
-    }
-  })
-
-  $area.addEventListener('mouseup', function(e) {
-    if (draggable) {
-      draggable.classList.remove('dragged')
-      draggable = null
-      e.preventDefault()
-    }
-  })
+function spawn_box() {
+  var b = Object.create(box)
+  heap.push(b)
+  update_view()
 }
 
-function is_draggable($elem) {
-  return $elem.hasAttribute('data-draggable')
+function update_view() {
+  var svg = d3.select('#box-area')
+
+  var boxes_join = svg.selectAll('.box')
+        .data(heap)
+
+  // boxes.exit().remove()
+
+  var boxes = boxes_join.enter().append('g')
+        .attr('class', 'box')
+        .call(drag_box)
+
+  boxes.append('rect')
+    .attr({
+      width: 100,
+      height: 40,
+      stroke: 'black',
+      fill: 'white',
+      'stroke-width': 2,
+    })
+
+  boxes.append('circle')
+    .attr({
+      cx: 80,
+      cy: 20,
+      r: 7,
+    })
+
+  boxes.attr('transform', function(d) { return `translate(${d.x} ${d.y})` })
 }
 
-function find_draggable($elem) {
-  var e = $elem
-  while (e && !is_draggable(e)) {
-    e = e.parentElement
-  }
-  return e
-}
+var drag_box = d3.behavior.drag()
+      .origin(identity)
+      .on('drag', function drag_box_on_drag(d) {
+        d3.select(this)
+          .attr('transform', `translate(${d.x = d3.event.x} ${d.y = d3.event.y})`)
+      })
+      .on('dragstart', function() {
+        d3.select(this).classed('dragged', true)
+      })
+      .on('dragend', function() {
+        d3.select(this).classed('dragged', false)
+      })
 
 
 
-function fromTemplate(selector) {
-  var $template = document.querySelector(selector)
-  var $fragment = document.importNode($template.content, true)
-  return $fragment
-}
-
-function dispatch(eventName, detail) {
-  document.dispatchEvent(new CustomEvent(eventName, {detail}))
-}
+function identity(d) { return d }

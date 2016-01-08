@@ -1,3 +1,5 @@
+#+OPTIONS: ^:{}
+
 * [2015-09-30 mer.]
 :PROPERTIES:
 :header-args: :results none
@@ -461,3 +463,19 @@ animations in Firefox are just slower.
 
 Hmm, closing the DevTools /is/ a definite improvement however.  Good thing to
 keep in mind.
+
+* [2016-01-08 ven.]
+** Switching to d3
+Managing SVG and interactivity is tedious.  D3 seems a good fit for what I want
+to do.  I get browser compatibility, selectors, the join model of handling data,
+and even animations.
+
+Drag and drop is built-in, and I might need things like force layouts.
+
+Also, it’s one of the most-used JS library, which means it probably won’t
+disappear for at least a few years.
+
+** Heisendrag
+I was curious as to why the drag and drop example of D3 in Firefox was fluid,
+while mine was choppy.  Turns out, dragging the browser tab in the other window
+fixed the slowness ಠ_ಠ
