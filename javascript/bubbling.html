@@ -1,0 +1,122 @@
+<!doctype html>
+<html>
+  <meta charset="utf-8">
+  <head>
+    <style>
+     line {
+       stroke: #696969;
+       stroke-width: 2;
+     }
+    </style>
+  </head>
+  <body>
+    <script src="//d3js.org/d3.v3.min.js"></script>
+    <script>
+/* An interactive visualization of event bubbling and capturing.
+ * See: http://www.quirksmode.org/js/events_order.html
+ */
+
+    var width = 500
+    var height = 500
+    var ysep = 60
+
+    var colors = ['gray', '#ff7f0e', '#2ca02c']
+
+    var svg = d3.select('body').append('svg')
+       .attr({width, height})
+
+ 
+    // Build a binary tree
+
+    function build_node(parent, w, x, y, depth) {
+      var node = parent.append('g')
+                       .data([{state: 0}]) // 0: unbound
+                                           // 1: bound with bubbling
+                                           // 2: bound with capture
+
+      var circle = node.append('circle')
+         .attr({cx: x, cy: y, r: 20,
+                fill: 'gray'})
+
+      ++depth
+      if (depth === 4) return
+
+      node.append('line')
+          .attr({x1: x, y1: y,
+                 x2: x - w/2, y2: y + ysep})
+
+      node.append('line')
+          .attr({x1: x, y1: y,
+                 x2: x + w/2, y2: y + ysep})
+
+      build_node(node, w/2, x - w/2, y + ysep, depth)
+      build_node(node, w/2, x + w/2, y + ysep, depth)
+
+      node.node().appendChild(circle.node())
+    }
+
+    build_node(svg, width/2, width/2, ysep, 0)
+
+
+    // Distinguish two forms of clicks on objects: with and without the Alt key
+    // pressed.  Custom events are sent instead of the click.
+
+    d3.selectAll('g').on('click', function dispatch() {
+      d3.event.stopPropagation()  // stop this click!
+      // Replace the global d3.event
+      if (d3.event.altKey) {
+        d3.event = new CustomEvent('change-state')
+      } else {
+        d3.event = new CustomEvent('bump', {bubbles: true})
+      }
+      this.dispatchEvent(d3.event)
+    })
+
+    d3.selectAll('g')
+      .on('change-state', change_listener)
+      .each(change_listener)
+
+    // Cycle state and register the corresponding listener.
+    function change_listener(d) {
+      d.state = (d.state + 1) % 3
+      if (d.state === 0) {
+        d3.select(this).on('bump', null)
+      } else if (d.state === 1) {
+        d3.select(this).on('bump', enqueue, false)
+      } else if (d.state === 2) {
+        d3.select(this).on('bump', enqueue, true)
+      }
+
+      // Update circle color to match new state
+      d3.select(this.lastChild)
+        .attr('fill', function(d) { return colors[d.state] })
+    }
+
+    // When a custom 'bump' event is triggered, we queue them in order to know
+    // in which order to play the animation (setup the delays).
+    var queue = []
+
+    function enqueue(d) {
+      queue.push(this.lastChild)
+    }
+
+    // When the 'bump' event reaches the root, we can start the animation.
+    svg.on('bump', function dequeue() {
+       queue.forEach(function(e, i) {
+         d3.select(e)
+            .transition()
+              .delay(300 * i)  // FIFO delay
+              .ease('elastic')
+              .duration(700)
+              .attr('r', 30)
+            .transition()
+              .delay(1000)
+              .attr('r', 20)
+       })
+
+       // Empty queue
+       queue.length = 0
+    })
+    </script>
+  </body>
+</html>

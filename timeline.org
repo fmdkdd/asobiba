@@ -479,3 +479,10 @@ disappear for at least a few years.
 I was curious as to why the drag and drop example of D3 in Firefox was fluid,
 while mine was choppy.  Turns out, dragging the browser tab in the other window
 fixed the slowness ಠ_ಠ
+
+* [2016-01-12 mar.]
+** Mastering D3 and event propagation
+In order to better understand how event propagation works in the DOM, and to
+experiment with D3 animations, I made a simple visualization based on [[http://www.quirksmode.org/js/events_order.html][this
+helpful page]], and using [[http://bl.ocks.org/mbostock/3943967][this block]] as a model for chaining transitions, and [[http://bl.ocks.org/mbostock/9631744][this
+block]] for the visual language.
