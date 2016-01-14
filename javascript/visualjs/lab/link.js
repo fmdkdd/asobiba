@@ -13,6 +13,35 @@ document.addEventListener('DOMContentLoaded', init)
 // knee-deep in mixing up actions on state transitions and actions on state
 // update.
 
+/*
+ Complete (functional description of) automaton
+
+ ready --click on circle--> select-dst
+        |
+        +- create temp line from circle to mouse
+
+ select-dst --move mouse-> select-dst
+             |
+             +- set end point of temp line to mouse position
+
+ select-dst --click on a free node-> ready
+             |
+             +- remove temp line
+             +- add link between src and dst to model
+             +- add link to view (update view)
+
+ select-dst --click elsewhere-> ready
+             |
+             + remove temp line
+
+
+ TODO: add highlighting above
+ TODO: how to handle events?  Most nastiness of the code comes from the events
+ handlers that must be added and removed on transitions.  They are not
+ functional behavior, only needed by the implementation, so they should be
+ handled directly by the automaton.
+*/
+
 function init() {
 
   var nodes = [{x: 23, y: 42}, {x: 80, y: 260}]
