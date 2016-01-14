@@ -33,6 +33,9 @@ function init() {
     // the SVG text element directly, but the caret is mightily broken in
     // Firefox and Chrome.
 
+    // If the contenteditable div proves unreliable across browsers, maybe use
+    // an input text instead.
+
     // Prevent the click from triggering further interaction.
     d3.event.stopPropagation()
 
