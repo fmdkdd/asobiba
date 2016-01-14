@@ -112,11 +112,8 @@ function init() {
     d3.event.stopPropagation()
 
     link_src = this
-    // Get coordinates of src relative to the container SVG
-    var bb = link_src.getBoundingClientRect()
-    var svgbb = svg.node().getBoundingClientRect()
-    var src_xy = [window.scrollX + bb.left - svgbb.left + bb.width / 2,
-                  window.scrollY + bb.top - svgbb.top + bb.height / 2]
+    // Get relative to containing SVG
+    var src_bb = relativeBBox(link_src, svg.node())
     // and coordinates of mouse relative to the same container
     var mouse = d3.mouse(svg.node())
 
@@ -124,7 +121,7 @@ function init() {
     svg.append('line')
       .attr({class: 'tmp-link',
              stroke: 'black',
-             x1: src_xy[0], y1: src_xy[1],
+             x1: src_bb.cx, y1: src_bb.cy,
              x2: mouse[0], y2: mouse[1]})
 
     // to be updated whenever the mouse moves
@@ -185,15 +182,37 @@ function init() {
     links.push(link)
 
     // Get top left coordinates of dst
-    var bb = dst.getBoundingClientRect()
-    var svgbb = svg.node().getBoundingClientRect()
-    var dst_xy = [window.scrollX + bb.left - svgbb.left,
-                  window.scrollY + bb.top - svgbb.top]
+    var dst_bb = relativeBBox(dst, svg.node())
 
     svg.append('line')
       .attr({class: 'link',
              stroke: '#78b',
              x1: src_xy[0], y1: src_xy[1],
-             x2: dst_xy[0], y2: dst_xy[1]})
+             x2: dst_bb.x, y2: dst_bb.y})
+  }
+}
+
+
+// Return bounding box of elem relative to the top left corner of the given
+// container.  The bounding box also accounts for window scrolling.  The
+// bounding box is an object with the properties:
+// top (alias y), left (alias x), down, right, width, height,
+// cx (x of center), cy (y of center)
+function relativeBBox(elem, container) {
+  var bb = elem.getBoundingClientRect()
+  var ref = container.getBoundingClientRect()
+
+  var left = window.scrollX + bb.left - ref.left
+  var top = window.scrollY + bb.top - ref.top
+
+  return {
+    left: left, x: left,
+    top: top, y: top,
+    right: left + bb.width,
+    down: top + bb.height,
+    width: bb.width,
+    height: bb.height,
+    cx: left + bb.width / 2,
+    cy: top + bb.height / 2
   }
 }
