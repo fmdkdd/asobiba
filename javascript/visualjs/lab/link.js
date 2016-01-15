@@ -36,8 +36,24 @@ document.addEventListener('DOMContentLoaded', init)
              |
              + remove temp line
 
+ Animations and highlights:
 
- TODO: add highlighting above
+ ready --enter circle-> ready
+        |
+        +- grow circle
+
+ ready --leave circle-> ready
+        |
+        +- reduce circle to original size
+
+ select-dst --enter node-> select-dst
+             |
+             + stroke node in green
+
+ select-dst --leave node-> select-dst
+             |
+             + stroke node in default color (black)
+
  TODO: how to handle events?  Most nastiness of the code comes from the events
  handlers that must be added and removed on transitions.  They are not
  functional behavior, only needed by the implementation, so they should be
