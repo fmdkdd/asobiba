@@ -8,6 +8,11 @@
        border: 1px solid #333;
        margin-left: 20px;
      }
+
+     /* Prevent the line SVG element to trigger mouseenter/mouseleave events on
+     the elements drawn below it when the mouse moves, since the endpoint
+     follows the mouse cursor. */
+     .tmp-link { pointer-events: none; }
     </style>
   </head>
   <body>

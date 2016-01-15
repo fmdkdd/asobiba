@@ -3,6 +3,8 @@ document.addEventListener('DOMContentLoaded', init)
 // TODO: when clicking on a circle that already has link starting from it,
 // promote the link to temporary, but restore it on cancellation.
 
+// TODO: should do nothing if a link already exists between targets.
+
 // REFACTOR: this is a simple automaton.
 // init --click on circle--> begin-link
 // begin-link --mousemove--> begin-link (and update path)
@@ -108,8 +110,6 @@ function init() {
     circle.on('mouseleave.highlight-action', null)
   }
 
-  // XXX: FF has a strangely triggers a mouseenter when the mouse moves inside a
-  // the rect, but *only when moving to the right*.
   function highlight_node() {
     d3.select(this).select('rect')
       .transition()
@@ -164,9 +164,6 @@ function init() {
     activate_node_highlight()
     // and listen on the SVG as well for cancellation
     svg.on('click.link-create', cancel_link)
-
-    // FIXME: In Chrome, cancel_link is called instead of end_link when clicking
-    // on a node.
   }
 
   function update_path() {
@@ -202,8 +199,11 @@ function init() {
 
     cancel_link()
 
-    // TODO: should return if the link already exists
     var dst = this
+
+    // Remove highlight on node since the cursor is still in, and we removed the
+    // listeners in cancel_link
+    unhighlight_node.call(dst)
 
     // Otherwise, create permanent link between the two.
     var link = {from: src.__data__,

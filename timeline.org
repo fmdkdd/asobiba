@@ -486,3 +486,34 @@ In order to better understand how event propagation works in the DOM, and to
 experiment with D3 animations, I made a simple visualization based on [[http://www.quirksmode.org/js/events_order.html][this
 helpful page]], and using [[http://bl.ocks.org/mbostock/3943967][this block]] as a model for chaining transitions, and [[http://bl.ocks.org/mbostock/9631744][this
 block]] for the visual language.
+
+* [2016-01-15 ven.]
+** Mouseenter event fired only when going to the right in FF
+At least I thought that, maybe it was a bug in Firefox.  The behavior puzzled me
+and then I noticed that the SVG rect I was hovering my mouse onto was /not/ the
+only element around: the temporary line I drew on top of everything was there
+too!
+
+So, #notabug.  Standard PEBKAC.  The line should not be interact with the cursor
+in this case, and that is what the CSS property ~pointer-events: none~ is for.
+
+And hey!  As a bonus, it fixed the behavior I was seeing in Chrome: since the
+cursor was just above the line, whenever I clicked on it to validate, I was
+clicking on the line, which had only the SVG container as a parent, and thus the
+SVG registered the click while the node did not.  In Firefox, for some reason,
+the cursor always clicked the node below the line.  Maybe the calculations were
+off a pixel...
+
+** The self-perpetuating task of explaining code with code
+I want to visualize JS code to better understand it, and be able to explain it.
+For that, I build a program.  I write more code, /different/ code, code that the
+visualization might not suffice to explain.  The visualization if for heap
+objects, but for that I’m writing an automaton, and we already have a good
+visual language for those.  But!  If I want this automaton visualization to be
+interactive, I again need to write more code.
+
+Either at some point I have visualizations for the first kind of code, and also
+for the code of the visualizations, etc.—I converge—or I just throw up my arms
+in the air and leave some code unexplained, or self-evident.
+
+Will only know if I try.
