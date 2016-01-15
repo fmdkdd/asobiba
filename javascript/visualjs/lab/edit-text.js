@@ -40,10 +40,10 @@ function init() {
     d3.event.stopPropagation()
 
     var text_orig = d3.select(this)
-    var bb = text_orig.node().getBoundingClientRect()
+    var bb = this.getBoundingClientRect()
 
     // Place the div just above the text_orig element
-    var left = window.scrollX + bb.left + 2 // account for border width
+    var left = window.scrollX + bb.left
     var top = window.scrollY + bb.top
 
     var edit_box = d3.select('body').append('div')
