@@ -1,5 +1,7 @@
 document.addEventListener('DOMContentLoaded', init)
 
+// TODO: what if the user erases the whole content?
+
 function init() {
   var svg = d3.select('#box-area')
 

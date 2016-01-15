@@ -517,3 +517,88 @@ for the code of the visualizations, etc.—I converge—or I just throw up my ar
 in the air and leave some code unexplained, or self-evident.
 
 Will only know if I try.
+
+** Declarative automaton for linking nodes interactively
+The linking nodes code is /clearly/ an automaton, and /clearly/ is spaghetti
+code at the moment.  Dealing with listeners that should only exist on one state
+is especially nasty, since we have to register them, then toggle them off, and
+this is a repeating pattern that surely could be taken care of by a declarative
+automaton.
+
+As it stands, here is the description of the functionality needed to make the
+linking:
+
+#+BEGIN_EXAMPLE
+Complete (functional description of) automaton
+
+ready --click on circle--> select-dst
+       |
+       +- create temp line from circle to mouse
+
+select-dst --move mouse-> select-dst
+            |
+            +- set end point of temp line to mouse position
+
+select-dst --click on a free node-> ready
+            |
+            +- remove temp line
+            +- add link between src and dst to model
+            +- add link to view (update view)
+
+select-dst --click elsewhere-> ready
+            |
+            + remove temp line
+
+Animations and highlights:
+
+ready --enter circle-> ready
+       |
+       +- grow circle
+
+ready --leave circle-> ready
+       |
+       +- reduce circle to original size
+
+select-dst --enter node-> select-dst
+            |
+            + stroke node in green
+
+select-dst --leave node-> select-dst
+            |
+            + stroke node in default color (black)
+#+END_EXAMPLE
+
+I’m pretty sure there is a fluent API there that can take care of the
+administrative details of entering a state, and setting up/destroying events
+listeners as it goes through a transition.  Anything that need to be done on a
+transition can be passed as a function.
+
+Transitions, for my case, are always events happening on some element.  Then 4
+things happen, in order:
+1. We execute whatever needs to be done when leaving the state (cleaning up
+   event listeners)
+2. We execute the transition function
+3. We change the state, internally
+4. We execute whatever needs to be done when entering the new state (setting up
+   new listeners)
+
+If the transition is a loop (to and from the state), then only step 2 is needed.
+
+That’s it!  Initially I don’t think any more control is needed for my use case.
+
+Here is how I would sketch the API:
+
+#+BEGIN_SRC js
+var link_automaton = automaton()
+
+var ready = link_automaton.state('ready')
+      .on('circle.mouseenter', grow)
+      .on('circle.mouseleave', shrink)
+      .to('select-dst', 'circle.click', create_tmp_link)
+
+link_automaton.init('ready')
+#+END_SRC
+
+Need to prototype that to know if it works in practice, and make sure it is
+composable (can add states and transitions in multiple steps, not just one
+monolithic call).
