@@ -5,61 +5,6 @@ document.addEventListener('DOMContentLoaded', init)
 
 // TODO: should do nothing if a link already exists between targets.
 
-// REFACTOR: this is a simple automaton.
-// init --click on circle--> begin-link
-// begin-link --mousemove--> begin-link (and update path)
-// begin-link --click on valid dst--> init (and erase tmp and install link)
-// begin-link --click elsewhere--> init (and erase tmp)
-// etc.
-// It should be written as such for clarity.  As it stands, I'm already
-// knee-deep in mixing up actions on state transitions and actions on state
-// update.
-
-/*
- Complete (functional description of) automaton
-
- ready --click on circle--> select-dst
-        |
-        +- create temp line from circle to mouse
-
- select-dst --move mouse-> select-dst
-             |
-             +- set end point of temp line to mouse position
-
- select-dst --click on a free node-> ready
-             |
-             +- remove temp line
-             +- add link between src and dst to model
-             +- add link to view (update view)
-
- select-dst --click elsewhere-> ready
-             |
-             + remove temp line
-
- Animations and highlights:
-
- ready --enter circle-> ready
-        |
-        +- grow circle
-
- ready --leave circle-> ready
-        |
-        +- reduce circle to original size
-
- select-dst --enter node-> select-dst
-             |
-             + stroke node in green
-
- select-dst --leave node-> select-dst
-             |
-             + stroke node in default color (black)
-
- TODO: how to handle events?  Most nastiness of the code comes from the events
- handlers that must be added and removed on transitions.  They are not
- functional behavior, only needed by the implementation, so they should be
- handled directly by the automaton.
-*/
-
 function init() {
 
   var nodes = [{x: 23, y: 42}, {x: 80, y: 260}]
@@ -84,156 +29,214 @@ function init() {
 
 
   // On click on circle, begin linking by overlaying a temporary path between
-  // the link source and the mouse cursor.  When a second (different) target is
-  // clicked, add the link to the model, remove the overlay, and add the
-  // definitive link path.  If the second click happens outside of a valid
-  // target, cancel linking by destroying the overlay.
+  // the link source and the mouse cursor.  When a second target is clicked, add
+  // the link to the model, remove the overlay, and add the definitive link
+  // path.  If the second click happens outside of a valid target, cancel
+  // linking by destroying the overlay.
 
-  restart_linking()
+  var link_automaton = automaton.new(svg.node())
+  var ready = state.new(link_automaton)
+  var selectDst = state.new(link_automaton)
 
-  var link_src
-  function restart_linking() {
-    link_src = null
+  ready
+    .to(selectDst, 'circle:click', add_tmp_link)
 
-    circle.on('click.link-create', begin_link)
-    // Circle react on mouseover to signal that interaction is possible
-    activate_circle_highlight()
-  }
+  selectDst
+    .on('body:mousemove', update_tmp_link)
 
-  function highlight_circle() {
-    d3.select(this)
-      .transition()
-      .duration(300)
-      .ease('elastic')
-      .attr('r', 25)
-  }
+  // Clicking a node installs the link between from the source to it
+    .to(ready, '.node:click', add_link)
 
-  function unhighlight_circle() {
-    d3.select(this)
-      .transition()
-      .duration(300)
-      .ease('elastic')
-      .attr('r', 20)
-  }
+  // Clicking anywhere else cancels linking
+    .to(ready, 'svg:click')
 
-  function activate_circle_highlight() {
-    circle.on('mouseenter.highlight-action', highlight_circle)
-    circle.on('mouseleave.highlight-action', unhighlight_circle)
-  }
+  selectDst.addListener('leave', remove_tmp_link)
 
-  function deactivate_circle_highlight() {
-    circle.on('mouseenter.highlight-action', null)
-    circle.on('mouseleave.highlight-action', null)
-  }
+  ready
+    .addListener('enter', function() {
+      // The first circle clicked
+      link_automaton.data.link_src = null
+      link_automaton.data.link_dst = null
+    })
 
-  function highlight_node() {
-    d3.select(this).select('rect')
-      .transition()
-      .duration(300)
-      .ease('elastic')
-      .attr('stroke', 'green')
-  }
+  function add_tmp_link() {
+    link_automaton.data.link_src = this
 
-  function unhighlight_node() {
-    d3.select(this).select('rect')
-      .transition()
-      .duration(300)
-      .ease('elastic')
-      .attr('stroke', 'black')
-  }
-
-  function activate_node_highlight() {
-    node.on('mouseenter.highlight-action', highlight_node)
-    node.on('mouseleave.highlight-action', unhighlight_node)
-  }
-
-  function deactivate_node_highlight() {
-    node.on('mouseenter.highlight-action', null)
-    node.on('mouseleave.highlight-action', null)
-  }
-
-  function begin_link() {
-    // No need to bubble
-    d3.event.stopPropagation()
-
-    link_src = this
-    // Get relative to containing SVG
-    var src_bb = relativeBBox(link_src, svg.node())
+    // Get coordinates relative to containing SVG
+    var src_bb = relativeBBox(link_automaton.data.link_src, svg.node())
     // and coordinates of mouse relative to the same container
     var mouse = d3.mouse(svg.node())
 
     // Build line from src to mouse
     svg.append('line')
       .attr({class: 'tmp-link',
-             stroke: 'black',
              x1: src_bb.cx, y1: src_bb.cy,
              x2: mouse[0], y2: mouse[1]})
 
-    // to be updated whenever the mouse moves
-    d3.select(document).on('mousemove.link-create', update_path)
-
-    // Erase the listeners on circle
-    circle.on('click.link-create', null)
-    deactivate_circle_highlight()
-    // and start listening on node instead
-    node.on('click.link-create', end_link)
-    activate_node_highlight()
-    // and listen on the SVG as well for cancellation
-    svg.on('click.link-create', cancel_link)
+    // No bubbling necessary
+    d3.event.stopPropagation()
   }
 
-  function update_path() {
+  function update_tmp_link() {
     var mouse = d3.mouse(svg.node())
     svg.select('.tmp-link')
       .attr({x2: mouse[0], y2: mouse[1]})
   }
 
-  function cancel_link() {
-    // No need to bubble
-    d3.event.stopPropagation()
-
-    // Destroy temporary path and listeners
+  function remove_tmp_link() {
     svg.select('.tmp-link').remove()
-    svg.on('mousemove.link-create', null)
-    svg.on('click.link-create', null)
-    node.on('click.link-create', null)
-    deactivate_node_highlight()
-
-    // Remove highlight on link_src circle
-    unhighlight_circle.call(link_src)
-
-    // Allow for linking to start afresh
-    restart_linking()
   }
 
-  function end_link() {
-    var tmp_link = svg.select('.tmp-link')
-    var src_xy = [tmp_link.attr('x1'),
-                  tmp_link.attr('y1')]
-    // Save before it is erased by cancel_link
-    var src = link_src
-
-    cancel_link()
-
+  function add_link() {
+    var src = link_automaton.data.link_src
     var dst = this
 
-    // Remove highlight on node since the cursor is still in, and we removed the
-    // listeners in cancel_link
-    unhighlight_node.call(dst)
-
-    // Otherwise, create permanent link between the two.
+    // Create permanent link between the two in the model
     var link = {from: src.__data__,
                 to: dst.__data__}
     links.push(link)
 
-    // Get top left coordinates of dst
+    // Get coordinates of src and dst for the resilient link
+    var src_bb = relativeBBox(src, svg.node())
     var dst_bb = relativeBBox(dst, svg.node())
 
     svg.append('line')
       .attr({class: 'link',
-             stroke: '#78b',
-             x1: src_xy[0], y1: src_xy[1],
+             x1: src_bb.cx, y1: src_bb.cy,
              x2: dst_bb.x, y2: dst_bb.y})
+
+    // Also stroke the selected node back to black immediately.
+    // XXX: This should be added by the animations, with an additional callback
+    // on an existing transition.  But the automaton API does not allow that for
+    // now.
+    stroke_black.call(dst.querySelector('rect'))
+  }
+
+
+  // Animations functions
+  function animate_radius(r) {
+    return function() {
+      d3.select(this)
+        .transition()
+        .duration(300)
+        .ease('elastic')
+        .attr('r', r)
+    }
+  }
+
+  var grow = animate_radius(25)
+  var shrink= animate_radius(20)
+
+  function animate_stroke(color) {
+    return function() {
+      d3.select(this)
+        .transition()
+        .duration(300)
+        .ease('elastic')
+        .attr('stroke', color)
+    }
+  }
+
+  var stroke_green = animate_stroke('green')
+  var stroke_black = animate_stroke('black')
+
+  // Additional transitions for the automaton
+  ready
+    .on('circle:mouseenter', grow)
+    .on('circle:mouseleave', shrink)
+
+  selectDst
+    .on('.node:mouseenter', function() {
+      stroke_green.call(this.querySelector('rect')) })
+    .on('.node:mouseleave', function() {
+      stroke_black.call(this.querySelector('rect')) })
+
+  // When the link is added or canceled, shrink the circle back.  This is needed
+  // because we voluntarily leave the first selected circle in the grow state.
+  selectDst.addListener('leave', function() {
+    shrink.call(link_automaton.data.link_src)
+  })
+
+  // The initial state
+  link_automaton.currentState = ready
+  link_automaton.currentState.enter()
+}
+
+
+// State automaton
+
+var automaton = {
+  new: function(root) {
+    var o = Object.create(this)
+
+    o.root = root
+    o.states = Object.create(null)
+    o.currentState = null
+    // Holds state local to the automaton
+    o.data = Object.create(null)
+
+    return o
+  },
+}
+
+var state = {
+  new: function(automaton) {
+    var o = Object.create(this)
+
+    // Needed for signaling transitions
+    o.automaton = automaton
+
+    // Used as EventEmitter implementation, since we can't just inherit from it.
+    o.f = document.createDocumentFragment()
+
+    return o
+  },
+
+  // Event emitter interface
+  addListener: function(type, fn) { this.f.addEventListener(type, fn) },
+  removeListener: function(fn) { this.f.removeEventListener(fn) },
+  dispatch: function(event) { this.f.dispatchEvent(event) },
+
+  enter: function() { this.dispatch(new CustomEvent('enter')) },
+  leave: function() { this.dispatch(new CustomEvent('leave')) },
+
+  // Add self transition
+  on: function(condition, fn) {
+    // Condition format is 'selector:event-type'
+    condition = condition.split(':')
+    var selector = condition[0]
+    var type = condition[1]
+
+    // When entering state, start listening for this condition on all elements
+    // matching the selector
+    this.addListener('enter', function() {
+      // XXX: Assuming there will only be at most one transition of this type
+      // for the selected elements.  Otherwise, the latest specified prevails.
+      d3.selectAll(selector)
+        .on(type, fn)
+    })
+
+    // When leaving the state, stop listening
+    this.addListener('leave', function() {
+      d3.selectAll(selector)
+        .on(type, null)
+    })
+
+    return this
+  },
+
+  // Add transition to another state
+  to: function(state, condition, fn) {
+    var self = this
+
+    function cb(...args) {
+      self.automaton.currentState.leave()
+      if (fn) fn.apply(this, args)
+      self.automaton.currentState = state
+      self.automaton.currentState.enter()
+    }
+
+    return self.on(condition, cb)
   }
 }
 

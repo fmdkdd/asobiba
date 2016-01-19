@@ -12,7 +12,16 @@
      /* Prevent the line SVG element to trigger mouseenter/mouseleave events on
      the elements drawn below it when the mouse moves, since the endpoint
      follows the mouse cursor. */
-     .tmp-link { pointer-events: none; }
+     .tmp-link {
+       stroke: black;
+       stroke-width: 2;
+       pointer-events: none;
+     }
+
+     .link {
+       stroke: #78b;
+       stroke-width: 2;
+     }
     </style>
   </head>
   <body>

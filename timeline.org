@@ -602,3 +602,48 @@ link_automaton.init('ready')
 Need to prototype that to know if it works in practice, and make sure it is
 composable (can add states and transitions in multiple steps, not just one
 monolithic call).
+
+* [2016-01-19 mar.]
+** Declarative automaton API choices
+Nearly done.  The code is much clearer using the automaton.  For now I’m just
+declaring state objects and adding callbacks to their transition/enter/leave
+events, and not using a fluent interface at all.
+
+However, the fluent interface can come on top of that, to alleviate two problems
+with the lower-level interface:
+1. All the states must be declared beforehand.  If A refers to state B (in a
+   transition, say), then B must be declared.
+
+   Using a fluent interface, we can just give the name of the state rather than
+   a reference to it, and let the interface build the actual state objects for
+   us.
+
+2. Adding a callback to a transition is done with ‘on’, but a callback to an
+   enter/leave event of a state uses ‘addListener’.  The fluent interface can
+   merge the two calls based on the arguments.
+
+There remains a problem with the automaton that I would like solved before
+moving forward: how to deal with state that is local to the automaton.  The link
+automaton needs to keep a reference to the first element selected, in the ready
+state, for use in the select-dst state.
+
+I elected to add an empty ‘data’ object to the automaton.  It’s basically the
+same as closing over a variable, but at least it’s namespaced.  And in the
+future, maybe I can provide a way to get a ref to the automaton from callback
+calls.
+
+
+
+An issue I encountered in this version is that I can’t add multiple callbacks to
+one transition.  Or even add a callback after creating the transition without
+any, at first.
+
+To solve that, transitions should be first class, either through giving them a
+name, or returning a new object.
+
+As an added nicety, I think I know how to settle the dilemma of having to choose
+whether transition callbacks happen after or before we leave the current state:
+let the user choose.  Callbacks can be added either at the ‘debut’ of the
+transition (before leaving the old state), or at the ‘end’ (after entering the
+new state).  Maybe the ‘middle’ (after leaving the old state, but before
+entering the new one) can also be useful.
