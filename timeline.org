@@ -647,3 +647,14 @@ let the user choose.  Callbacks can be added either at the ‘debut’ of the
 transition (before leaving the old state), or at the ‘end’ (after entering the
 new state).  Maybe the ‘middle’ (after leaving the old state, but before
 entering the new one) can also be useful.
+
+* [2016-01-22 ven.]
+** More design decisions
+I’ve pondered whether using the automaton as a pure event emitter.  When
+entering a state, when a transition is made (3 stages), just emit custom events
+and define the behavior only in the listeners to these custom events.
+
+This is better for decoupling the code.  But the cost is that you lose track of
+the control flow.  Some animation bugs are subtle, and require you to know
+precisely what happens and in which order.  Animation is part of the
+interaction, and the code should not be declared separately.

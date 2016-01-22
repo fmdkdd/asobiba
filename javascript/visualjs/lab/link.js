@@ -22,10 +22,10 @@ function init() {
 
   var rect = node.append('rect')
         .attr({width: 200, height: 80,
-               fill: 'white', stroke: 'black'})
+               fill: 'transparent', stroke: 'black'})
 
   var circle = node.append('circle')
-        .attr({cx: 160, cy: 40, r: 20})
+        .attr({cx: 160, cy: 40, r: 15})
 
 
   // On click on circle, begin linking by overlaying a temporary path between
@@ -36,28 +36,66 @@ function init() {
 
   var link_automaton = automaton.new(svg.node())
   var ready = state.new(link_automaton)
-  var selectDst = state.new(link_automaton)
+  var src_selected = state.new(link_automaton)
+  var inside_node = state.new(link_automaton)
 
-  ready
-    .to(selectDst, 'circle:click', add_tmp_link)
-
-  selectDst
-    .on('body:mousemove', update_tmp_link)
-
-  // Clicking a node installs the link between from the source to it
-    .to(ready, '.node:click', add_link)
-
-  // Clicking anywhere else cancels linking
-    .to(ready, 'svg:click')
-
-  selectDst.addListener('leave', remove_tmp_link)
+  var grow = animate_radius(20)
+  var shrink= animate_radius(15)
+  var stroke_green = animate_stroke('green')
+  var stroke_black = animate_stroke('black')
 
   ready
     .addListener('enter', function() {
-      // The first circle clicked
+      // Reset data linked to the automaton
       link_automaton.data.link_src = null
       link_automaton.data.link_dst = null
+      link_automaton.data.current_node = null
     })
+
+    .to(inside_node, 'circle:click', function() {
+      link_automaton.data.current_node = this.parentNode
+      add_tmp_link.call(this)
+    })
+
+    .on('circle:mouseenter', grow)
+    .on('circle:mouseleave', shrink)
+
+  src_selected
+    .on('body:mousemove', update_tmp_link)
+
+    .to(inside_node, '.node:mouseenter', function() {
+      link_automaton.data.current_node = this
+    })
+
+  // Clicking anywhere else cancels linking
+    .to(ready, 'svg:click', function() {
+      remove_tmp_link.call(this)
+
+      // When the link is added or canceled, shrink the circle back.  This is needed
+      // because we voluntarily leave the first selected circle in the grow state.
+      shrink.call(link_automaton.data.link_src)
+    })
+
+  inside_node
+    .addListener('enter', select_node)
+    .addListener('leave', function() {
+      link_automaton.data.current_node = null
+    })
+
+  // Clicking a node installs the link from the source to it
+    .to(ready, '.node:click', function() {
+      add_link.call(this)
+      shrink.call(link_automaton.data.link_src)
+    })
+
+    .to(src_selected, '.node:mouseleave', function() {
+      stroke_black.call(this.querySelector('rect'))
+    })
+
+  // The initial state
+  link_automaton.enter(ready)
+
+
 
   function add_tmp_link() {
     link_automaton.data.link_src = this
@@ -67,8 +105,9 @@ function init() {
     // and coordinates of mouse relative to the same container
     var mouse = d3.mouse(svg.node())
 
-    // Build line from src to mouse
-    svg.append('line')
+    // Build line from src to mouse.  Add before other elements to the circles
+    // appear on top of the line.
+    svg.insert('line', ':first-child')
       .attr({class: 'tmp-link',
              x1: src_bb.cx, y1: src_bb.cy,
              x2: mouse[0], y2: mouse[1]})
@@ -81,6 +120,16 @@ function init() {
     var mouse = d3.mouse(svg.node())
     svg.select('.tmp-link')
       .attr({x2: mouse[0], y2: mouse[1]})
+  }
+
+  function select_node() {
+    var node = link_automaton.data.current_node
+    stroke_green.call(node.querySelector('rect'))
+
+    // Snap tmp link to node corner
+    var bb = relativeBBox(node, svg.node())
+    svg.select('.tmp-link')
+      .attr({x2: bb.x, y2: bb.y})
   }
 
   function remove_tmp_link() {
@@ -96,14 +145,9 @@ function init() {
                 to: dst.__data__}
     links.push(link)
 
-    // Get coordinates of src and dst for the resilient link
-    var src_bb = relativeBBox(src, svg.node())
-    var dst_bb = relativeBBox(dst, svg.node())
-
-    svg.append('line')
-      .attr({class: 'link',
-             x1: src_bb.cx, y1: src_bb.cy,
-             x2: dst_bb.x, y2: dst_bb.y})
+    // Promote the temporary link to permanent
+    svg.select('.tmp-link')
+      .attr('class', 'link')
 
     // Also stroke the selected node back to black immediately.
     // XXX: This should be added by the animations, with an additional callback
@@ -124,9 +168,6 @@ function init() {
     }
   }
 
-  var grow = animate_radius(25)
-  var shrink= animate_radius(20)
-
   function animate_stroke(color) {
     return function() {
       d3.select(this)
@@ -136,30 +177,6 @@ function init() {
         .attr('stroke', color)
     }
   }
-
-  var stroke_green = animate_stroke('green')
-  var stroke_black = animate_stroke('black')
-
-  // Additional transitions for the automaton
-  ready
-    .on('circle:mouseenter', grow)
-    .on('circle:mouseleave', shrink)
-
-  selectDst
-    .on('.node:mouseenter', function() {
-      stroke_green.call(this.querySelector('rect')) })
-    .on('.node:mouseleave', function() {
-      stroke_black.call(this.querySelector('rect')) })
-
-  // When the link is added or canceled, shrink the circle back.  This is needed
-  // because we voluntarily leave the first selected circle in the grow state.
-  selectDst.addListener('leave', function() {
-    shrink.call(link_automaton.data.link_src)
-  })
-
-  // The initial state
-  link_automaton.currentState = ready
-  link_automaton.currentState.enter()
 }
 
 
@@ -177,6 +194,16 @@ var automaton = {
 
     return o
   },
+
+  enter: function(state) {
+    // Leave whatever state we were in to trigger the leave event.
+    if (this.currentState)
+      this.currentState.leave()
+
+    // Enter the new
+    this.currentState = state
+    this.currentState.enter()
+  }
 }
 
 var state = {
@@ -193,12 +220,22 @@ var state = {
   },
 
   // Event emitter interface
-  addListener: function(type, fn) { this.f.addEventListener(type, fn) },
-  removeListener: function(fn) { this.f.removeEventListener(fn) },
-  dispatch: function(event) { this.f.dispatchEvent(event) },
+  addListener: function(type, fn) {
+    this.f.addEventListener(type, fn)
+    return this },
+  removeListener: function(type, fn) {
+    this.f.removeEventListener(type, fn)
+    return this },
+  dispatch: function(event) {
+    this.f.dispatchEvent(event)
+    return this },
 
-  enter: function() { this.dispatch(new CustomEvent('enter')) },
-  leave: function() { this.dispatch(new CustomEvent('leave')) },
+  enter: function() {
+    this.dispatch(new CustomEvent('enter'))
+    return this },
+  leave: function() {
+    this.dispatch(new CustomEvent('leave'))
+    return this },
 
   // Add self transition
   on: function(condition, fn) {
@@ -210,8 +247,12 @@ var state = {
     // When entering state, start listening for this condition on all elements
     // matching the selector
     this.addListener('enter', function() {
-      // XXX: Assuming there will only be at most one transition of this type
-      // for the selected elements.  Otherwise, the latest specified prevails.
+      // Use D3 to add the listener in order to have d3.event set up correctly
+      // in the callback, and receiving data as argument.
+      //
+      // The cost is that since we do not take a namespace in, there can only be
+      // one callback tied to a given type for the selected element.  So, the
+      // latest specified prevails.
       d3.selectAll(selector)
         .on(type, fn)
     })
@@ -242,16 +283,15 @@ var state = {
 
 
 // Return bounding box of elem relative to the top left corner of the given
-// container.  The bounding box also accounts for window scrolling.  The
-// bounding box is an object with the properties:
-// top (alias y), left (alias x), down, right, width, height,
-// cx (x of center), cy (y of center)
+// container.  The bounding box is an object with the properties: top (alias y),
+// left (alias x), down, right, width, height, cx (x of center), cy (y of
+// center)
 function relativeBBox(elem, container) {
   var bb = elem.getBoundingClientRect()
   var ref = container.getBoundingClientRect()
 
-  var left = window.scrollX + bb.left - ref.left
-  var top = window.scrollY + bb.top - ref.top
+  var left = bb.left - ref.left
+  var top = bb.top - ref.top
 
   return {
     left: left, x: left,
