@@ -49,7 +49,7 @@ function update_view() {
         .attr('class', 'box')
         .call(drag_box)
 
-  boxes.each(function(d) {
+  boxes.each(function construct_box(d) {
     var b = d3.select(this)
     d.properties.forEach(function(p, i) {
       var g = b.append('g')
@@ -72,13 +72,15 @@ function update_view() {
           fill: '#556270',
         })
         .text(p.label)
+        .on('click', edit_text)
+      // Prevent the drag behavior from interfering with the cursor selection
+        .on('mousedown', function() { d3.event.stopPropagation() })
 
       // Property value
       g.append('text')
         .attr({
           dx: 82, dy: 25,
           'text-anchor': 'middle',
-          fill: '#556270',
         })
         .text(p.value)
 
@@ -93,41 +95,72 @@ function update_view() {
     })
   })
 
-  // var link_source = null
+}
 
-  // var circle = boxes.append('circle')
-  //   .attr({
-  //     cx: 80,
-  //     cy: 20,
-  //     r: 7,
-  //   })
-  //   .on('mouseover', function circle_mouseover(d) {
-  //     d3.select(this).classed('hovered', true)
-  //     update_view()
-  //   })
-  //   .on('mouseout', function circle_mouseexit() {
-  //     d3.select(this).classed('hovered', false)
-  //     update_view()
-  //   })
-  //   .on('click', function circle_click(d) {
-  //     if (link_source == null) {  // entering linking mode
-  //       link_source = d
-  //       d3.select(this).classed('selected', true)
-  //     }
-  //     else { // selecting destination
-  //       var link_target = d
-  //       link_source.value = link_target
-  //       d3.classed('selected', false)
-  //     }
-  //   })
+function edit_text() {
+  // Add ability to edit SVG text element by spawning a contenteditable div
+  // above the SVG text element.  When the text is saved, change the value of
+  // the SVG text element and destroy the temporary div.
+  //
+  // I tried to set document.body to contenteditable, which enables editing the
+  // SVG text element directly, but the caret is mightily broken in Firefox and
+  // Chrome.
+  //
+  // If the contenteditable div proves unreliable across browsers, maybe use an
+  // input text instead.
 
-  // boxes.attr('transform', function(d) { return `translate(${d.x} ${d.y})` })
+  // Prevent the click from triggering further interaction.
+  d3.event.stopPropagation()
 
-  // circle.classed('hovered')
-  //   .attr('fill', 'red')
+  var text_orig = d3.select(this)
+  var bb = this.getBoundingClientRect()
 
-  // circle.classed('selected')
-  //   .attr('fill', 'blue')
+  // Place the div just above the text_orig element
+  var left = window.scrollX + bb.left
+  var top = window.scrollY + bb.top
+
+  var edit_box = d3.select('body').append('div')
+        .attr('class', 'tmp-edit-box')
+        .attr('contenteditable', true)
+        .style({position: 'absolute',
+                left: left + 'px',
+                top: top + 'px'})
+        .text(text_orig.text())
+
+  // Hide original text element
+  text_orig.style('visibility', 'hidden')
+
+  // Save cursor position in SVG text element
+  var sel = getSelection()
+  var cursorPos = getSelection().anchorOffset
+
+  // Focus the div instead
+  edit_box.node().focus()
+  // and put the cursor at the same place in the text
+  sel.collapse(edit_box.node().firstChild, cursorPos)
+
+  // When the edit is done, save the text value, destroy the edit box, and
+  // unhide the original SVG text element
+  function finish_edit() {
+    text_orig.text(edit_box.text())
+    edit_box.remove()
+    text_orig.style('visibility', 'visible')
+
+    // No need to bubble
+    d3.event.stopPropagation()
+  }
+
+  // The edit ends when we focus away from the edit box
+  edit_box.on('blur', finish_edit)
+  // or when we type enter
+  edit_box.on('keypress', function() {
+    // No need to bubble
+    d3.event.stopPropagation()
+
+    if (d3.event.keyCode === 13) { // 'return' keycode
+      finish_edit()
+    }
+  })
 }
 
 var drag_box = d3.behavior.drag()
