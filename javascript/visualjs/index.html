@@ -15,6 +15,27 @@
        color: #556270;
      }
 
+     .box circle {
+       fill: #556270;
+     }
+
+     /* Prevent the line SVG element to trigger mouseenter/mouseleave events on
+     the elements drawn below it when the mouse moves, since the endpoint
+     follows the mouse cursor. */
+     .tmp-link {
+       stroke: #4ECDC4;
+       pointer-events: none;
+     }
+
+     .link, .tmp-link {
+       stroke-width: 2;
+       stroke-linecap: round;
+     }
+
+     .link {
+       stroke: #556270;
+     }
+
      .box.dragged {
        cursor: grabbing;
      }
