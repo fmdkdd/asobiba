@@ -344,7 +344,7 @@ var drag_box = d3.behavior.drag()
         d3.select(this)
           .attr('transform', `translate(${d.x = d3.event.x} ${d.y = d3.event.y})`)
 
-        console.log(d)
+        // TODO: update links pointing to or from this box
       })
       .on('dragstart', function() {
         // Re-insert as the last child to be drawn above the other boxes
