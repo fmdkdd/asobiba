@@ -1,14 +1,9 @@
 document.addEventListener('DOMContentLoaded', init)
 
-// TODO: when clicking on a circle that already has link starting from it,
-// promote the link to temporary, but restore it on cancellation.
-
-// TODO: should do nothing if a link already exists between targets.
-
 function init() {
 
   var nodes = [{x: 23, y: 42}, {x: 80, y: 260}]
-  var links = []
+  var links = window.links = new Map()
 
 
   var svg = d3.select('#box-area')
@@ -98,17 +93,30 @@ function init() {
 
 
   function add_tmp_link() {
-    link_automaton.data.link_src = this
+    var src = link_automaton.data.link_src = this
 
     // Get coordinates relative to containing SVG
-    var src_bb = relativeBBox(link_automaton.data.link_src, svg.node())
+    var src_bb = relativeBBox(src, svg.node())
     // and coordinates of mouse relative to the same container
     var mouse = d3.mouse(svg.node())
 
-    // Build line from src to mouse.  Add before other elements to the circles
-    // appear on top of the line.
-    svg.insert('line', ':first-child')
-      .attr({class: 'tmp-link',
+    var link = null
+
+    // If the src already has a link pointing from it, then re-use the link
+    // rather than create a new one.
+    if (links.has(src.__data__)) {
+      link = d3.select(src.__data__.svg_link)
+
+      // and remove the link from the model
+      links.delete(src.__data__)
+      src.__data__.svg_link = null
+    } else {
+      // Build line from src to mouse.  Add before other elements to the circles
+      // appear on top of the line.
+      link = svg.insert('line', ':first-child')
+    }
+
+    link.attr({class: 'tmp-link',
              x1: src_bb.cx, y1: src_bb.cy,
              x2: mouse[0], y2: mouse[1]})
 
@@ -141,18 +149,16 @@ function init() {
     var dst = this
 
     // Create permanent link between the two in the model
-    var link = {from: src.__data__,
-                to: dst.__data__}
-    links.push(link)
+    links.set(src.__data__, dst.__data__)
 
     // Promote the temporary link to permanent
-    svg.select('.tmp-link')
+    var link = svg.select('.tmp-link')
       .attr('class', 'link')
 
-    // Also stroke the selected node back to black immediately.
-    // XXX: This should be added by the animations, with an additional callback
-    // on an existing transition.  But the automaton API does not allow that for
-    // now.
+    // and associate the SVG link with its endpoints
+    src.__data__.svg_link = link.node()
+
+    // Also stroke the selected node back to black immediately
     stroke_black.call(dst.querySelector('rect'))
   }
 
