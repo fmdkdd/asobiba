@@ -1,7 +1,10 @@
 document.addEventListener("DOMContentLoaded", init)
 
 // Feature 1: draggable boxes
-// TODO: Feature 2: link boxes with arcs
+// Feature 2: link boxes with arcs
+// TODO: update links when boxes move
+// TODO: snap boxes to grid when dragging them around
+// TODO: can add/remove properties
 
 function init() {
   d3.select('#add-box')
@@ -49,7 +52,6 @@ function update_view() {
 
   var boxes = boxes_join.enter().append('g')
         .attr('class', 'box')
-        .call(drag_box)
 
   boxes.each(function construct_box(d) {
     var b = d3.select(this)
@@ -87,6 +89,8 @@ function update_view() {
             class: 'ref',
             cx: 85, cy: 20, r: 4
           })
+        // Prevent the drag behavior from interfering with the ref click
+          .on('mousedown', function() { d3.event.stopPropagation() })
       } else {
         g.append('text')
           .attr({
@@ -117,7 +121,7 @@ function update_view() {
   var link_automaton = automaton.new(svg.node())
   var ready = state.new(link_automaton)
   var src_selected = state.new(link_automaton)
-  var inside_node = state.new(link_automaton)
+  var inside_cell = state.new(link_automaton)
 
   var grow = animate_radius(10)
   var shrink= animate_radius(4)
@@ -129,11 +133,19 @@ function update_view() {
       // Reset data linked to the automaton
       link_automaton.data.link_src = null
       link_automaton.data.link_dst = null
-      link_automaton.data.current_node = null
+      link_automaton.data.current_cell = null
+
+      // Can drag boxes in this state
+      boxes.call(drag_box)
     })
 
-    .to(inside_node, '.ref:click', function() {
-      link_automaton.data.current_node = this.parentNode
+    .addListener('leave', function() {
+      // Cannot drag in the other states
+      boxes.on('.drag', null)
+    })
+
+    .to(inside_cell, '.ref:click', function() {
+      link_automaton.data.current_cell = this.parentNode
       add_tmp_link.call(this)
     })
 
@@ -143,8 +155,8 @@ function update_view() {
   src_selected
     .on('body:mousemove', update_tmp_link)
 
-    .to(inside_node, '.cell:mouseenter', function() {
-      link_automaton.data.current_node = this
+    .to(inside_cell, '.cell:mouseenter', function() {
+      link_automaton.data.current_cell = this
     })
 
   // Clicking anywhere else cancels linking
@@ -156,13 +168,18 @@ function update_view() {
       shrink.call(link_automaton.data.link_src)
     })
 
-  inside_node
-    .addListener('enter', select_node)
+  inside_cell
+    .addListener('enter', select_cell)
     .addListener('leave', function() {
-      link_automaton.data.current_node = null
+      link_automaton.data.current_cell = null
+
+      svg.selectAll('.tmp-anchor')
+        .remove()
     })
 
-  // Clicking a node installs the link from the source to it
+    .on('.cell:mousemove', select_cell)
+
+  // Clicking a cell installs the link from the source to it
     .to(ready, '.cell:click', function() {
       add_link.call(this)
       shrink.call(link_automaton.data.link_src)
@@ -198,31 +215,152 @@ function update_view() {
     } else {
       // Build line from src to mouse.  Add before other elements to the circles
       // appear on top of the line.
-      link = svg.insert('line', ':first-child')
+      link = svg.insert('path', ':first-child')
     }
 
-    link.attr({class: 'tmp-link',
-             x1: src_bb.cx, y1: src_bb.cy,
-             x2: mouse[0], y2: mouse[1]})
+    link .attr({class: 'tmp-link',
+                d: link_path({
+                  cell: src.parentNode,
+                  xy: [src_bb.cx, src_bb.cy]
+                }, {mouse: mouse})})
+             // x1: src_bb.cx, y1: src_bb.cy,
+             // x2: mouse[0], y2: mouse[1]})
 
     // No bubbling necessary
     d3.event.stopPropagation()
   }
 
   function update_tmp_link() {
+    var src = link_automaton.data.link_src
+    var src_bb = relativeBBox(src, svg.node())
     var mouse = d3.mouse(svg.node())
-    svg.select('.tmp-link')
-      .attr({x2: mouse[0], y2: mouse[1]})
+    var link = svg.select('.tmp-link')
+          .attr('d', link_path({
+            cell: src.parentNode,
+            xy: [src_bb.cx, src_bb.cy]
+          }, {mouse: mouse}))
+    // svg.select('.tmp-link')
+    //   .attr({x2: mouse[0], y2: mouse[1]})
   }
 
-  function select_node() {
-    var node = link_automaton.data.current_node
-    stroke_green.call(node.querySelector('rect'))
+  function link_path(from, to) {
+    var line = d3.svg.line()
 
-    // Snap tmp link to node corner
-    var bb = relativeBBox(node, svg.node())
+    var src = from.xy
+    var dst = null
+    var pre_dst = null
+
+    var path = [src]
+
+    if (to.mouse) {
+      dst = to.mouse
+    } else if (to.cell) {
+      // If targeting a cell, there are only three clean entries: up, left,
+      // bottom.  Up and bottom can be obscured by neighboring cells.
+
+      // Use the mouse to select the nearest valid anchor.
+      var mouse = d3.mouse(svg.node())
+      var cell = to.cell
+
+      var anchors = valid_cell_anchors(cell)
+
+      var nearest = _.minBy(anchors, function(p) {
+        return distance(mouse, p)
+      })
+
+      dst = [nearest[0], nearest[1]]
+      pre_dst = [nearest[2], nearest[3]]
+    }
+
+    // There are only two clean exits out of ref circle: right and bottom.  We
+    // should exit from the bottom when the destination is in the left part of
+    // the diagonal sprouting from the ref circle to the top-left corner of the
+    // box.
+    //
+    //           \
+    //            \   Right exit
+    //             \
+    //              o
+    //               \
+    // Bottom exit    \
+    //                 \
+    var box_bb = relativeBBox(from.cell.parentNode, svg.node())
+
+    var side = side_of_AB(src, [box_bb.x, box_bb.y], dst)
+
+    if (side < 0) {             // bottom exit
+      path.push([src[0], src[1] + 40])
+      line.interpolate('step-after')
+    } else {                    // right exit
+      path.push([src[0] + 30, src[1]])
+      line.interpolate('step-before')
+    }
+
+    // If targeting a cell, add a point to the path to avoid meeting the anchor
+    // destination with a parallel line.
+    if (pre_dst)
+      path.push(pre_dst)
+
+    path.push(dst)
+
+    return line(path)
+  }
+
+  function select_cell() {
+    var src = link_automaton.data.link_src
+    var src_bb = relativeBBox(src, svg.node())
+
+    var cell = link_automaton.data.current_cell
+    stroke_green.call(cell.querySelector('rect'))
+
+    // Draw all valid anchors to guide the user
+    var anchors = svg.selectAll('.tmp-anchor')
+      .data(valid_cell_anchors(cell))
+
+    anchors.enter()
+      .append('circle')
+      .attr('class', 'tmp-anchor')
+      .attr('r', 4)
+      .attr('fill', '#4ECDC4')
+
+    anchors
+      .attr('cx', function(d) { return d[0] })
+      .attr('cy', function(d) { return d[1] })
+
+    // Snap tmp link to nearest anchor
+    var bb = relativeBBox(cell, svg.node())
     svg.select('.tmp-link')
-      .attr({x2: bb.x, y2: bb.y})
+      .attr('d', link_path({
+        cell: cell,
+        xy: [src_bb.cx, src_bb.cy]
+      }, {cell: cell}))
+
+      // .attr({x2: bb.x, y2: bb.y})
+  }
+
+  function valid_cell_anchors(cell) {
+    var cell_bb = relativeBBox(cell, svg.node())
+
+    // left anchor is alway available
+    var anchors = [
+      [cell_bb.x     , cell_bb.y + cell_bb.height / 2,
+       cell_bb.x - 15, cell_bb.y + cell_bb.height / 2]
+    ]
+
+    var box = cell.parentNode
+    var box_bb = relativeBBox(box, svg.node())
+
+    // If top cell, up anchor is available
+    if (cell_bb.y === box_bb.y)
+      anchors.push([cell_bb.x + 35, cell_bb.y,
+                    cell_bb.x + 35, cell_bb.y - 15])
+
+    // If bottom cell, bottom anchor is available
+    if (cell_bb.y + cell_bb.height === box_bb.y + box_bb.height)
+      anchors.push([cell_bb.x + 35, cell_bb.y + cell_bb.height,
+                    cell_bb.x + 35, cell_bb.y + cell_bb.height + 15])
+
+    return anchors
   }
 
   function remove_tmp_link() {
@@ -243,7 +381,7 @@ function update_view() {
     // and associate the SVG link with its endpoints
     src.__data__.svg_link = link.node()
 
-    // Also stroke the selected node back to black immediately
+    // Also stroke the selected cell back to black immediately
     stroke_black.call(dst.querySelector('rect'))
   }
 
@@ -382,6 +520,19 @@ function relativeBBox(elem, container) {
   }
 }
 
+// A, B and P are three points.  Returns -1 if P is to the left of (AB), +1 if
+// on the right, and 0 if P is on the line.
+// https://stackoverflow.com/questions/1560492/how-to-tell-whether-a-point-is-to-the-right-or-left-side-of-a-line
+function side_of_AB(A, B, P) {
+  return Math.sign((B[0] - A[0]) * (P[1] - A[1])
+                   - (B[1] - A[1]) * (P[0] - A[0]))
+}
+
+function distance(a, b) {
+  var dx = a[0] - b[0]
+  var dy = a[1] - b[1]
+  return Math.sqrt(dx * dx + dy * dy)
+}
 
 
 // State automaton
