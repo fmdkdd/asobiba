@@ -3,7 +3,6 @@ document.addEventListener("DOMContentLoaded", init)
 // Feature 1: draggable boxes
 // Feature 2: link boxes with arcs
 // TODO: update links when boxes move
-// TODO: snap boxes to grid when dragging them around
 // TODO: can add/remove properties
 
 function init() {
@@ -479,8 +478,12 @@ function edit_text() {
 var drag_box = d3.behavior.drag()
       .origin(identity)
       .on('drag', function drag_box_on_drag(d) {
+        // Snap to grid of 10x10 pixels
+        var x = 10 * Math.floor(d3.event.x / 10)
+        var y = 10 * Math.floor(d3.event.y / 10)
+
         d3.select(this)
-          .attr('transform', `translate(${d.x = d3.event.x} ${d.y = d3.event.y})`)
+          .attr('transform', `translate(${d.x = x} ${d.y = y})`)
 
         // TODO: update links pointing to or from this box
       })
