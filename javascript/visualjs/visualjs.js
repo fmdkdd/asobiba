@@ -405,8 +405,6 @@ function update_view() {
         .attr('stroke', color)
     }
   }
-
-
 }
 
 function edit_text() {
