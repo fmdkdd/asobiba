@@ -23,6 +23,7 @@ var heap = []
 
 // A box represents a JS object in the visualization.
 var box = {
+  id: -1,
   parent: null,                 // prototype link
   properties: [                 // list of properties
     {label: 'a', value: 1},
@@ -35,9 +36,12 @@ var box = {
 
 // Heap view
 
+var gen_id = 0
 function spawn_box() {
   var b = Object.create(box)
+  b.id = gen_id++
   heap.push(b)
+
   update_view()
 }
 
