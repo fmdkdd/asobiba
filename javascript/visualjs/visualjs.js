@@ -45,74 +45,95 @@ function spawn_box() {
   update_view()
 }
 
+// Functions used by update_view that are not closures are defined only once
+// here.
+function box_key(b) { return b.id }
+function box_properties(b) { return b.properties }
+function cell_label(c) { return c.label }
+function translate_xy(b) { return `translate(${b.x} ${b.y})` }
+function translate_cell(c, i) { return `translate(0 ${40 * i})` }
+
+function stop_propagation() { d3.event.stopPropagation() }
+
+function construct_cell(selection) {
+  // Border of the property
+  selection.append('rect')
+    .attr({
+      width: 100,
+      height: 40,
+      stroke: '#556270',
+      fill: 'transparent',
+      'stroke-width': 2,
+    })
+
+  // Property name
+  selection.append('text')
+    .attr({
+      dx: 5, dy: 25,
+      fill: '#556270',
+    })
+    .text(cell_label)
+    .on('click', edit_text)
+  // Prevent the drag behavior from interfering with the cursor selection
+    .on('mousedown', stop_propagation)
+
+  // Separating line
+  selection.append('line')
+    .attr({
+      x1: 70, y1: 0,
+      x2: 70, y2: 40,
+      stroke: '#556270',
+      'stroke-width': 2,
+    })
+
+  // Property value
+  selection.each(function(c) {
+    var $cell = d3.select(this)
+
+    if (c.value === ref) {
+      $cell.append('circle')
+        .attr({class: 'ref',
+               cx: 85, cy: 20, r: 4})
+      // Prevent the drag behavior from interfering with the ref click
+        .on('mousedown', stop_propagation)
+    }
+    else {
+      $cell.append('text')
+        .attr({
+          dx: 82, dy: 25,
+          'text-anchor': 'middle',
+        })
+        .text(c.value)
+    }
+  })
+}
+
 function update_view() {
   var svg = d3.select('#box-area')
 
-  var boxes_join = svg.selectAll('.box')
-        .data(heap)
+  var $boxes = svg.selectAll('.box')
+        .data(heap, box_key)
 
-  // boxes.exit().remove()
+  $boxes.enter().append('g')
+    .attr('class', 'box')
 
-  var boxes = boxes_join.enter().append('g')
-        .attr('class', 'box')
+  $boxes
+    .attr('transform', translate_xy)
 
-  boxes.each(function construct_box(d) {
-    var b = d3.select(this)
-    d.properties.forEach(function(p, i) {
-      var g = b.append('g')
-            .attr({
-              class: 'cell',
-              transform: `translate(0 ${40 * i})`,})
+  $boxes.exit().remove()
 
-      // Border of the property
-      g.append('rect')
-        .attr({
-          width: 100,
-          height: 40,
-          stroke: '#556270',
-          fill: 'transparent',
-          'stroke-width': 2,
-        })
 
-      // Property name
-      g.append('text')
-        .attr({
-          dx: 5, dy: 25,
-          fill: '#556270',
-        })
-        .text(p.label)
-        .on('click', edit_text)
-      // Prevent the drag behavior from interfering with the cursor selection
-        .on('mousedown', function() { d3.event.stopPropagation() })
+  var $cells = $boxes.selectAll('.cell')
+        .data(box_properties)
 
-      // Property value
-      if (p.value === ref) {
-        g.append('circle')
-          .attr({
-            class: 'ref',
-            cx: 85, cy: 20, r: 4
-          })
-        // Prevent the drag behavior from interfering with the ref click
-          .on('mousedown', function() { d3.event.stopPropagation() })
-      } else {
-        g.append('text')
-          .attr({
-            dx: 82, dy: 25,
-            'text-anchor': 'middle',
-          })
-          .text(p.value)
-      }
+  $cells.enter().append('g')
+    .attr('class', 'cell')
+    .call(construct_cell)
 
-      // Separating line
-      g.append('line')
-        .attr({
-          x1: 70, y1: 0,
-          x2: 70, y2: 40,
-          stroke: '#556270',
-          'stroke-width': 2,
-        })
-    })
-  })
+  $cells
+    .attr('transform', translate_cell)
+
+  $cells.exit().remove()
 
 
   // On click on circle, begin linking by overlaying a temporary path between
@@ -139,12 +160,12 @@ function update_view() {
       link_automaton.data.current_cell = null
 
       // Can drag boxes in this state
-      boxes.call(drag_box)
+      $boxes.call(drag_box)
     })
 
     .addListener('leave', function() {
       // Cannot drag in the other states
-      boxes.on('.drag', null)
+      $boxes.on('.drag', null)
     })
 
     .to(inside_cell, '.ref:click', function() {
@@ -411,6 +432,7 @@ function update_view() {
   }
 }
 
+
 function edit_text() {
   // Add ability to edit SVG text element by spawning a contenteditable div
   // above the SVG text element.  When the text is saved, change the value of
