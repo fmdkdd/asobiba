@@ -5,13 +5,20 @@ document.addEventListener("DOMContentLoaded", init)
 // TODO: update links when boxes move
 // TODO: can add/remove properties
 
+// FIXME: add box -> new box cannot be dragged.  Automaton does not take part in
+// update_view.  Call drag_box on new boxes is enough?
+
+// FIXME: when linking, should not be able to edit text (edit text/grab/link are
+// exclusive states)
+
 function init() {
   d3.select('#add-box')
     .on('click', spawn_box)
 
   spawn_box()
-}
 
+  init_automaton(d3.select('#box-area'))
+}
 
 
 // Heap model
@@ -134,8 +141,12 @@ function update_view() {
     .attr('transform', translate_cell)
 
   $cells.exit().remove()
+}
 
 
+// Automaton
+
+function init_automaton(svg) {
   // On click on circle, begin linking by overlaying a temporary path between
   // the link source and the mouse cursor.  When a second target is clicked, add
   // the link to the model, remove the overlay, and add the definitive link
@@ -160,12 +171,12 @@ function update_view() {
       link_automaton.data.current_cell = null
 
       // Can drag boxes in this state
-      $boxes.call(drag_box)
+      svg.selectAll('.box').call(drag_box)
     })
 
     .addListener('leave', function() {
       // Cannot drag in the other states
-      $boxes.on('.drag', null)
+      svg.selectAll('.box').on('.drag', null)
     })
 
     .to(inside_cell, '.ref:click', function() {
@@ -217,7 +228,6 @@ function update_view() {
   link_automaton.enter(ready)
 
 
-
   function add_tmp_link() {
     var src = link_automaton.data.link_src = this
 
@@ -247,8 +257,8 @@ function update_view() {
                   cell: src.parentNode,
                   xy: [src_bb.cx, src_bb.cy]
                 }, {mouse: mouse})})
-             // x1: src_bb.cx, y1: src_bb.cy,
-             // x2: mouse[0], y2: mouse[1]})
+    // x1: src_bb.cx, y1: src_bb.cy,
+    // x2: mouse[0], y2: mouse[1]})
 
     // No bubbling necessary
     d3.event.stopPropagation()
@@ -339,7 +349,7 @@ function update_view() {
 
     // Draw all valid anchors to guide the user
     var anchors = svg.selectAll('.tmp-anchor')
-      .data(valid_cell_anchors(cell))
+          .data(valid_cell_anchors(cell))
 
     anchors.enter()
       .append('circle')
@@ -359,7 +369,7 @@ function update_view() {
         xy: [src_bb.cx, src_bb.cy]
       }, {cell: cell}))
 
-      // .attr({x2: bb.x, y2: bb.y})
+    // .attr({x2: bb.x, y2: bb.y})
   }
 
   function valid_cell_anchors(cell) {
@@ -400,7 +410,7 @@ function update_view() {
 
     // Promote the temporary link to permanent
     var link = svg.select('.tmp-link')
-      .attr('class', 'link')
+          .attr('class', 'link')
 
     // and associate the SVG link with its endpoints
     src.__data__.svg_link = link.node()
@@ -409,7 +419,6 @@ function update_view() {
     stroke_black.call(dst.querySelector('rect'))
   }
 
-
   // Animations functions
   function animate_radius(r) {
     return function() {
