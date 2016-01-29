@@ -2,7 +2,7 @@
  Understanding D3 nested selections for hierarchical data binding.
 
  Takeaways: I can use the update pattern for nested data.  I should use a key
- function for boxes.
+ function for boxes and for cells to preserve object constancy.
  */
 
 document.addEventListener('DOMContentLoaded', init)
@@ -53,7 +53,8 @@ function update() {
 
   // CELLS
   var $cells = $boxes.selectAll('.cell')
-        .data(d => d.things)
+        .data(d => d.things,
+              d => d)
 
   $cells.exit().remove()
 
