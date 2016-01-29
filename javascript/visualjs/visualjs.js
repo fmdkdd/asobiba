@@ -136,7 +136,8 @@ function update_view() {
 
 
   var $cells = $boxes.selectAll('.cell')
-        .data(box_properties)
+        .data(box_properties,
+              cell_label)
 
   $cells.enter().append('g')
     .attr('class', 'cell')
