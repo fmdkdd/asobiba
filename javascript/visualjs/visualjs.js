@@ -155,9 +155,8 @@ function update_view() {
 function init_automaton(svg) {
   // On click on circle, begin linking by overlaying a temporary path between
   // the link source and the mouse cursor.  When a second target is clicked, add
-  // the link to the model, remove the overlay, and add the definitive link
-  // path.  If the second click happens outside of a valid target, cancel
-  // linking by destroying the overlay.
+  // the link to the model and update the view.  If the second click happens
+  // outside of a valid target, cancel linking by destroying the overlay.
 
   var link_automaton = automaton.new(svg.node())
   var ready = state.new(link_automaton)
@@ -230,7 +229,7 @@ function init_automaton(svg) {
       stroke_black.call(this.querySelector('rect'))
     })
 
-  // The initial state
+  // Enter initial state
   link_automaton.enter(ready)
 
 
@@ -263,8 +262,6 @@ function init_automaton(svg) {
                   cell: src.parentNode,
                   xy: [src_bb.cx, src_bb.cy]
                 }, {mouse: mouse})})
-    // x1: src_bb.cx, y1: src_bb.cy,
-    // x2: mouse[0], y2: mouse[1]})
 
     // No bubbling necessary
     d3.event.stopPropagation()
@@ -279,8 +276,6 @@ function init_automaton(svg) {
             cell: src.parentNode,
             xy: [src_bb.cx, src_bb.cy]
           }, {mouse: mouse}))
-    // svg.select('.tmp-link')
-    //   .attr({x2: mouse[0], y2: mouse[1]})
   }
 
   function link_path(from, to) {
@@ -374,8 +369,6 @@ function init_automaton(svg) {
         cell: cell,
         xy: [src_bb.cx, src_bb.cy]
       }, {cell: cell}))
-
-    // .attr({x2: bb.x, y2: bb.y})
   }
 
   function valid_cell_anchors(cell) {
