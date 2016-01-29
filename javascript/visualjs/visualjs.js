@@ -5,8 +5,7 @@ document.addEventListener("DOMContentLoaded", init)
 // TODO: update links when boxes move
 // TODO: can add/remove properties
 
-// FIXME: add box -> new box cannot be dragged.  Automaton does not take part in
-// update_view.  Call drag_box on new boxes is enough?
+// FIXME: only one link can exist at a time?
 
 // FIXME: when linking, should not be able to edit text (edit text/grab/link are
 // exclusive states)
@@ -123,6 +122,7 @@ function update_view() {
 
   $boxes.enter().append('g')
     .attr('class', 'box')
+    .call(drag_box)
 
   $boxes
     .attr('transform', translate_xy)

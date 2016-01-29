@@ -658,3 +658,37 @@ This is better for decoupling the code.  But the cost is that you lose track of
 the control flow.  Some animation bugs are subtle, and require you to know
 precisely what happens and in which order.  Animation is part of the
 interaction, and the code should not be declared separately.
+
+* [2016-01-29 ven.]
+** Event binding troubles
+So, I was on the fence about binding listeners to elements themselves, rather
+than on the containing SVG, fearing performance issues.  Since boxes can be
+added/removed, and we add several listeners to different element of each box,
+AND we add/remove listeners depending on the current state of the automaton.
+
+The upside is code that is free of ~if~ statements, since the dispatching is
+taken care of by the event dispatcher.
+
+However, it has come to bite me back.  If I define the automaton only once (as I
+should have from the start), then when a new box is created, no listeners are
+bound to it.  Can’t be dragged.
+
+Of course I could add the drag behavior to newly created boxes.  But, it might
+not be correct if we are not in the ready state.  What we should do is add the
+listeners for boxes (and sub-components, cell and circle) valid /in the current
+state/.  That seems like it’s easy to forget, and it is.  Also, it seems
+a bit wasteful, because I would select all boxes again, and reassign the
+listeners for all.
+
+Another solution is to catch all events at the container level, let them bubble
+up and identify the original target.  But now the problem is that sometimes I
+don’t want to just know the original target, but I need the path in the DOM that
+the event took.  So now I need to walk up the tree, duplicating the bubbling
+phase.
+
+And, ultimately, the drag behavior from d3 need to be called on a selection, not
+on the container.
+
+The more pragmatic solution is just to call drag_box when a new box is created.
+Since I know the user is in the ready state.  Even though it’s not correct, I
+might find a better way to organize this stuff later down the road if need be.
