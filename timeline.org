@@ -692,3 +692,59 @@ on the container.
 The more pragmatic solution is just to call drag_box when a new box is created.
 Since I know the user is in the ready state.  Even though it’s not correct, I
 might find a better way to organize this stuff later down the road if need be.
+
+* [2016-03-22 mar.]
+** Comparing approaches to deal with state
+Ronan has been using RxJS for an application that presents a GUI in the
+browser.  I was wondering how the reactive programming approach would handle my
+situation, for which I found that a state automaton was the best approximation.
+
+But at the same time, it seems odd that I have to resort to an explicit state
+automaton to handle my elementary interaction.  So, how do others deal with it?
+
+Looking at RxJS docs, it seems that it is a complete algebra of events, meaning
+I could use the basic operators to build richer ones, and eventually create
+streams of predicates that would give me exactly the same information that a
+state automaton gives.
+
+But, would the complex operator be as clear, or clearer than the description of
+an automaton?  And what about the performance of the thing, as this is always a
+worrying concern when techniques from functional programming are naively ported
+to JavaScript.
+
+I need to find out:
+1) the way ‘traditional’ GUI systems deal with this kind of interaction (Swing,
+   GTK, Qt, Cocoa?)
+2) if there is a ‘canonical’ way to handle this kind of interaction using RxJS
+   (or in reactive programming)
+3) if there is a standard, or well-known technique to bind listeners to DOM
+   elements ‘lazily’, that is, whenever an element matches the given selector, it
+   should trigger the listener.
+
+For point 3, if I set up a single listener at the root of the document, I can
+capture any click and match the given selector against event.target.  But what
+if I want to match against a /parent/ of the target?  Knowing that clicks
+bubble, I could walk up the DOM and test the selector against each element,
+until I hit the root.
+
+Except now I’m duplicating logic done by the browser, and it’s incompatible with
+stuff like ~event.stopPropagation()~.
+
+
+
+Okay, on 3, there is an [[https://developer.mozilla.org/en-US/docs/Web/API/element/matches][~Element.matches~]] predicate to know if the element would
+have matched the given CSS selector.  Better than having to check the ~tagName~
+and ~classList~.  But doesn’t solve the need to look up the parent.
+
+The name of the technique is “event delegation”.  [[https://api.jquery.com/on/][Jquery]] has an argument for
+that, but for some reason, it doesn’t work on SVG.  And indeed, it walks the
+tree:
+
+#+BEGIN_QUOTE
+jQuery bubbles the event from the event target up to the element where the
+handler is attached (i.e., innermost to outermost element) and runs the handler
+for any elements along that path matching the selector.
+#+END_QUOTE
+
+On point 1, there are certainly a number of hits for “GUI state machine”, and
+the pattern seems recognized.
