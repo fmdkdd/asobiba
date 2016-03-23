@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <script src="../d3/d3.min.js"></script>
+    <script src="link-root-listener.js"></script>
+    <style>
+     html {
+       background-color: #334;
+     }
+
+     #box-area {
+       border: 1px solid #333;
+       margin-left: 20px;
+     }
+
+     /* Prevent the line SVG element to trigger mouseenter/mouseleave events on
+        the elements drawn below it when the mouse moves, since the endpoint
+        follows the mouse cursor. Also prevent the line to steal click events to
+        /cancel linking.
+     */
+     .tmp-link {
+       pointer-events: none;
+     }
+
+     .link, .tmp-link {
+       stroke: #78b;
+       stroke-width: 2;
+       stroke-linecap: round;
+     }
+    </style>
+  </head>
+  <body>
+    <svg id="box-area" width="500" height="500">
+      <style>
+       .box rect {
+         fill: transparent;
+         stroke: black;
+       }
+
+       rect.selected {
+         stroke: green;
+       }
+      </style>
+    </svg>
+  </body>
+</html>
