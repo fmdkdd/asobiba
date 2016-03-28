@@ -4,5 +4,4 @@ c/vm/mac
 scala/target
 scala/project
 rust/*/target
-Cargo.lock
 .flowconfig

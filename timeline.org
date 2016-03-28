@@ -748,3 +748,225 @@ for any elements along that path matching the selector.
 
 On point 1, there are certainly a number of hits for “GUI state machine”, and
 the pattern seems recognized.
+
+* [2016-03-28 Mon]
+** Trying out a Sparkets rust server
+Since server is in need of a rewrite, to be faster, cleaner and more robust.
+
+Since we already compiled Coffeescript, that does not change the compilation
+time much.
+
+** Choosing a library
+I’ve got a fast and simple [[https://github.com/housleyjk/ws-rs][websocket library]].
+
+Now, I know I will want to benchmark binary messages vs. text messages.  So I
+should design around this choice by presenting a common interface.
+
+** Testing input latency
+I want to test how the game feels with a moderately high latency (~50 to 100ms
+roundtrip).  I thought Chromium was able to do that, but it seems the throttling
+option of the network panel only works for initiating the connection, and is not
+applied to all subsequent frames when the websocket is established.
+
+But, there is an option to add latency directly on the loopback interface
+through [[https://daniel.haxx.se/blog/2010/12/14/add-latency-to-localhost/][netem]]:
+
+: tc qdisc add dev lo root handle 1:0 netem delay 50ms
+
+this sets 50ms of delay.  It does affect ~ping~, and it visibly affects
+websocket frames on my machine.
+
+To reset:
+: tc qdisc del dev lo root
+
+It seems you need to reset before applying a different delay.
+
+** Multi-threaded server or asynchronous?
+Building up a small prototype.  Not familiar at all with how to build a game
+server in Rust.  And I have to deal with memory management explicitly.
+
+The nodejs server was asynchronous, because nodejs.  One event loop where input
+was collected, and one setTimeout to deal with game updates.
+
+In Rust, I guess I could also do that, but I have to look up how.  Meanwhile, I
+could also use a multi-threaded approach.  One thread per client might be
+simpler to code, and since we are not expecting thousands of players, the
+performance scaling of thread is not an issue.
+
+In any case, I need to brush up on coding concurrency in Rust.
+
+Been reading:
+
+- [[http://fabiensanglard.net/quakeSource/quakeSourceNetWork.php][Network code review of Quake]]
+
+  Yes, I know it uses UDP, and WebSocket is on TCP.  But I want to know how
+  clients are handled.
+
+  Well, it’s not clear from that article.
+
+** What’s the ideal solution to input latency anyway?
+I’ve always wondered if the treat input/update logic/render loop was optimal.
+I’ve been doing that for ages.  I remember it bit me because updates were tied
+to graphical frames, and lagging on frames made the game slow.
+
+But this was an issue of handling time in the updates.  If the game updates by
+doing ~player.x++~ each frame /and/ you assume the game runs at 60fps, then when
+an old machine churns out 30fps, the game plays in slow motion.  Because what
+you really wanted to say is ‘x increases by one each 16.66ms’; the simulation is
+tied to continuous time.
+
+A game is a simulation.  The simulation, to feel good, needs to be as responsive
+as possible.  If I act on the real world, I expect an immediate feedback.  The
+simulation, to feel real, must do the same.  It means that a player must be able
+to react on input, and see his impact on the simulation in /realtime/.  Of
+course, the computer cannot do realtime, only discrete.  But, the computer can
+compute the simulation and redraw it much faster than the brain can notice.
+
+25fps is good enough for our brain to believe that movies are real.  But when
+you add interaction, you usually need to be a bit faster than that.  25fps means
+40ms between two frames.
+
+Let’s say it takes 10 ms to update the simulation, and another 10ms to draw the
+scene and refresh the display.  Out of 40ms, the CPU is only busy for 20ms,
+which is good.
+
+#+BEGIN_EXAMPLE
+   late input                            early input
+   |                                     |
+--UUUUUUUUUURRRRRRRRRR--------------------UUUUUUUUUURRRRRRRRRR----------------
+  |  compute s        |                   |  compute s+1      |
+ screen shows s-1     |  screen shows s                       | screen shows s+1
+#+END_EXAMPLE
+
+Already something is troubling.  The simulation should render things as they are
+/right now/.  But as it /takes time/ doing so, the display is already outdated
+as it is shown on the screen!
+
+It’s like when I give you the time, by the time you hear it and process it, it’s
+already false.  Now, luckily, the time is still useful to you because I only go
+to the minutes.  Seconds are trickier.  Milliseconds are already hopeless.
+
+Same thing for the simulation.  It’s in some state ‘s’, then at the scheduled
+time (every 40ms), it starts updating to state s+1.  When the screen is
+refreshed, we are already 20ms in.  What time does the simulation reflect?
+
+If it reflects the time of the world at the /beginning/ of the update, then the
+image on the screen is already 20ms outdated when it comes up.
+
+That means that if a user action is made just before the update comes along, we
+will see the result 20ms at the earliest.  Worst case, the input is made just
+after the update component reads them, then we have to wait for the current
+frame to draw, then the next: 60ms before our action impacts the world we see.
+
+So, for any random button press, the screen might display the changed world
+after a delay that is anywhere between 20ms and 60ms.
+
+If that delay is long enough for the brain to have time to think “did I press
+that button?”, for the brain to /notice/, then the simulation is not fluid, and
+the illusion breaks.
+
+The question is then, how long can this delay be before the brain starts to
+notice?
+
+
+
+Running some tests...
+
+Typing a key (down key event) paints a square on the screen.  The square
+alternate between pink and green colors to distinguish each key stroke.
+
+Delays are chosen randomly, I just type to see if it feels responsive.
+Delays are just lower bound on the actual perceived delay: the screen might take
+some milliseconds longer to refresh.
+
+I’ve noticed that typing just one key is vastly different than stringing a few
+keys together.  If I type once, and wait to see if I notice the delay before the
+square is painted, 100ms feels immediate.  But string 3 keys rapidly, and it
+does not feel instant anymore.
+
+400ms is definitely noticeable, and feels sluggish at all.
+
+A delay of 200ms is noticeable, but can still feel responsive for one key.  Not
+for 3 keys.
+
+100ms feels immediate.  But I can feel the delay when stringing keys.
+
+50ms feels immediate.  Stringing keys also.
+
+10ms feels a bit faster than 50ms, but not really much.
+
+
+
+Another test, on input speed this time.  Measuring time between key downs.
+
+Double-tapping the same key: I can hit 87ms minimum reliably, but with effort.
+Effortless is more 150ms.
+
+Stringing two different keys: now there is an issue with measurement.  Tapping
+two or more keys /at the same time/, I can never get below 8ms.
+
+Since each key down is a separate call to the listener, I suspect that the time
+is spent dispatching and cleaning up.  So, 8ms is the effective resolution of
+the browser in this setup.  Sometimes I get a 3, or even 0.5, but quite
+randomly.
+
+Now, stringing two different keys: I can do 8ms (same time for the browser) and
+16ms reliably (the earliest to distinguish between two key down), without
+effort.
+
+With 3 fingers, I can do <100ms for each successive tap, effortlessly.
+
+
+
+What does this mean?  Well, if I am able to hit two keys with 20ms between them,
+I can also hit them with a 60ms interval.  If I can feel the difference in
+my fingers, the game should also reflect this difference.
+
+But, if I sample the input every 40ms (by polling the keys at the beginning of
+the update loop), keys hit with an interval <40ms are counted as being hit at
+the same time.
+
+It’s basic sampling.  The signal is 1 when the key is down, and 0 when the key
+is up.
+
+#+BEGIN_EXAMPLE
+----------|----------|----------|----------
+0000000111110000000000011111000000011110000
+#+END_EXAMPLE
+
+As long as the key is held down for longer than the polling interval, we are
+sure to get every key.
+
+And if we want to distinguish between two successive key pressed, we just have
+to use a reasonably low polling.
+
+On my browser, the lightest tap I can muster holds the key for 32ms.  Meaning
+that if the polling was 40ms, I could miss that key down from time to time,
+depending on how it falls with respect to the update.
+
+In this case, 30ms would suffice.  Poll interval of 30ms, or you start losing
+keys.
+
+
+
+So I guess the morale of the story is: faster feedback is always better.  But
+below 50ms of visual feedback, the gains are negligible.
+
+Polling keys at the start of a monolithic update loop is okay, as long as the
+polling interval is less than the time a key can be held down.  Should check on
+target hardware how low the resolution can be (browser + keyboard is certainly
+not the optimal setup).
+
+** Carmack on movement prediction
+To alleviate server latency in QuakeWorld, Carmack tried to use prediction.  The
+player movement is duplicated on the client, starting from the last known good
+state received from the server.
+
+The server works by directly answering to received packets: update only the
+world around the player, and send the state back.  There is no global time
+anymore.  But the player does not have to wait for the fixed update.
+
+Carmack notes that simulating 300ms of player movement on the client is
+hopeless.  But, for <100ms delays, client prediction helps smooth out the
+movements.  Because server updates may not always arrive on time, we can keep
+the framerate constant on the client with prediction.
