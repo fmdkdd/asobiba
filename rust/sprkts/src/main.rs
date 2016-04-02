@@ -6,14 +6,16 @@ extern crate ws;
 struct Client {
   out: ws::Sender,
   input_mask: u8,
-  ship: Box<Ship>,
+  ship: Ship,
+  // ship: Box<Ship>,
 }
 
 impl Client {
-  fn new(out : ws::Sender, ship: Ship) -> Client {
-    Client { out: out,
-             input_mask: 0,
-             ship: Box::new(ship)
+  fn new(out: ws::Sender, ship: Ship) -> Client {
+    Client {
+      out: out,
+      input_mask: 0,
+      ship: ship,
     }
   }
 }
@@ -35,19 +37,47 @@ impl ws::Handler for Client {
 
     self.input_mask = msg_vec[0];
 
-    // if input_mask[0] & 1 == 1 {
-    //   self.ship.move_by(-1, 0);
-    //   println!("x: {}", self.ship.x)
-    // }
+    if self.input_mask & 1 > 0 {
+      self.ship.move_by(-1, 0);
+    }
+
+    if self.input_mask & 4 > 0 {
+      self.ship.move_by(1, 0);
+    }
+
+    if self.input_mask & 2 > 0 {
+      self.ship.move_by(0, -1);
+    }
+
+    if self.input_mask & 8 > 0 {
+      self.ship.move_by(0, 1);
+    }
+
+    let mut x = i32_to_u8vec(self.ship.x);
+    let mut y = i32_to_u8vec(self.ship.y);
+    x.append(&mut y);
+
+    self.out.send(ws::Message::binary(x));
+
+    println!("x: {}, y: {}", self.ship.x, self.ship.y);
 
     Ok(())
   }
 }
 
-struct Game {
-  clients: Vec<Client>,
-  // ships: Vec<Ship>,
+fn i32_to_u8vec(x: i32) -> Vec<u8> {
+  vec![
+    (x & 0xFF) as u8,
+    (x >> 8 & 0xFF) as u8,
+    (x >> 16 & 0xFF) as u8,
+    (x >> 24 & 0xFF) as u8
+  ]
 }
+
+struct Game;
+// clients: Vec<Client>,
+// ships: Vec<Ship>,
+
 
 impl ws::Factory for Game {
   type Handler = Client;
@@ -66,7 +96,8 @@ fn main() {
   // })
   //   .expect("Failed to create WebSocket")
 
-  let game = Game { clients: vec![] };
+  // let game = Game { clients: vec![] };
+  let game = Game;
 
   let socket = ws::WebSocket::new(game)
     .expect("Error creating WebSocket");

@@ -25,44 +25,20 @@ function sendInput() {
     | keyMask[KEY_S] << I_RIGHT
     | keyMask[KEY_W] << I_UP
 
-  if (inputMask[0] !== lastInputMask[0]) {
-    console.log(keyMask, inputMask)
-    server.send(inputMask)
+  server.send(inputMask)
 
-    lastInputMask = inputMask
-  }
-
-  setTimeout(sendInput, inputSendInterval)
+  lastInputMask = inputMask
 }
 
 function init() {
   var lastInputTime = 0
 
-  var delays = [10, 50, 100, 200, 400]
-  var delay = delays[Math.floor(Math.random()*delays.length)]
-
-  console.log('DELAY', delay)
-
   // Input
   document.addEventListener('keydown', function(ev) {
     keyMask[ev.which] = true
-    // var t = performance.now()
-    // var dt = t - lastInputTime
-    // lastInputTime = t
-    // console.log(ev.which, t, dt)
-    // console.log(performance.now())
-    lastInputTime = performance.now()
-    // setTimeout(function() {
-    //   ctxt.fillStyle = ctxt.fillStyle === '#ffc0cb' ? 'green' : '#ffc0cb'
-    //   ctxt.fillRect(100, 100, 300, 300)
-    //   console.log(performance.now())
-    // }, delay)
   })
   document.addEventListener('keyup', function(ev) {
     keyMask[ev.which] = false
-    var t = performance.now()
-    var dt = t - lastInputTime
-    console.log(ev.which, t, dt)
   })
 
   // Websocket
@@ -73,6 +49,7 @@ function init() {
 
     // Start sending input
     // sendInput()
+    loop()
   })
 
   server.addEventListener('close', function(close) {
@@ -84,7 +61,16 @@ function init() {
   })
 
   server.addEventListener('message', function(msg) {
-    console.log('Message from websocket', msg)
+    // console.log('Message from websocket', msg)
+    var reader = new FileReader()
+    reader.addEventListener('loadend', function() {
+      var x = new DataView(reader.result).getInt32(0, true)
+      var y = new DataView(reader.result).getInt32(4, true)
+
+      ship.x = x
+      ship.y = y
+    })
+    reader.readAsArrayBuffer(msg.data)
   })
 
   // Rendering
@@ -93,9 +79,6 @@ function init() {
 
   window.addEventListener('resize', resizeCanvas)
   resizeCanvas()
-
-  // Start drawing
-  // render()
 }
 
 function resizeCanvas() {
@@ -106,12 +89,20 @@ function resizeCanvas() {
   // canvas.height = document.body.clientHeight
 }
 
+function loop() {
+  sendInput()
+  render()
+
+  requestAnimationFrame(loop)
+}
+
+var ship = {x: 0, y: 0}
+
 function render() {
-  ctxt.fillColor = 'black'
+  ctxt.fillStyle = 'black'
   ctxt.fillRect(0, 0, canvas.width, canvas.height)
 
-  // ctxt.
+  ctxt.fillStyle = 'white'
+  ctxt.fillRect(ship.x, -ship.y, 10, 10)
 
-
-  requestAnimationFrame(render)
 }
