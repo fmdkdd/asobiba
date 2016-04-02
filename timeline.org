@@ -970,3 +970,51 @@ Carmack notes that simulating 300ms of player movement on the client is
 hopeless.  But, for <100ms delays, client prediction helps smooth out the
 movements.  Because server updates may not always arrive on time, we can keep
 the framerate constant on the client with prediction.
+
+* [2016-04-02 Sat]
+** Setting the MTU on Archlinux
+I had issues connecting to wiki.archlinux.org, but other websites were fine.
+
+Apparently, that was caused by a misconfigured MTU.  Under Windows, the MTU was
+1480 for ipv6, and 1500 for ipv4, but in Linux it was 1500.
+
+To find out the correct MTU, I used ping:
+
+: $ ping -4 -l 1452 -M do www.dslreports.com
+
+‘-M do’ tells ping to look for MTU discovery packets.  The host has to be
+configured to send these packets back, which few of those I tested (8.8.8.8,
+google.com, free.fr) did.
+
+Setting the MTU temporarily:
+
+: # ip link set eth0 mtu 1480
+
+(replace ‘eth0’ by interface name)
+
+Then wiki.archlinux.org loaded correctly.
+
+To set the MTU permanently, the wiki advised to use an udev rule, but I could
+not get it to match the interface name for some reason.  Too lazy to RTFM, turns
+out there is an MTUBytes option for systemd-networkd.service.  In
+/etc/systemd/network/my.network:
+
+: [Link]
+: MTUBytes=1480
+
+Voilà.
+
+** Mounting a WDTV Live Hub
+Did not want to install/configure Samba.
+
+But luckily, only ~cifs-utils~ is required:
+
+: # mount -t cifs //SERVER_IP/WDTVLiveHub/ /mnt/wdtv -o uid=USER,gid=USER
+
+To find what shares are up on the network:
+
+: $ smbclient -L //SERVER_NAME
+
+To find the IP of the server:
+
+: $ nmblookup SERVER_NAME
