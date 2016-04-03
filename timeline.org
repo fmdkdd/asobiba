@@ -1018,3 +1018,36 @@ To find what shares are up on the network:
 To find the IP of the server:
 
 : $ nmblookup SERVER_NAME
+
+* [2016-04-03 Sun]
+** Making progress
+Spent a few hours trying to find a way to emulate a setInterval on the server.
+Well, good old thread::sleep is still the state of the art, apparently.  It was
+used by a [[https://github.com/mvdnes/rboy/blob/master/src/main.rs][gameboy emulator]], and measurements show it as accurate enough.
+
+I ought to make a [[http://gafferongames.com/game-physics/fix-your-timestep/][“right” timestep]] this time around though.
+
+And I’m sure I’ll run into all kind of ownership fun when I start accessing the
+game state from the logic thread as well as from the websocket handler.
+
+One thing I haven’t settled, is whether to send game updates to clients when we
+receive a message, or broadcast in the logic thread.  I recall reading Carmack
+switching to the former for Quake3.  Cuts time between updates for the client,
+but every client will have a slightly different state (although the interval are
+so small, it should not be noticeable).
+
+Serialization was another issue.  I found a library, [[http://tyoverby.com/bincode/bincode/][bincode]], so I don’t have to
+write a struct to [u8] function.  But on the JS side, I still need to write a
+deserializer.  So I might end up writing the serializer by hand, to have more
+control over endianness.  And for diffing snapshots to send updates.
+
+And while I’m experimenting, maybe find a way to use the unreliable WebRTC data
+channel, rather than websocket.  Should be quite faster especially out of the
+LAN.
+
+- http://www.html5rocks.com/en/tutorials/webrtc/datachannels/
+- https://hacks.mozilla.org/2013/03/webrtc-data-channels-for-great-multiplayer/
+
+But on the Rust side, it’s rather bleak:
+
+- https://github.com/phsym/sctp-sys

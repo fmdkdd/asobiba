@@ -1,17 +1,25 @@
 extern crate ws;
+extern crate bincode;
+extern crate rustc_serialize;
+extern crate time;
 
 // use std::rc::Rc;
 // use std::cell::Cell;
+
+use std::sync::mpsc;
+
+use bincode::rustc_serialize::{encode, decode};
+use rustc_serialize::Encodable;
 
 struct Client {
   out: ws::Sender,
   input_mask: u8,
   ship: Ship,
-  // ship: Box<Ship>,
 }
 
 impl Client {
   fn new(out: ws::Sender, ship: Ship) -> Client {
+    println!("shipx: {}", ship.x);
     Client {
       out: out,
       input_mask: 0,
@@ -53,31 +61,23 @@ impl ws::Handler for Client {
       self.ship.move_by(0, 1);
     }
 
-    let mut x = i32_to_u8vec(self.ship.x);
-    let mut y = i32_to_u8vec(self.ship.y);
-    x.append(&mut y);
+    let msg = Message {
+      x: self.ship.x,
+      y: self.ship.y,
+    };
 
-    self.out.send(ws::Message::binary(x));
-
-    println!("x: {}, y: {}", self.ship.x, self.ship.y);
-
-    Ok(())
+    let limit = bincode::SizeLimit::Bounded(1000);
+    self.out.send(encode(&msg, limit).unwrap().as_slice())
   }
 }
 
-fn i32_to_u8vec(x: i32) -> Vec<u8> {
-  vec![
-    (x & 0xFF) as u8,
-    (x >> 8 & 0xFF) as u8,
-    (x >> 16 & 0xFF) as u8,
-    (x >> 24 & 0xFF) as u8
-  ]
+#[derive(RustcEncodable)]
+struct Message {
+  x: i32,
+  y: i32,
 }
 
 struct Game;
-// clients: Vec<Client>,
-// ships: Vec<Ship>,
-
 
 impl ws::Factory for Game {
   type Handler = Client;
@@ -85,36 +85,41 @@ impl ws::Factory for Game {
   fn connection_made(&mut self, out: ws::Sender) -> Client {
     let ship = Ship::new();
     let c = Client::new(out, ship);
-    // let c = Client { out: out, ship: Box::new(ship) };
+    // self.clients.push(c);
     c
   }
 }
 
 fn main() {
-  // ws::listen("localhost:12345", |out| {
-  //   Client { out: out, ship: Ship::new() }
-  // })
-  //   .expect("Failed to create WebSocket")
-
-  // let game = Game { clients: vec![] };
   let game = Game;
-
   let socket = ws::WebSocket::new(game)
     .expect("Error creating WebSocket");
-  socket.listen("localhost:12345")
-    .expect("Error listening at 12345");
+  let broadcaster = socket.broadcaster();
+
+  std::thread::spawn(|| {
+    socket.listen("localhost:12345")
+      .expect("Error listening at 12345");
+  });
+
+  let periodic = timer_periodic(20);
+  let mut last_time = time::PreciseTime::now();
+
+  loop {
+    let now = time::PreciseTime::now();
+    let dt = last_time.to(now);
+    last_time = now;
+
+    // broadcaster.send(Game)
+    // println!("tick: {}", dt);
+
+    periodic.recv();
+  }
 }
 
 // All the game messages
 // enum Message {
 //   Hello,
 //   ShipPosition(i32, i32),
-// }
-
-// Handles serialization and deserialization of messages.
-// trait Messenger {
-//   fn send(p: Player, m: Message);
-//   // should subscribe to messages as well?
 // }
 
 struct Ship {
@@ -131,4 +136,15 @@ impl Ship {
     self.x += dx;
     self.y += dy;
   }
+}
+
+fn timer_periodic(ms: u64) -> mpsc::Receiver<()> {
+  let (tx, rx) = mpsc::sync_channel(1);
+  std::thread::spawn(move || {
+    loop {
+      std::thread::sleep(std::time::Duration::from_millis(ms));
+      tx.send(()).unwrap();
+    }
+  });
+  rx
 }

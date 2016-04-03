@@ -64,8 +64,8 @@ function init() {
     // console.log('Message from websocket', msg)
     var reader = new FileReader()
     reader.addEventListener('loadend', function() {
-      var x = new DataView(reader.result).getInt32(0, true)
-      var y = new DataView(reader.result).getInt32(4, true)
+      var x = new DataView(reader.result).getInt32(0, false)
+      var y = new DataView(reader.result).getInt32(4, false)
 
       ship.x = x
       ship.y = y

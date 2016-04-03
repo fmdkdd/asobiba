@@ -4,4 +4,7 @@ version = "0.1.0"
 authors = ["fmdkdd"]
 
 [dependencies]
-ws = "0.4.5"
+ws = "0.4"
+rustc-serialize = "0.3"
+bincode = "0.5"
+time = "0.1"
