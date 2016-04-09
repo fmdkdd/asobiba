@@ -1060,3 +1060,26 @@ Tried to bind the socket in C.  It gets past the accept and blocks.
 
 So, I guess if I can chat with a JS web page over RTCDataChannel, it might be
 worth to try to see how to integrate the C code into Rust?
+
+* [2016-04-09 Sat]
+** Understanding WebRTC
+Found a pretty [[http://chimera.labs.oreilly.com/books/1230000000545/index.html][comprehensive book]] on WebRTC and browser networking.
+
+Managed to build a minimal example of a client page using WebRTC to setup an
+unreliable data channel to itself.
+
+Now, the sad part of that is that setting up a WebRTC connection is /much more/
+than just creating a socket.  You need an SDP, to setup ICE candidates, and then
+let the browser establish the SCTP connection over DTLS over UDP under the hood.
+
+I only found an SCTP library for Rust for now, so I’m missing a few components
+to make a Rust binary talk to a WebRTC JS client.
+
+Nodejs can talk to a WebRTC browser, right?  The goto library on npm seems to be
+[[https://github.com/feross/simple-peer][simple-peer]].  To use it in node, they point to [[https://www.npmjs.com/package/wrtc][wrtc]].  Seems /they/ mostly wrap
+around the WRTC implementation of Chromium, and export that to node bindings.
+
+So using that with Rust seems... not fun, at all.
+
+On the other hand, I /could/ use simple-peer and wrtc in Sparkets directly, and
+have an UDP protocol for messages.  Less work, more benefits.
