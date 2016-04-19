@@ -14,9 +14,95 @@ function init() {
   document.addEventListener('mousemove', update)
   $svg.addEventListener('mouseenter', update)
 
-  boxes.forEach(function(b) {
-    $svg.appendChild(createBox(b))
+  boxes.forEach(b => {
+    var box = Box.new(b)
+    box.moveTo(b.x, b.y)
+    box.add(Property.new().$)
+    box.insertInto($svg)
+    // $svg.appendChild(createBox(b))
   })
+}
+
+var Property = {
+  name: 'name',
+  value: 0,
+  $: null,
+
+  new(name, value) {
+    var o = Object.create(this)
+
+    o.name = name
+    o.value = value
+
+    o.$ = svgElem('g.property')
+    var rect = svgElem('rect', {width: 200, height: 80})
+    o.$.appendChild(rect)
+    var circle = svgElem('circle', {cx: 160, cy: 40, r: 15})
+    o.$.appendChild(circle)
+
+    return o
+  },
+
+  insertInto($elem) {
+    $elem.appendChild(this.$)
+  },
+}
+
+var Box = {
+  x: 0, y: 0,
+  $: null,
+  dragStart: {x: 0, y: 0},
+
+  new() {
+    var o = Object.create(this)
+
+    o.$ = svgElem('g.box')
+
+    o.$.addEventListener('mousedown', ev => {
+      o.$.classList.add('dragging')
+      o.dragStart.x = ev.clientX
+      o.dragStart.y = ev.clientY
+      ev.preventDefault()
+    })
+
+    document.addEventListener('mouseup', _ => {
+      o.$.classList.remove('dragging')
+    })
+
+    document.addEventListener('mousemove', ev => {
+      if (o.$.classList.contains('dragging')) {
+        o.moveBy(ev.clientX - o.dragStart.x,
+                 ev.clientY - o.dragStart.y)
+        o.dragStart.x = ev.clientX
+        o.dragStart.y = ev.clientY
+      }
+    })
+
+    return o
+  },
+
+  moveTo(x, y) {
+    this.x = x; this.y = y
+    this.$.setAttribute('transform', `translate(${x} ${y})`)
+  },
+
+  moveBy(dx, dy) {
+    this.moveTo(this.x + dx, this.y + dy)
+  },
+
+  insertInto($elem) {
+    $elem.appendChild(this.$)
+  },
+
+  add($elem) {
+    this.$.appendChild($elem)
+  },
+
+  empty() {
+    while (this.$.firstChild) {
+      this.$.removeChild(this.$.firstChild)
+    }
+  },
 }
 
 function update(event) {
