@@ -335,6 +335,7 @@ Which means ... that 0xFF + 1 triggers a panic!  But only in debug builds, since
 these checks are removed on release builds.  However, the right way to go about
 that is to use ~wrapping_add~ instead to /explicitly/ signal overflow is
 intended.
+
 * [2015-12-23 mer.]
 ** Improving s3c
 Was looking to improve the error feedback of s3c.  But I realized that I could
@@ -392,6 +393,7 @@ be used to step through a block.
 
 Maybe using a forEach on each /block/ rather than line would be faster than the
 current way.  Another time.
+
 * [2016-01-06 mer.]
 ** Decoding opcodes in GBS
 The decoding opcode part of GBS is a bit redundant:
@@ -1083,3 +1085,21 @@ So using that with Rust seems... not fun, at all.
 
 On the other hand, I /could/ use simple-peer and wrtc in Sparkets directly, and
 have an UDP protocol for messages.  Less work, more benefits.
+
+* [2016-04-19 Tue]
+** One fat listener
+I like simple approaches.  Watching [[http://mollyrocket.com/861][Immediate-mode GUIs]], I want to try writing
+a catch-all listener that will handle all the logic in one place.
+
+I suspect that he had in mind to repaint the components in the single update
+function.  I don’t need to do that here, as I deal with SVG elements inserted
+into the DOM.
+
+The single update function works.  But it made me realize I really ought to
+decompose the ‘box’ functionality into independent behaviors, or traits:
+- a movable behavior that adds a moveTo command for manual positioning
+- a draggable behavior for mouse dragging
+- the box is just a container, doesn’t need to know what’s inside to draw itself
+- a snappable behavior for snapping to a grid
+
+Properties are distinct components also.  And links too.
