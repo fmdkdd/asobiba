@@ -50,26 +50,78 @@ function* solve(problem, initial_states, is_goal, expand) {
 // console.log(s.next())
 // console.log(s.next())
 
-var puzzle = {
-  width: 4,
-  height: 4,
-  start: [0,0],
-  goal: [3,3],
+var Puzzle = {
+  // width: 4,
+  // height: 4,
+  // start: [0,0],
+  // goal: [3,3],
+
+  grid: null,
+
+  new(str) {
+    var o = Object.create(Puzzle)
+
+    o.grid = str.slice()
+    o._parse_grid()
+
+    return o
+  },
+
+  _parse_grid() {
+    var line, x, y
+    var starts = []
+    var goals = []
+    var height = this.grid.length
+    var width = 0
+
+    for (y=0; y < height; ++y) {
+      line = this.grid[height - 1 - y]
+
+      // Find starts
+      x = line.indexOf('O')
+      while (x > -1) {
+        starts.push([x, y])
+        x = line.indexOf('O', x + 1)
+      }
+
+      // Find goals
+      x = line.indexOf('A')
+      while (x > -1) {
+        goals.push([x, y])
+        x = line.indexOf('A', x + 1)
+      }
+
+      // Save max width
+      width = Math.max(line.length, width)
+    }
+
+    this.starts = starts
+    this.goals = goals
+    this.height = height
+    this.width = width
+  },
 }
 
 var Path = {
+  puzzle: null,
   start: null,
+  goal: null,
   current: null,
   moves: null,
-  positions: null,
 
-  new(start) {
+  new(puzzle, start, goal) {
     var o = Object.create(Path)
 
-    o.start = start.slice()
+    o.puzzle = puzzle
+    o.start = start
+    o.goal = goal
     o.current = start.slice()
     o.moves = []
-    o.positions = [start.slice()]
+    o.grid = new Array(puzzle.width * puzzle.height)
+    o.grid.width = puzzle.width
+    o.grid.height = puzzle.height
+    o.grid.fill(0)
+    o._set_grid_at(start, 1)
 
     return o
   },
@@ -77,18 +129,34 @@ var Path = {
   clone() {
     var o = Object.create(Path)
 
-    o.start = this.start.slice()
+    o.puzzle = this.puzzle
+    o.start = this.start
+    o.goal = this.goal
     o.current = this.current.slice()
     o.moves = this.moves.slice()
-    o.positions = this.positions.slice()
+    o.grid = this.grid.slice()
+    o.grid.width = this.grid.width
+    o.grid.height = this.grid.height
 
     return o
   },
 
+  _get_grid_at(pos) {
+    return this.grid[pos[1] * this.grid.width + pos[0]]
+  },
+
+  _set_grid_at(pos, v) {
+    this.grid[pos[1] * this.grid.width + pos[0]] = v;
+    return this
+  },
+
+  // O(1)
   move(dir) {
     move_in_dir(this.current, dir)
+    this._set_grid_at(this.current, 1)
+    move_in_dir(this.current, dir)
+    this._set_grid_at(this.current, 1)
     this.moves.push(dir)
-    this.positions.push(this.current.slice())
     return this
   },
 
@@ -97,18 +165,27 @@ var Path = {
   // },
 
   // Would going there would overlap a previous position?
+  // O(1)
   would_overlap(dir) {
     var pos = this.current.slice()
+    move_in_dir(pos, dir)
     move_in_dir(pos, dir)
 
     return this.been_through(pos)
   },
 
   // Didn't we pass through here already?
+  // O(1)
   been_through(pos) {
-    return this.positions.some(p => p[0] == pos[0] && p[1] == pos[1])
+    return this._get_grid_at(pos) > 0
   },
 
+  // Are we there yet?
+  is_goal() {
+    return this.current[0] == this.goal[0] && this.current[1] == this.goal[1]
+  },
+
+  // O(1)
   is_inside(width, height) {
     var x = this.current[0]
     var y = this.current[1]
@@ -116,62 +193,58 @@ var Path = {
     return x >= 0 && x < width && y >= 0 && y < height
   },
 
-  pretty_print_nodes(width, height) {
+  pretty_print() {
+    var x, y, mark
     var line = []
-    var x, y
+    var height = this.grid.height
+    var width = this.grid.width
 
-    console.log('-----')
+    console.log()
     for (y=height-1; y >= 0; --y) {
       line.length = 0
       for (x=0; x < width; ++x) {
-        if (this.been_through([x, y]))
-          line.push('x')
+        mark = this._get_grid_at([x,y]) > 0
+        // Start or goal
+        if (x == this.start[0] && y == this.start[1])
+          line.push('O')
+        else if (x == this.goal[0] && y == this.goal[1])
+          line.push('A')
+
+        // Edges
+        else if (x % 2 == 1 && mark)
+          line.push('-')
+        else if (y % 2 == 1 && mark)
+          line.push('|')
+
+        // Nodes
+        else if (mark)
+          line.push('X')
+
+        // Neither edge nor node
         else
-          line.push('o')
-      }
-      console.log(line.join(''))
-    }
-  },
-
-  pretty_print(start, width, height) {
-    // x-x-x = 3 nodes + 2 edges
-    var out_w = 2 * width - 1
-    var out_h = 2 * height - 1
-    var output = new Array(out_w * out_h)
-    output.fill(' ')
-
-    // Construct the output by walking through the moves
-    var pos = start.slice()
-    output[pos[1] * out_w + pos[0]] = 'O'
-    this.moves.forEach(m => {
-      // Add edge
-      move_in_dir(pos, m)
-      output[pos[1] * out_w + pos[0]] = m & 0b01 ? '|' : '-'
-
-      // Add node
-      move_in_dir(pos, m)
-      output[pos[1] * out_w + pos[0]] = 'X'
-    })
-
-    // And print the output
-    var line = []
-    var x, y
-
-    console.log()
-    for (y=out_h-1; y >= 0; --y) {
-      line.length = 0
-      for (x=0; x < out_w; ++x) {
-        line.push(output[y * out_w + x])
+          line.push(' ')
       }
       console.log(line.join(''))
     }
   },
 }
 
-var s = solve(puzzle,
-              _ => [Path.new(puzzle.start)],
-              s => s.current[0] === puzzle.goal[0]
-              && s.current[1] === puzzle.goal[1],
+
+var puz =  Puzzle.new([
+  '.-.-.-A',
+  '| | | |',
+  '.-.-.-.',
+  '| | | |',
+  '.-.-.-.',
+  '| | | |',
+  'O-.-.-O'
+])
+
+console.log(puz)
+
+var s = solve(puz,
+              p => [Path.new(p, p.starts[1], p.goals[0])],
+              s => s.is_goal(),
               s => {
                 res = []
                 ;[UP, RIGHT, DOWN, LEFT].forEach(dir => {
@@ -184,7 +257,7 @@ var s = solve(puzzle,
                   ns.move(dir)
 
                   // Are we still inside the grid?
-                  if (ns.is_inside(4, 4))
+                  if (ns.is_inside(s.puzzle.width, s.puzzle.height))
                     res.push(ns)
                 })
                 return res
@@ -194,7 +267,7 @@ var i = 0
 var v = s.next()
 while (!v.done) {
   ++i
-  v.value.pretty_print([0,0], 4, 4)
+  v.value.pretty_print()
   v = s.next()
 }
 console.log('%d solutions', i)
