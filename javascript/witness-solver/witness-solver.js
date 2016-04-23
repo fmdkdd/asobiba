@@ -90,6 +90,19 @@ var Puzzle = {
     this.height = height
     this.width = width
   },
+
+  // Is there a node or an edge there?
+  // O(1)
+  can_move_there(pos) {
+    var x = pos[0]
+    var y = pos[1]
+    var height = this.height
+
+    // Is inside the grid
+    return x >= 0 && x < this.width && y >= 0 && y < this.height
+    // and there is an edge or a node there
+      && this.grid[height - 1 - y][x].search(/[-|OA.]/) > -1
+  },
 }
 
 var Path = {
@@ -170,6 +183,19 @@ var Path = {
     return this._get_grid_at(pos) > 0
   },
 
+  // Would walking in this direction result in an invalid state?
+  // Checks for
+  is_valid(dir) {
+    var pos = this.current.slice()
+    move_in_dir(pos, dir)
+    if (!this.puzzle.can_move_there(pos)) return false
+    move_in_dir(pos, dir)
+    if (!this.puzzle.can_move_there(pos)) return false
+
+    // Don't backtrack
+    return !this.been_through(pos)
+  },
+
   // Are we there yet?
   is_goal() {
     return this.current[0] == this.goal[0] && this.current[1] == this.goal[1]
@@ -193,7 +219,7 @@ var Path = {
     for (y=height-1; y >= 0; --y) {
       line.length = 0
       for (x=0; x < width; ++x) {
-        mark = this._get_grid_at([x,y]) > 0
+        mark = this.been_through([x,y])
         // Start or goal
         if (x == this.start[0] && y == this.start[1])
           line.push('O')
@@ -221,16 +247,14 @@ var Path = {
 
 
 var puz =  Puzzle.new([
-  '.-.-.-A',
+  '.- -.-A',
   '| | | |',
   '.-.-.-.',
   '| | | |',
   '.-.-.-.',
   '| | | |',
-  'O-.-.-O'
+  'O .-.-O'
 ])
-
-console.log(puz)
 
 var s = solve(puz,
               p => [Path.new(p, p.starts[1], p.goals[0])],
@@ -238,17 +262,15 @@ var s = solve(puz,
               s => {
                 res = []
                 ;[UP, RIGHT, DOWN, LEFT].forEach(dir => {
-                  // Don't backtrack
-                  if (s.would_overlap(dir))
+                  // Can we go there?
+                  if (!s.is_valid(dir))
                     return
 
                   // Move in that direction
                   var ns = s.clone()
                   ns.move(dir)
 
-                  // Are we still inside the grid?
-                  if (ns.is_inside(s.puzzle.width, s.puzzle.height))
-                    res.push(ns)
+                  res.push(ns)
                 })
                 return res
               })
