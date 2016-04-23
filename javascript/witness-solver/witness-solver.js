@@ -45,17 +45,7 @@ function* solve(problem, initial_states, is_goal, expand) {
   }
 }
 
-// var s = solve({}, _ => [1], x => (x % 10) == 0, x => [x+2,x-1])
-
-// console.log(s.next())
-// console.log(s.next())
-
 var Puzzle = {
-  // width: 4,
-  // height: 4,
-  // start: [0,0],
-  // goal: [3,3],
-
   grid: null,
 
   new(str) {
@@ -152,17 +142,17 @@ var Path = {
 
   // O(1)
   move(dir) {
+    // Move onto the edge
     move_in_dir(this.current, dir)
     this._set_grid_at(this.current, 1)
+
+    // Move onto the node
     move_in_dir(this.current, dir)
     this._set_grid_at(this.current, 1)
+
     this.moves.push(dir)
     return this
   },
-
-  // last_move() {
-  //   return this.moves[this.moves.length - 1]
-  // },
 
   // Would going there would overlap a previous position?
   // O(1)
