@@ -46,6 +46,10 @@ function* solve(problem, initial_states, is_goal, expand) {
 }
 
 var Puzzle = {
+  starts: null,
+  goals: null,
+  height: 0,
+  width: 0,
   grid: null,
 
   new(str) {
@@ -61,6 +65,7 @@ var Puzzle = {
     var line, x, y
     var starts = []
     var goals = []
+    var strict_edges = []
     var height = this.grid.length
     var width = 0
 
@@ -81,14 +86,28 @@ var Puzzle = {
         x = line.indexOf('A', x + 1)
       }
 
+      // Find strict edges
+      x = line.indexOf('=')
+      while (x > -1) {
+        strict_edges.push([x, y])
+        x = line.indexOf('=', x + 1)
+      }
+
+      x = line.indexOf('!')
+      while (x > -1) {
+        strict_edges.push([x, y])
+        x = line.indexOf('!', x + 1)
+      }
+
       // Save max width
       width = Math.max(line.length, width)
     }
 
-    this.starts = starts
-    this.goals = goals
     this.height = height
     this.width = width
+    this.starts = starts
+    this.goals = goals
+    this.strict_edges = strict_edges
   },
 
   // Is there a node or an edge there?
@@ -101,7 +120,12 @@ var Puzzle = {
     // Is inside the grid
     return x >= 0 && x < this.width && y >= 0 && y < this.height
     // and there is an edge or a node there
-      && this.grid[height - 1 - y][x].search(/[-|OA.]/) > -1
+      && this.grid[height - 1 - y][x].search(/[-=|!OA.]/) > -1
+  },
+
+  // Check for edges that must be passed through
+  does_satisfy_constraints(path) {
+    return this.strict_edges.every(e => path.been_through(e))
   },
 }
 
@@ -197,16 +221,11 @@ var Path = {
   },
 
   // Are we there yet?
-  is_goal() {
-    return this.current[0] == this.goal[0] && this.current[1] == this.goal[1]
-  },
+  is_solution() {
+    var is_at_goal = this.current[0] == this.goal[0]
+          && this.current[1] == this.goal[1]
 
-  // O(1)
-  is_inside(width, height) {
-    var x = this.current[0]
-    var y = this.current[1]
-
-    return x >= 0 && x < width && y >= 0 && y < height
+    return is_at_goal && this.puzzle.does_satisfy_constraints(this)
   },
 
   pretty_print() {
@@ -245,20 +264,27 @@ var Path = {
   },
 }
 
+// Syntax:
+// .     node
+// O     starting node
+// A     goal node
+// -, |  edge
+// =, !  edge that must be passed through (strict edge)
 
 var puz =  Puzzle.new([
-  '.- -.-A',
+  '.-.-.-A',
+  '|   | !',
+  '.-.=.-.',
   '| | | |',
-  '.-.-.-.',
-  '| | | |',
-  '.-.-.-.',
-  '| | | |',
+  '.=.-.-.',
+  '| | ! |',
   'O .-.-O'
 ])
 
 var s = solve(puz,
-              p => [Path.new(p, p.starts[1], p.goals[0])],
-              s => s.is_goal(),
+              p => [Path.new(p, p.starts[0], p.goals[0]),
+                    Path.new(p, p.starts[1], p.goals[0])],
+              s => s.is_solution(),
               s => {
                 res = []
                 ;[UP, RIGHT, DOWN, LEFT].forEach(dir => {
