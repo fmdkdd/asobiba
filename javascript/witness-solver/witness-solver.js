@@ -288,6 +288,47 @@ var Path = {
   },
 }
 
+// [a] -> [b] -> [a,b]
+function zip(a, b) {
+  var res = []
+  a.forEach(aa => {
+    b.forEach(bb => {
+      res.push([aa, bb])
+    })
+  })
+  return res
+}
+
+function solve_it(puzzle) {
+  var s = solve(puzzle,
+                p => zip(p.starts, p.goals).map(sg => Path.new(p, sg[0], sg[1])),
+                s => s.is_solution(),
+                s => {
+                  res = []
+                  ;[UP, RIGHT, DOWN, LEFT].forEach(dir => {
+                    // Can we go there?
+                    if (!s.is_valid(dir))
+                      return
+
+                    // Move in that direction
+                    var ns = s.clone()
+                    ns.move(dir)
+
+                    res.push(ns)
+                  })
+                  return res
+                })
+
+  var i = 0
+  var v = s.next()
+  while (!v.done) {
+    ++i
+    v.value.pretty_print()
+    v = s.next()
+  }
+  console.log('%d solutions', i)
+}
+
 // Syntax:
 // .     node
 // O     starting node
@@ -296,41 +337,14 @@ var Path = {
 // =, !  edge that must be passed through (strict edge)
 // 1,2,3 edge lovers cell constraint
 
-var puz =  Puzzle.new([
+var puz1 = Puzzle.new([
   '.-.-.-A',
   '|   | !',
-  '.-.=.-.',
-  '|2| | |',
+  '.-.-.-.',
+  '|2| |3|',
   '.=.-.-.',
-  '| | ! |',
+  '| | | |',
   'O .-.-O'
 ])
 
-var s = solve(puz,
-              p => [Path.new(p, p.starts[0], p.goals[0]),
-                    Path.new(p, p.starts[1], p.goals[0])],
-              s => s.is_solution(),
-              s => {
-                res = []
-                ;[UP, RIGHT, DOWN, LEFT].forEach(dir => {
-                  // Can we go there?
-                  if (!s.is_valid(dir))
-                    return
-
-                  // Move in that direction
-                  var ns = s.clone()
-                  ns.move(dir)
-
-                  res.push(ns)
-                })
-                return res
-              })
-
-var i = 0
-var v = s.next()
-while (!v.done) {
-  ++i
-  v.value.pretty_print()
-  v = s.next()
-}
-console.log('%d solutions', i)
+solve_it(puz1)
