@@ -80,6 +80,9 @@ function* solve(problem, initial_states, is_goal, expand) {
 var Puzzle = {
   starts: null,
   goals: null,
+  strict_edges: null,
+  edge_lovers: null,
+  incompatibles: null,
   height: 0,
   width: 0,
   grid: null,
@@ -104,13 +107,9 @@ var Puzzle = {
     var goals = []
     var strict_edges = []
     var edge_lovers = []
+    var incompatibles = []
     var height = this.grid.length
     var width = 0
-
-    const starts_re = /O/g
-    const goals_re = /A/g
-    const strict_edges_re = /[=!]/g
-    const edge_lovers_re = /[123]/g
 
     for (y=0; y < height; ++y) {
       line = this.grid[height - 1 - y]
@@ -135,6 +134,11 @@ var Puzzle = {
         edge_lovers.push([match[0], match.index, y])
       }
 
+      // Find incompatible cells
+      while ((match = incompatibles_re.exec(line)) != null) {
+        incompatibles.push([match[0], match.index, y])
+      }
+
       // Save max width
       width = Math.max(line.length, width)
     }
@@ -145,6 +149,7 @@ var Puzzle = {
     this.goals = goals
     this.strict_edges = strict_edges
     this.edge_lovers = edge_lovers
+    this.incompatibles = incompatibles
   },
 
   pos_type(pos) {
@@ -439,6 +444,12 @@ function solve_it(puzzle) {
 // =, !  edge that must be passed through (strict edge)
 // 1,2,3 edge lovers cell constraint
 // a-z   incompatible cells constraints
+
+const starts_re = /O/g
+const goals_re = /A/g
+const strict_edges_re = /[=!]/g
+const edge_lovers_re = /[123]/g
+const incompatibles_re = /[a-z]/g
 
 // Missing edges, strict edges and edge lovers
 var puz1 = Puzzle.new([
