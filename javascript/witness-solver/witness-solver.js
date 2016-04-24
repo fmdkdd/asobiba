@@ -1,3 +1,9 @@
+// Puzzle solver for the game The Witness
+//
+// HERE BE SPOILERS
+// You should try to figure out the meanings of the puzzle symbols for yourself
+// first, because that's the fun part.
+
 // bb
 // ||
 // |axis
