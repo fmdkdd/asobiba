@@ -44,7 +44,8 @@ function* solve(problem, initial_states, is_goal, expand) {
         yield s
 
       // Pump new states
-      Array.prototype.push.apply(next_states, expand(s))
+      else
+        Array.prototype.push.apply(next_states, expand(s))
     }
 
     states = next_states
