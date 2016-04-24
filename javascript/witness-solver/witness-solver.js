@@ -51,29 +51,22 @@ function move_in_dir(pos, dir) {
 function* solve(problem, initial_states, is_goal, expand) {
   // Try valid moves until finding a solution or all possible solutions are
   // exhausted.
+  // Depth-first search to yield solutions as soon as possible.
 
   var states = initial_states(problem)
-  var next_states
-  var s, i, l
+  var s
 
   // While there are valid states, go on
-  while ((l = states.length) > 0) {
-    next_states = []
+  while (states.length > 0) {
+    s = states.shift()
 
-    // Test all states and expand
-    for (i=0; i < l; ++i) {
-      s = states[i]
+    // Are we done yet?
+    if (is_goal(s))
+      yield s
 
-      // Are we done yet?
-      if (is_goal(s))
-        yield s
-
-      // Pump new states
-      else
-        Array.prototype.push.apply(next_states, expand(s))
-    }
-
-    states = next_states
+    // Pump new states
+    else
+      Array.prototype.unshift.apply(states, expand(s))
   }
 }
 
@@ -568,4 +561,19 @@ var puz4 = Puzzle.new([
   'O-.-.-A'
 ])
 
-solve_it(puz4)
+// Larger puzzle, 1min to solve completely
+var puz5 = Puzzle.new([
+  '.-.-.-.-.-A',
+  '| | | | |3|',
+  '.-.-.-.-.-.',
+  '| | | | |1|',
+  '.-.-.-.-.-.',
+  '| |b| | |1|',
+  '.-.-.-.-.-.',
+  '|b|b|b| |1|',
+  '.-.-.-.-.-.',
+  '| | |a|a| |',
+  'O-.-.-.-.-.',
+])
+
+solve_it(puz5)
