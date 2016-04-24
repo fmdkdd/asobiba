@@ -58,7 +58,7 @@ function* solve(problem, initial_states, is_goal, expand) {
 
   // While there are valid states, go on
   while (states.length > 0) {
-    s = states.shift()
+    s = states.pop()
 
     // Are we done yet?
     if (is_goal(s))
@@ -66,7 +66,7 @@ function* solve(problem, initial_states, is_goal, expand) {
 
     // Pump new states
     else
-      Array.prototype.unshift.apply(states, expand(s))
+      Array.prototype.push.apply(states, expand(s))
   }
 }
 
@@ -197,24 +197,27 @@ var Puzzle = {
     }))
       return false
 
-    // Now we need to distinguish connected components
-    var ccs = path.connected_components()
+    if (this.incompatibles.length > 0) {
 
-    var cc, c, j, k, t
-    var incompatible
-    for (var i=0, l=ccs.length; i < l; ++i) {
-      cc = ccs[i]
+      // Now we need to distinguish connected components
+      var ccs = path.connected_components()
 
-      // All incompatible cells in a component must be of the same type
-      incompatible = null
-      for (j=0, k=cc.length; j < k; ++j) {
-        c = cc[j]
-        t = this.pos_type(c)
-        if (t.search(incompatibles_re) > -1) {
-          if (incompatible == null)
-            incompatible = t
-          else if (incompatible != t)
-            return false
+      var cc, c, j, k, t
+      var incompatible
+      for (var i=0, l=ccs.length; i < l; ++i) {
+        cc = ccs[i]
+
+        // All incompatible cells in a component must be of the same type
+        incompatible = null
+        for (j=0, k=cc.length; j < k; ++j) {
+          c = cc[j]
+          t = this.pos_type(c)
+          if (t.search(incompatibles_re) > -1) {
+            if (incompatible == null)
+              incompatible = t
+            else if (incompatible != t)
+              return false
+          }
         }
       }
     }
