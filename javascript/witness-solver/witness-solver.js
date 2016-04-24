@@ -13,9 +13,34 @@ const LEFT  = 0b00,
       RIGHT = 0b10,
       UP    = 0b11
 
-function is_opposed_dir(a, b) {
+function is_opposite_dir(a, b) {
   // Same axis, different direction
   return a ^ b === 0b10
+}
+
+const NONE       = 0b00,
+      VERTICAL   = 0b01,
+      HORIZONTAL = 0b10,
+      BOTH       = 0b11
+
+function mirror_dir(dir, mirror) {
+  var vertical = dir & 0b01
+
+  if (mirror === VERTICAL) {
+    if (vertical) return dir ^ 0b10
+    else return dir
+  }
+
+  else if (mirror === HORIZONTAL) {
+    if (vertical) return dir
+    else return dir ^ 0b10
+  }
+
+  else if (mirror === BOTH)
+    return dir ^ 0b10
+
+  // No mirror.  Why did you call me?
+  return dir
 }
 
 function move_in_dir(pos, dir) {
@@ -58,10 +83,14 @@ var Puzzle = {
   height: 0,
   width: 0,
   grid: null,
+  mirror: NONE,
 
-  new(str) {
+  new(str, options) {
+    options = options || {}
+
     var o = Object.create(Puzzle)
 
+    o.mirror = options.mirror || NONE
     o.grid = str.slice()
     o._parse_grid()
 
@@ -118,6 +147,26 @@ var Puzzle = {
     this.edge_lovers = edge_lovers
   },
 
+  pos_type(pos) {
+    return this.grid[this.height - 1 - pos[1]][pos[0]]
+  },
+
+  // Return the other start of the puzzle
+  mirror_start(start) {
+    // There should only be two starts, otherwise I really don't know what I'm
+    // doing
+
+    if (this.starts.length !== 2)
+      throw new Error("Can't mirror more than 2 starts")
+
+    // Return the other
+    if (this.starts[0][0] === start[0]
+        && this.starts[0][1] === start[1])
+      return this.starts[1]
+    else
+      return this.starts[0]
+  },
+
   // Is there a node or an edge there?
   // O(1)
   can_move_there(pos) {
@@ -161,6 +210,10 @@ var Path = {
   current: null,
   moves: null,
 
+  // For mirror paths
+  current_mirror: null,
+  start_mirror: null,
+
   new(puzzle, start, goal) {
     var o = Object.create(Path)
 
@@ -174,6 +227,12 @@ var Path = {
     o.grid.height = puzzle.height
     o.grid.fill(0)
     o._set_grid_at(start, 1)
+
+    if (puzzle.mirror) {
+      o.mirror_start = puzzle.mirror_start(start).slice()
+      o.current_mirror = o.mirror_start
+      o._set_grid_at(o.mirror_start, 2)
+    }
 
     return o
   },
@@ -189,6 +248,11 @@ var Path = {
     o.grid = this.grid.slice()
     o.grid.width = this.grid.width
     o.grid.height = this.grid.height
+
+    if (this.puzzle.mirror) {
+      o.mirror_start = this.mirror_start.slice()
+      o.current_mirror = this.current_mirror.slice()
+    }
 
     return o
   },
@@ -212,18 +276,22 @@ var Path = {
     move_in_dir(this.current, dir)
     this._set_grid_at(this.current, 1)
 
+    // If mirror puzzle, need to walk from the other goal in the opposite
+    // direction
+    if (this.puzzle.mirror) {
+      var rid = mirror_dir(dir, this.puzzle.mirror)
+
+      // Move onto the edge
+      move_in_dir(this.current_mirror, rid)
+      this._set_grid_at(this.current_mirror, 2)
+
+      // Move onto the node
+      move_in_dir(this.current_mirror, rid)
+      this._set_grid_at(this.current_mirror, 2)
+    }
+
     this.moves.push(dir)
     return this
-  },
-
-  // Would going there would overlap a previous position?
-  // O(1)
-  would_overlap(dir) {
-    var pos = this.current.slice()
-    move_in_dir(pos, dir)
-    move_in_dir(pos, dir)
-
-    return this.been_through(pos)
   },
 
   // Didn't we pass through here already?
@@ -242,7 +310,22 @@ var Path = {
     if (!this.puzzle.can_move_there(pos)) return false
 
     // Don't backtrack
-    return !this.been_through(pos)
+    if (this.been_through(pos)) return false
+
+    // Same checks for mirror path
+    if (this.puzzle.mirror) {
+      var sop = this.current_mirror.slice()
+      var rid = mirror_dir(dir, this.puzzle.mirror)
+
+      move_in_dir(sop, rid)
+      if (!this.puzzle.can_move_there(sop)) return false
+      move_in_dir(sop, rid)
+      if (!this.puzzle.can_move_there(sop)) return false
+
+      if (this.been_through(sop)) return false
+    }
+
+    return true
   },
 
   // Are we there yet?
@@ -267,7 +350,7 @@ var Path = {
         // Start or goal
         if (x == this.start[0] && y == this.start[1])
           line.push('O')
-        else if (x == this.goal[0] && y == this.goal[1])
+        else if (this.puzzle.pos_type([x,y]) === 'A')
           line.push('A')
 
         // Edges
@@ -339,13 +422,25 @@ function solve_it(puzzle) {
 // 1,2,3 edge lovers cell constraint
 
 var puz1 = Puzzle.new([
-  '.-.-.-A',
-  '|   | !',
+  '.-.-.-.-A',
+  '|   | !  ',
+  '.-.-.-.  ',
+  '|2| |3|  ',
+  '.=.-.-.  ',
+  '| | | |  ',
+  'O .-.-O  '
+])
+
+var puz2 = Puzzle.new([
+  '  A A  ',
+  '  | |  ',
   '.-.-.-.',
-  '|2| |3|',
+  '|   | |',
+  '.-.-.-.',
+  '| | | |',
   '.=.-.-.',
   '| | | |',
   'O .-.-O'
-])
+], {mirror: HORIZONTAL})
 
-solve_it(puz1)
+solve_it(puz2)
