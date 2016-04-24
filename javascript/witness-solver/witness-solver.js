@@ -204,6 +204,28 @@ var Puzzle = {
     }))
       return false
 
+    // Now we need to distinguish connected components
+    var ccs = path.connected_components()
+
+    var cc, c, j, k, t
+    var incompatible
+    for (var i=0, l=ccs.length; i < l; ++i) {
+      cc = ccs[i]
+
+      // All incompatible cells in a component must be of the same type
+      incompatible = null
+      for (j=0, k=cc.length; j < k; ++j) {
+        c = cc[j]
+        t = this.pos_type(c)
+        if (t.search(incompatibles_re) > -1) {
+          if (incompatible == null)
+            incompatible = t
+          else if (incompatible != t)
+            return false
+        }
+      }
+    }
+
     return true
   },
 }
@@ -340,6 +362,58 @@ var Path = {
           && this.current[1] == this.goal[1]
 
     return is_at_goal && this.puzzle.does_satisfy_constraints(this)
+  },
+
+  // Return the connected components of the path, as arrays of cells
+  connected_components() {
+    // Find components by flood filling the grid
+    var components = []
+
+    // Make a copy of the grid
+    var g = this.grid.slice()
+    var w = this.grid.width
+    var h = this.grid.height
+
+    // Find a 0 (unoccupied position) and flood fill
+    var idx, bin, p, x, y
+    var queue = []
+    while ((idx = g.indexOf(0)) > -1) {
+      // Gather cells starting by idx
+      queue.push(idx)
+      bin = []
+
+      // While there are unvisited cells
+      while (queue.length > 0) {
+        p = queue.shift()
+
+        // Unvisited position
+        if (g[p] === 0) {
+          // Mark as visited
+          g[p] = 9
+
+          // and gather if cell
+          x = p % w
+          y = Math.floor(p / w)
+          if (x % 2 == 1 && y % 2 == 1)
+            bin.push([x, y])
+        }
+
+        // Add unvisited neighbors
+        if (g[p - 1] === 0)
+          queue.push(p - 1)
+        if (g[p + 1] === 0)
+          queue.push(p + 1)
+        if (g[p - w] === 0)
+          queue.push(p - w)
+        if (g[p + w] === 0)
+          queue.push(p + w)
+      }
+
+      // Done with this component
+      components.push(bin)
+    }
+
+    return components
   },
 
   pretty_print() {
@@ -486,11 +560,11 @@ var puz3 = Puzzle.new([
 // Incompatible cells
 var puz4 = Puzzle.new([
   '.-.-.-.',
-  '|a  | |',
+  '|a  |b|',
   '.-.-.-.',
   '! |   |',
   '.-.-.-.',
-  '| | |b|',
+  '| |a|b|',
   'O-.-.-A'
 ])
 
