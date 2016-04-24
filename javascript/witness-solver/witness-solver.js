@@ -208,6 +208,7 @@ var Path = {
   start: null,
   goal: null,
   current: null,
+  grid: null,
   moves: null,
 
   // For mirror paths
@@ -337,7 +338,7 @@ var Path = {
   },
 
   pretty_print() {
-    var x, y, mark
+    var x, y, pos, mark
     var line = []
     var height = this.grid.height
     var width = this.grid.width
@@ -346,11 +347,12 @@ var Path = {
     for (y=height-1; y >= 0; --y) {
       line.length = 0
       for (x=0; x < width; ++x) {
-        mark = this.been_through([x,y])
+        pos = [x,y]
+        mark = this.been_through(pos)
         // Start or goal
         if (x == this.start[0] && y == this.start[1])
           line.push('O')
-        else if (this.puzzle.pos_type([x,y]) === 'A')
+        else if (this.puzzle.pos_type(pos) === 'A')
           line.push('A')
 
         // Edges
@@ -366,6 +368,22 @@ var Path = {
         // Neither edge nor node
         else
           line.push(' ')
+      }
+      console.log(line.join(''))
+    }
+  },
+
+  print_grid() {
+    var x, y
+    var height = this.grid.height
+    var width = this.grid.width
+    var line = []
+
+    console.log()
+    for (y=height-1; y >= 0; --y) {
+      line.length = 0
+      for (x=0; x < width; ++x) {
+        line.push(this._get_grid_at([x,y]))
       }
       console.log(line.join(''))
     }
@@ -420,27 +438,49 @@ function solve_it(puzzle) {
 // -, |  edge
 // =, !  edge that must be passed through (strict edge)
 // 1,2,3 edge lovers cell constraint
+// a-z   incompatible cells constraints
 
+// Missing edges, strict edges and edge lovers
 var puz1 = Puzzle.new([
-  '.-.-.-.-A',
-  '|   | !  ',
-  '.-.-.-.  ',
-  '|2| |3|  ',
-  '.=.-.-.  ',
-  '| | | |  ',
-  'O .-.-O  '
-])
-
-var puz2 = Puzzle.new([
-  '  A A  ',
-  '  | |  ',
+  '.-.-.-A',
+  '|   | !',
   '.-.-.-.',
-  '|   | |',
-  '.-.-.-.',
-  '| | | |',
+  '|2| |3|',
   '.=.-.-.',
   '| | | |',
   'O .-.-O'
+])
+
+// Mirrors
+var puz2 = Puzzle.new([
+  '.-A-A-.',
+  '|   | |',
+  '.-.-.-.',
+  '| | | |',
+  '.-.-.-.',
+  '| | |3|',
+  'O-.-.-O'
 ], {mirror: HORIZONTAL})
 
-solve_it(puz2)
+var puz3 = Puzzle.new([
+  'A-.-.-O',
+  '|   | |',
+  '.-.-.-.',
+  '! |   |',
+  '.-.-.-.',
+  '| | |2|',
+  'O-.-.-A'
+], {mirror: BOTH})
+
+// Incompatible cells
+var puz4 = Puzzle.new([
+  '.-.-.-.',
+  '|a  | |',
+  '.-.-.-.',
+  '! |   |',
+  '.-.-.-.',
+  '| | |b|',
+  'O-.-.-A'
+])
+
+solve_it(puz4)
