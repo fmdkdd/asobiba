@@ -62,41 +62,41 @@ var Puzzle = {
   },
 
   _parse_grid() {
-    var line, x, y
+    var line, y, match
+
     var starts = []
     var goals = []
     var strict_edges = []
+    var edge_lovers = []
     var height = this.grid.length
     var width = 0
+
+    const starts_re = /O/g
+    const goals_re = /A/g
+    const strict_edges_re = /[=!]/g
+    const edge_lovers_re = /[123]/g
 
     for (y=0; y < height; ++y) {
       line = this.grid[height - 1 - y]
 
       // Find starts
-      x = line.indexOf('O')
-      while (x > -1) {
-        starts.push([x, y])
-        x = line.indexOf('O', x + 1)
+      while ((match = starts_re.exec(line)) != null) {
+        starts.push([match.index, y])
       }
 
       // Find goals
-      x = line.indexOf('A')
-      while (x > -1) {
-        goals.push([x, y])
-        x = line.indexOf('A', x + 1)
+      while ((match = goals_re.exec(line)) != null) {
+        goals.push([match.index, y])
       }
 
       // Find strict edges
-      x = line.indexOf('=')
-      while (x > -1) {
-        strict_edges.push([x, y])
-        x = line.indexOf('=', x + 1)
+      while ((match = strict_edges_re.exec(line)) != null) {
+        strict_edges.push([match.index, y])
       }
 
-      x = line.indexOf('!')
-      while (x > -1) {
-        strict_edges.push([x, y])
-        x = line.indexOf('!', x + 1)
+      // Find edge lovers
+      while ((match = edge_lovers_re.exec(line)) != null) {
+        edge_lovers.push([match[0], match.index, y])
       }
 
       // Save max width
@@ -108,6 +108,7 @@ var Puzzle = {
     this.starts = starts
     this.goals = goals
     this.strict_edges = strict_edges
+    this.edge_lovers = edge_lovers
   },
 
   // Is there a node or an edge there?
@@ -123,9 +124,26 @@ var Puzzle = {
       && this.grid[height - 1 - y][x].search(/[-=|!OA.]/) > -1
   },
 
-  // Check for edges that must be passed through
+  // Check for additional puzzle constraints
   does_satisfy_constraints(path) {
-    return this.strict_edges.every(e => path.been_through(e))
+    // Must pass through each strict edge
+    if (!this.strict_edges.every(e => path.been_through(e)))
+      return false
+
+    // Edge lovers must have exactly the number of edges around them
+    if (!this.edge_lovers.every(l => {
+      // Count edges around this lover
+      var x = l[1]
+      var y = l[2]
+      var n = path.been_through([x,y+1])
+            + path.been_through([x,y-1])
+            + path.been_through([x+1,y])
+            + path.been_through([x-1,y])
+      return l[0] == n
+    }))
+      return false
+
+    return true
   },
 }
 
@@ -270,12 +288,13 @@ var Path = {
 // A     goal node
 // -, |  edge
 // =, !  edge that must be passed through (strict edge)
+// 1,2,3 edge lovers cell constraint
 
 var puz =  Puzzle.new([
   '.-.-.-A',
   '|   | !',
   '.-.=.-.',
-  '| | | |',
+  '|2| | |',
   '.=.-.-.',
   '| | ! |',
   'O .-.-O'
