@@ -203,14 +203,14 @@ function solve_faster(puzzle, solution) {
     // print_grid(grid, puzzle.width)
 
     if (next >= 0 && next < puz.length // is inside
-        && edge_re.test(puz[next])     // and there is an edge there
+        && puz[next] !== ' '           // and there is an edge there
         && grid[next] === 0) {         // and we haven't been here already
 
       // Check node before going through
       next += move_in_dir(dir)
 
       if (next >= 0 && next < puz.length
-          && node_re.test(puz[next]) // there is a node there
+          && puz[next] !== ' '  // there is a node there
           && grid[next] === 0) {
 
         // Ok, go there and mark the trail
