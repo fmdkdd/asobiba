@@ -314,6 +314,7 @@ const puz5 = Puzzle.new([
   'O-+-+-+-+-+',
 ])
 
+// 4s to find one solution
 const puz6 = Puzzle.new([
   '+-+-+-+-+-A',
   '|b|c|c| |3|',
@@ -328,4 +329,22 @@ const puz6 = Puzzle.new([
   'O-+-+-+-+-+',
 ])
 
-solve_it(puz6)
+// 40s, no solution
+// Even without incompatibles, most of the time is spent generating all possible
+// paths from O to A.  Even cutting only one edge cuts the time to 22s.
+const puz7 = Puzzle.new([
+  '+-+-+-+-+-+-A',
+  '| | |3|3|3| |',
+  '+-+-+-+-+-+-+',
+  '| | | |3|1| |',
+  '+-+-+-+-+-+-+',
+  '| | | | |1| |',
+  '+-+-+-+-+-+-+',
+  '| | | | |1| |',
+  '+-+-+-+-+-+-+',
+  '| | | | | | |',
+  'O-+-+-+-+-+-+',
+
+])
+
+solve_it(puz7)
