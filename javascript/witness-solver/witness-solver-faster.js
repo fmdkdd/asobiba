@@ -165,7 +165,7 @@ function connected_components(grid, width) {
 const node_re = /[.OA]/;
 const edge_re = /[-|=!]/;
 
-function solve_faster(puzzle, solution) {
+function solve_faster(puzzle, found_solution) {
   var moves = []
   var pos = puzzle.starts[0]
   var goal = puzzle.goals[0]
@@ -222,7 +222,7 @@ function solve_faster(puzzle, solution) {
 
         // Are we there yet?
         if (pos === goal && is_solution(grid, puzzle)) {
-          solution(moves, grid, puzzle)
+          found_solution(moves, grid, puzzle)
           // Stop looking further
           dir = STOP
         }
