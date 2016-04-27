@@ -64,24 +64,32 @@ const UP    = 0b00,
       STOP  = 4
 // Opposite dir is xor 0b10
 
+const incompatibles_re = /[a-z]/
+
 function is_solution(grid, puzzle) {
   var w = puzzle.width
 
   // Must pass through each strict edge
-  if (!puzzle.strict_edges.every(e => grid[e] === 1))
-    return false
+  var i, l, e
+  for (i=0, l=puzzle.strict_edges.length; i < l; ++i) {
+    e = puzzle.strict_edges[i]
+    if (grid[e] !== 1)
+      return false
+  }
 
   // Edge lovers must have exactly the number of edges around them
-  if (!puzzle.edge_lovers.every(l => {
-    // Count edges around this lover
-    var p = l[1]
-    var n = (grid[p+1] === 1)
-          + (grid[p-1] === 1)
-          + (grid[p+w] === 1)
-          + (grid[p-w] === 1)
-    return l[0] == n
-  }))
-    return false
+  var p, n
+  for (i=0, l=puzzle.edge_lovers.length; i < l; ++i) {
+    e = puzzle.edge_lovers[i]
+    n = e[0]
+    p = e[1]
+    n -= (grid[p+1] === 1)
+      + (grid[p-1] === 1)
+      + (grid[p+w] === 1)
+      + (grid[p-w] === 1)
+    if (n !== 0)
+      return false
+  }
 
   if (puzzle.incompatibles.length > 0) {
 
@@ -90,7 +98,7 @@ function is_solution(grid, puzzle) {
 
     var cc, c, j, k, t
     var incompatible
-    for (var i=0, l=ccs.length; i < l; ++i) {
+    for (i=0, l=ccs.length; i < l; ++i) {
       cc = ccs[i]
 
       // All incompatible cells in a component must be of the same type
@@ -98,7 +106,7 @@ function is_solution(grid, puzzle) {
       for (j=0, k=cc.length; j < k; ++j) {
         c = cc[j]
         t = puzzle.grid[c]
-        if (/[a-z]/.test(t)) {
+        if (incompatibles_re.test(t)) {
           if (incompatible == null)
             incompatible = t
           else if (incompatible != t)
@@ -245,40 +253,65 @@ function solve_faster(puzzle, found_solution) {
   }
 }
 
+function solve_it(puzzle) {
+  var solutions = 0
+  solve_faster(puzzle, function(moves, grid, puzzle) {
+    var w = puzzle.width
+    var out = []
+
+    for (var i=0, l=grid.length; i < l; i += w) {
+      for (var j=0; j < w; ++j) {
+        if (grid[i+j] === 1) {
+          out.push('\x1b[33m')
+          out.push(puzzle.grid[i+j])
+        }
+        // Don't print non-solution edges to reduce the noise
+        else if (!/[-|]/.test(puzzle.grid[i+j])) {
+          out.push('\x1b[39m')
+          out.push(puzzle.grid[i+j])
+        }
+        else
+          out.push(' ')
+      }
+      out.push('\n')
+    }
+
+    console.log()
+    console.log(out.join(''), '\x1b[00m')
+
+    solutions += 1
+  })
+  console.log(`${solutions} solutions`)
+}
+
 const puz1 = Puzzle.new([
-  '.-.-.-A',
+  '+-+-+-A',
   '|   | !',
-  '.-.-.-.',
+  '+-+-+-+',
   '|2| |3|',
-  '.=.-.-.',
+  '+=+-+-+',
   '| | | |',
-  'O .-.-O'
+  'O +-+-O'
 ])
 
 const puz5 = Puzzle.new([
-  '.-.-.-.-.-A',
-  '| | | | |3|',
-  '.-.-.-.-.-.',
-  '| | | | |1|',
-  '.-.-.-.-.-.',
+  '+-+-+-+-+-A',
+  '| |c|c| |3|',
+  '+-+-+-+-+-+',
+  '|c| | | |1|',
+  '+-+-+-+-+-+',
   '| |b| | |1|',
-  '.-.-.-.-.-.',
-  '|b|b|b| |1|',
-  '.-.-.-.-.-.',
+  '+-+-+-+-+-+',
+  '|b|b|b| | |',
+  '+-+-+-+-+-+',
   '| | |a|a| |',
-  'O-.-.-.-.-.',
+  'O-+-+-+-+-+',
 ])
 
-var solutions = 0
-solve_faster(puz5, function(moves, grid, puzzle) {
-  console.log()
-  print_grid(grid, puzzle.width)
-  solutions += 1
-})
-console.log(`${solutions} solutions`)
+const puz2 = Puzzle.new([
+  'O=+-A',
+  '| | |',
+  '+-O-+',
+])
 
-function print_grid(grid, width) {
-  for (var i=0, l=grid.length; i < l; i += width) {
-    console.log(grid.slice(i, i + width).join(''))
-  }
-}
+solve_it(puz5)
