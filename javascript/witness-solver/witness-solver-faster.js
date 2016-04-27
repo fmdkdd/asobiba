@@ -150,7 +150,6 @@ function connected_components(grid, width) {
         y = Math.floor(p / w)
         if (x % 2 == 1 && y % 2 == 1)
           bin.push(p)
-      }
 
       // Add unvisited neighbors
       if (g[p - 1] === 0)
@@ -161,6 +160,7 @@ function connected_components(grid, width) {
         queue.push(p - w)
       if (g[p + w] === 0)
         queue.push(p + w)
+      }
     }
 
     // Done with this component
