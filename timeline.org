@@ -1103,3 +1103,130 @@ decompose the ‘box’ functionality into independent behaviors, or traits:
 - a snappable behavior for snapping to a grid
 
 Properties are distinct components also.  And links too.
+
+* [2016-04-29 ven.]
+** Diving into V8 optimizations
+Trying to find out if, in a simple ~for~ loop:
+
+#+BEGIN_SRC js
+var a = []
+for (var i=0; i < a.length; ++i) {}
+#+END_SRC
+
+the ~i < a.length~ check is optimized as:
+
+#+BEGIN_SRC js
+var a = []
+for (var i=0, l=a.length; i < l; ++i) {}
+#+END_SRC
+
+or not.
+
+Via nodejs, we can pass a bunch of flags to V8 in order to obtain more
+information about the optimization, GC calls, intermediate representations, and
+generated code.
+
+After putting the loop in a function that's called 10000 times, the function is
+/hot/ and will be compiled and optimized.  We can see that with the --trace-opt
+option.
+
+#+BEGIN_EXAMPLE
+[compiling method 0xad4d20bd9c1 <JS Function f (SharedFunctionInfo 0x187ace9573f1)> using Crankshaft OSR]
+[optimizing 0xad4d20bd9c1 <JS Function f (SharedFunctionInfo 0x187ace9573f1)> - took 0.061, 0.151, 0.038 ms]
+#+END_EXAMPLE
+
+To find out the generated code, we can use --print-opt-code:
+
+#+BEGIN_EXAMPLE
+--- Optimized code ---
+optimization_id = 1
+source_position = 72
+kind = OPTIMIZED_FUNCTION
+name = f
+stack_slots = 10
+compiler = crankshaft
+Instructions (size = 696)
+0x2335adc58220     0  55             push rbp
+0x2335adc58221     1  4889e5         REX.W movq rbp,rsp
+0x2335adc58224     4  56             push rsi
+0x2335adc58225     5  57             push rdi
+0x2335adc58226     6  4883ec30       REX.W subq rsp,0x30
+0x2335adc5822a    10  488b45f8       REX.W movq rax,[rbp-0x8]
+0x2335adc5822e    14  488945d8       REX.W movq [rbp-0x28],rax
+0x2335adc58232    18  488bf0         REX.W movq rsi,rax
+...
+#+END_EXAMPLE
+
+Now, unfortunately, that's a bit low level.
+
+I tried to generate the same code for the hand-optimized for loop, and diff the
+outputs.  But there many random addresses that gets in the way of seeing if
+instructions differ.  One thing that's easy to spot though is the Instructions
+(size) line.
+
+My guess is it's the size of the compiled function.  But the hand-optimized
+version has size=812, which seems counter-intuitive.
+
+Or maybe, the hand-optimized version actually /defeats/ optimization made on the
+more common idiom by the compiler.
+
+We can get a look at some of the optimization phases made on the high-level
+representation (HIR) through the --trace-hydrogen flag.  My guess is Hydrogen is
+responsible for high-level representation.
+
+The file contains multiple control flow graph, with the helpful name of the pass
+that generates it.
+
+When ~f~ is optimized, it triggers a full compilation phase.  The graph is full
+of "blocks" of code:
+
+#+BEGIN_EXAMPLE
+                               +----------+
+                               v          |
+B0 -> B1 -> B2 -> B4 -> B5 -> B6 -> B7 -> B8
+             |          ^        -> B9 -> B10 (return)
+             +--> B3 ---+
+#+END_EXAMPLE
+
+Clearly, the loop is B6 -> B7 -> B8, and B9 is the exit path.
+
+If we look at B6, we can see our length check:
+
+#+BEGIN_EXAMPLE
+      0 0 v48 BlockEntry  type:Tagged <|@
+      0 0 t52 CheckHeapObject t39 <|@
+      0 1 t53 CheckMaps t39 [0x2a5dde306c51] <|@
+      0 1 i54 LoadNamedField t39.%length@24 t53 type:Smi <|@
+      0 0 i55 CompareNumericAndBranch LT i44 i54 goto (B7, B9) type:Tagged <|@
+#+END_EXAMPLE
+
+So, at this point, we are checking the ~length~ field of the array.
+
+But, after the "H_Global value numbering" phase, all that's left of this block
+is just the comparison:
+
+#+BEGIN_EXAMPLE
+      0 0 v48 BlockEntry  type:Tagged <|@
+      0 0 i55 CompareNumericAndBranch LT i44 i54 goto (B7, B9) type:Tagged <|@
+#+END_EXAMPLE
+
+i54, the integer that holds the length value, has moved to block B5, which is
+not part of the loop:
+
+#+BEGIN_EXAMPLE
+      0 0 v45 BlockEntry  type:Tagged <|@
+      0 0 v46 Simulate id=30 type:Tagged <|@
+      0 0 t52 CheckHeapObject t39 <|@
+      0 3 t53 CheckMaps t39 [0x2a5dde306c51] <|@
+      0 2 i54 LoadNamedField t39.%length@24 t53 type:Smi <|@
+      0 2 t70 Constant 0x2ffe54fafc79 <JS Array[0]> [map 0x2a5dde306b49]  <|@
+      0 0 t71 CheckMaps t70 [0x2a5dde306b49](stability-check) <|@
+      0 2 t72 Constant 0x2ffe54facc81 <an Object with map 0x2a5dde306519> [map 0x2a5dde306519]  <|@
+      0 0 t73 CheckMaps t72 [0x2a5dde306519](stability-check) <|@
+      0 4 t74 LoadNamedField t53.%elements@16 type:Tagged <|@
+      0 0 t75 CheckMaps t74 [0x2a5dde304209] <|@
+      0 0 v47 Goto B6 type:Tagged <|@
+#+END_EXAMPLE
+
+So, it seems that the length check is indeed optimized by V8.  And that is done
+in the "Global value numbering" phase on the HIR.
