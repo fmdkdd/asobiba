@@ -1230,3 +1230,27 @@ not part of the loop:
 
 So, it seems that the length check is indeed optimized by V8.  And that is done
 in the "Global value numbering" phase on the HIR.
+
+* [2016-05-02 lun.]
+** Someone who actually knows V8 optimizations
+already [[http://mrale.ph/blog/2014/12/24/array-length-caching.html][covered]] the ~array.length~ case in depth.
+
+He also built a [[http://mrale.ph/irhydra/2/][tool]] to visualize V8 HIR, contron flow graph, and
+deoptimizations output.  Much better than recreating the graph by hand.
+
+He mentions that manually caching the ~array.length~ may actually be worse,
+because it creates an additional variable that is assigned to a register.
+
+The morale here is, again, to measure before optimizing.
+
+The compiler does a good job a optimizing common idioms.  And it actually
+produces less-efficient code if you are trying to optimize things yourself.
+
+This was [[http://www.infoq.com/presentations/chrome-v8-optimization][reiterated]] by V8 engineer Ben Titzer for heap optimizations.  Someone
+asked if using an object pool is a good idea when you have allocations
+problems.  The answer: probably not, because V8 /assumes/ a usage pattern of
+creating objects and throwing them away.  An object pool is an uncommon pattern,
+and it might defeat optimizations.
+
+Measure first, understand how the runtime works, formulate a strategy, implement
+and measure again.
