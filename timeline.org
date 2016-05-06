@@ -1291,3 +1291,54 @@ remove the checks there is an infinite loop (maybe because I haven't implemented
 all flags for instructions yet).
 
 Maybe a basic test harness in Rust is a better idea.
+
+** Testing single instructions
+Created a ~step~ function that goes through one instruction and returns the
+number of cycles.  More useful for unit testing than ~run~.
+
+Using macros for testing, since I have lot of repetitive code for each register.
+But now, running into a strange SIGSEGV error when I have too many macro
+calls... strange.
+
+#+BEGIN_EXAMPLE
+error: Process didn't exit successfully: `gbs-4725f7ba8db983e2`
+(signal: 11, SIGSEGV: invalid memory reference)
+#+END_EXAMPLE
+
+Trying to debug by finding out what is generated after macro expansion.  Need an
+(undocumented, of course!) option:
+
+: rustc --test --pretty=expanded -Z unstable-options src/cpu.rs
+
+~--test~ means compile the test module, I suppose.  And ~--pretty~ is the option
+to output pretty printed code after macro expansion.
+
+Ok, I have code like this:
+
+#+BEGIN_SRC rust
+#[test]
+fn test() {
+  ld!(b, c);
+  ld!(b, d);
+  ...
+}
+#+END_SRC
+
+and the macro creates a new ~Cpu~ each time:
+
+#+BEGIN_SRC rust
+macro_rules ld! {
+  ($r:ident, $r2:ident) => ({
+    let mut cpu = Cpu::new();
+    ...
+    assert!(..)
+  });
+}
+#+END_SRC
+
+In the generated code, ~test~ contains as many blocks as there are ~ld!~ macro
+calls.  I suppose that the code generator doesn't like code that has too many
+blocks... Maybe I should split those into functions?
+
+Ok, changed the tests to generate one function for each test case.  Only
+slightly more verbose, but greatly increases my number of tests!
