@@ -1254,3 +1254,40 @@ and it might defeat optimizations.
 
 Measure first, understand how the runtime works, formulate a strategy, implement
 and measure again.
+
+* [2016-05-06 ven.]
+** Testing the GB CPU emulator
+The [[http://blargg.8bitalley.com/parodius/gb-tests/][Blargg test suite]] is a good start.  But there is a slight bootstrapping
+issue, as it needs a mostly-working CPU to actually start running the tests.
+
+And the output requires minimal screen emulation, which I don't really wanted to
+cover.
+
+And the GB rom files are not the same format as GBS files... again, I don't want
+to parse those.  On that front, since the assembly source is provided, I can
+actually recompile the tests for GBS.
+
+In shell.inc, you find:
+
+#+BEGIN_EXAMPLE
+; GBS music file
+.ifdef BUILD_GBS
+     .include "build_gbs.s"
+.endif
+#+END_EXAMPLE
+
+The readme mentions that 'wla-dx' was used to compile and link those assembly
+files.  The project is [[https://github.com/vhelin/wla-dx][still alive]], and also in [[https://aur.archlinux.org/packages/wla_dx/][AUR]] (gotta love Arch).
+
+To compile a GBS file from an individual test file, you just need to define
+~BUILD_GBS~ like so:
+
+: wla-gb -o -DBUILD_GBS FILE test.o
+: wlalink linkfile test.gbs
+
+Two issues for the moment with that ROM.  The play address of the header is
+0xC6D5, which is outside the 0x400--0x7FFF range of the GBS spec...  and if I
+remove the checks there is an infinite loop (maybe because I haven't implemented
+all flags for instructions yet).
+
+Maybe a basic test harness in Rust is a better idea.
