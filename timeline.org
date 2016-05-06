@@ -1342,3 +1342,27 @@ blocks... Maybe I should split those into functions?
 
 Ok, changed the tests to generate one function for each test case.  Only
 slightly more verbose, but greatly increases my number of tests!
+
+** Wait, was that a compiler bug?
+The SIGSEGV with too many macros... no unsafe code, but still an invalid memory
+reference?  How come?
+
+Building a minimal example now.
+
+: rustc --test main.rs; and ./main
+: fish: “and ./main” terminated by signal SIGSEGV (Address boundary error)
+
+Ok, just a single test function that calls 32 ~Cpu::new~ does it, but 31 calls
+does not SIGSEGV.  I emptied the ~Cpu~ struct to contain only the ~ram~ field,
+which has 65536 u8, hence each Cpu eats 64K.
+
+Let's see, 32*64K = 2048K = 2M.
+
+That's a suspiciously round number.  <2M, no SIGSEGV, >=2M, SIGSEGV.
+
+According to [[https://play.rust-lang.org/][play]], happens on stable, beta and nightly.  But only in debug mode
+(release optimizes everything away probably).
+
+Aaaand there we have it: [[https://github.com/rust-lang/rust/issues/31748][#31748]].  Rust has a default stack size of 2M, so we
+overflow that.  But there should be a stack overflow message that's skipped for
+some reasons, and the devs are aware of it.
