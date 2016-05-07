@@ -1366,3 +1366,110 @@ According to [[https://play.rust-lang.org/][play]], happens on stable, beta and 
 Aaaand there we have it: [[https://github.com/rust-lang/rust/issues/31748][#31748]].  Rust has a default stack size of 2M, so we
 overflow that.  But there should be a stack overflow message that's skipped for
 some reasons, and the devs are aware of it.
+
+* [2016-05-07 sam.]
+** Fixing flycheck-rust
+flycheck-rust is confused when you have both a lib.rs and a main.rs in the same
+folder.  Because cargo needs to know what target to build: the lib, or the
+binary?
+
+flycheck-rust does not specify the target, and spouts an error, and fails to
+check the buffer (and any buffer in the project).  This has been [[https://github.com/flycheck/flycheck-rust/issues/23][reported]], but
+not yet fixed.
+
+Now, we can get the all targets from cargo itself, thanks to the ~read-manifest~
+command:
+
+: cargo read-manifest
+
+returns a JSON with all targets.
+
+Now, which one to chose?  I suppose the 'lib' target will start with the
+'lib.rs' file, and compile all files that are included in it, recursively.  And
+the 'main' target is the same, but starting from the 'main.rs' file.
+
+Flycheck works per-buffer, so we should chose the target that will end up
+compiling the current file.  Ideally we would compile only the current file, but
+in larger projects, there are dependencies to keep track of.
+
+So, which target to chose?  I don't think there is a way to get that information
+directly from cargo right now, that is:
+
+: cargo which-target src/a.rs
+
+which would return the target name.
+
+In my use case, the project is a library, that also contains a binary as an
+example.  So, we should always build the 'lib' target (there's only one of
+those), and build the 'bin' target only when looking at the 'main.rs' file.
+
+If the current buffer is a match for the src file of any target, then chose the
+according target.  Otherwise, chose 'lib' by default.
+
+That seems to work locally.  Now, onto the PR!
+
+** Making the pull request
+Forked flycheck.
+
+Made the changes.  Tried to run the tests... fail!  Ah.
+
+: make specs test
+
+fails because it asks me for passphrase during the tests.  What?
+
+Looking around the source, the passphrase is "spam with eggs".  Now it passes:
+: Ran 71 out of 105 specs, 0 failed, in 10.0 seconds.
+
+Some tests are canceled because they need Emacs 25.
+
+Apply back my changes, there is a documentation failure.
+
+I ~ag~ for the option above mine, to look where it appears in the source.  There
+is a documentation entry in 'languages.rst'.  I document the new variable, test
+passes.
+
+Now, onto the integration tests:
+
+: make LANGUAGE=rust integ
+
+Okay, two tests fail: warning and multiline-error.  Actually, the second failed
+without my patch.  Probably a change in the compiler output.  Fixed the test.
+
+The first fails because there is no value for my new variable.  The test project
+is a crate named "flycheck".  Put that, all tests pass.
+
+Done.  Now, flycheck-rust!
+
+** Finding the right build target
+Had to change the approach a little, because we cannot default to "lib" crate
+type in a crate that contains only a 'main.rs'.  So instead of guessing, I just
+look the targets up in ~cargo read-manifest~.  First one is the default, and if
+we are looking at a file that is specified by the targets, this is the target we
+pick.
+
+Simple cases: only one target (lib or bin), that is the one chosen.  Works with
+"simple" setups.
+
+Multiple targets: lib, main.rs bin and multiples source files in src/bin.  If
+looking at 'main.rs', or any of the 'src/bin' files, those are targets, so they
+are chosen.  Any other file will default to the first target.
+
+It's not ideal.  I think it might miss cases like:
+
+: src/a.rs src/b.rs src/lib.rs src/main.rs
+: src/lib.rs depends on 'a.rs'
+: src/main.rs depends on 'b.rs'
+
+If the default target is 'lib', then Looking at 'b.rs' will pick lib, even
+though it's a dependency for the binary.  Converse is true for 'b' and a default
+target of 'bin'.
+
+Haven't encountered the issue, because I only have the case where 'main.rs'
+depends solely on the lib, and every other file is part of the lib, and the lib
+is the default target.
+
+Anyway, unless there is a way to find the target for a file, this will do.  This
+can always be overridden by setting the `flycheck-rust-binary-name` manually.
+
+Reviewed the code and added a docstring.  No test suite this time (though it
+would not be a bad idea to ensure we don't break any convoluted setups).
