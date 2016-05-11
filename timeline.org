@@ -1473,3 +1473,78 @@ can always be overridden by setting the `flycheck-rust-binary-name` manually.
 
 Reviewed the code and added a docstring.  No test suite this time (though it
 would not be a bad idea to ensure we don't break any convoluted setups).
+
+* [2016-05-11 mer.]
+** Checking that flycheck-rust works right for everyone's use case
+I've tested the basic layouts of src/lib, src/main and src/bin/.  But cargo
+allows for some fancy overrides, and I don't even have dependencies in my
+projects for now.
+
+[[https://github.com/flycheck/flycheck-rust/issues/7][I see]] that the cargo project itself is a corner case, and indeed it doesn't work
+as intended when looking at the src/bin/cargo.rs file.
+
+The cargo.toml of cargo sets the library path directly rather than relying on
+the project layout:
+
+: [lib]
+: name = "cargo"
+: path = "src/cargo/lib.rs"
+
+Note that the path is relative.  And it still is in ~cargo read-manifest~:
+
+#+BEGIN_EXAMPLE
+  {
+    "kind": [
+      "lib"
+    ],
+    "name": "cargo",
+    "src_path": "src/cargo/lib.rs"
+  },
+#+END_EXAMPLE
+
+But it's an absolute path when ~path~ is not set in the TOML.  Which isn't
+really helping as a machine-readable output.  The issue was raised in the [[https://github.com/rust-lang/cargo/pull/1434#issuecomment-94117884][original]]
+[[https://github.com/rust-lang/cargo/pull/2196#issuecomment-171411921][pull requests]], but not picked upon.
+
+Solution?  I guess either ensure that the ~src_path~ is always relative to the
+crate root, or always absolute.  Leaning towards the latter, as it should be
+easier to debug.
+
+However, even if it does check the correct file, it takes several seconds for a
+project as large as cargo.  Not sure if that's a good use case of flycheck.
+
+*** metadata replaces read-manifest
+In the future, it [[https://github.com/rust-lang/cargo/issues/2356][looks like]] ~read-manifest~ might be replaced by ~metadata~,
+which gives much more information, especially on the dependencies.  For the
+moment though, the targets section looks identical.
+
+On surprising effect of the ~cargo metadata~ command is that it fetches
+dependencies on first invocation before returning the JSON.  Which means that
+the first invocation is slow, and the stdout is not a correct JSON, since you
+have lines like:
+
+: Updating registry
+
+Though that can be skipped with the ~--no-deps~ flag.
+
+~jq~ can be useful to wade through the metadata dump:
+
+: cargo metadata | jq '.packages | .[] | select(.name == "cargo")'
+
+*** subcrates
+A use case of subcrates is the [[https://github.com/rust-lang-nursery/regex][regex crate]], which has regexp-syntax has a
+"subcrate": a dependency crate hosted inside the same repository.
+
+In this case, ~cargo read-manifest~ will report the targets for the current
+crate.  So if we are in the main crate, or in the subcrate, it picks the right
+target.
+
+*** cargo declares mod at compile time
+Using macros, which means that files that are part of the binary target are not
+picked up by flycheck.
+
+But even without macros, I don't think we would pick it up:
+
+~src/bin/read-manifest.rs~ is a ~pub mod~ (via macro) in ~src/bin/cargo.rs~.
+But there's no target corresponding to read-manifest, so how do we know that's
+part of the ~cargo~ binary target?
