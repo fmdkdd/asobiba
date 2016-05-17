@@ -13,13 +13,13 @@ use std::ops::{Index, IndexMut};
 const PAGE_SIZE: usize = 4096;
 
 struct JitMemory {
+  addr: *mut u8,
   size: usize,
-  contents: *mut u8,
 }
 
 impl JitMemory {
   fn new(num_pages: usize) -> JitMemory {
-    let contents: *mut u8;
+    let addr;
     let size = num_pages * PAGE_SIZE;
 
     unsafe {
@@ -30,21 +30,23 @@ impl JitMemory {
       // Mark read-write for now, executable later
       libc::mprotect(page, size, libc::PROT_READ | libc::PROT_WRITE);
 
-      // Fill with RET calls
+      // Fill with RET calls.  If the code falls anywhere in the region, the
+      // function returns.
       memset(page, 0xC3, size);
 
-      contents = mem::transmute(page);
+      // From *c_void to *u8
+      addr = mem::transmute(page);
     }
 
     JitMemory {
       size: size,
-      contents: contents
+      addr: addr,
     }
   }
 
   fn make_exec(&self) {
     unsafe {
-      let page = mem::transmute(self.contents);
+      let page = mem::transmute(self.addr);
       libc::mprotect(page, self.size, libc::PROT_READ | libc::PROT_EXEC);
     }
   }
@@ -54,13 +56,13 @@ impl Index<usize> for JitMemory {
   type Output = u8;
 
   fn index(&self, _index: usize) -> &u8 {
-    unsafe { &*self.contents.offset(_index as isize) }
+    unsafe { &*self.addr.offset(_index as isize) }
   }
 }
 
 impl IndexMut<usize> for JitMemory {
   fn index_mut(&mut self, _index: usize) -> &mut u8 {
-    unsafe { &mut *self.contents.offset(_index as isize) }
+    unsafe { &mut *self.addr.offset(_index as isize) }
   }
 }
 
@@ -77,7 +79,7 @@ fn run_jit() -> (fn() -> i64) {
 
   jit.make_exec();
 
-  unsafe { mem::transmute(jit.contents) }
+  unsafe { mem::transmute(jit.addr) }
 }
 
 fn main() {
