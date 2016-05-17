@@ -8,7 +8,6 @@ extern {
 }
 
 use std::mem;
-use std::ops::{Index, IndexMut};
 
 const PAGE_SIZE: usize = 4096;
 
@@ -52,30 +51,15 @@ impl JitMemory {
   }
 }
 
-impl Index<usize> for JitMemory {
-  type Output = u8;
+// Return a function that will execute the given code
+fn jit_code(code: &[u8]) -> (fn() -> i64) {
+  // Enough to hold all the code
+  let len = code.len();
+  let pages = len / PAGE_SIZE + 1;
 
-  fn index(&self, _index: usize) -> &u8 {
-    unsafe { &*self.addr.offset(_index as isize) }
-  }
-}
+  let jit = JitMemory::new(pages);
 
-impl IndexMut<usize> for JitMemory {
-  fn index_mut(&mut self, _index: usize) -> &mut u8 {
-    unsafe { &mut *self.addr.offset(_index as isize) }
-  }
-}
-
-fn run_jit() -> (fn() -> i64) {
-  let mut jit = JitMemory::new(1);
-
-  jit[0] = 0x48;
-  jit[1] = 0xC7;
-  jit[2] = 0xC0;
-  jit[3] = 0x03;
-  jit[4] = 0x00;
-  jit[5] = 0x00;
-  jit[6] = 0x00;
+  unsafe { std::ptr::copy_nonoverlapping(code.as_ptr(), jit.addr, len); }
 
   jit.make_exec();
 
@@ -83,6 +67,8 @@ fn run_jit() -> (fn() -> i64) {
 }
 
 fn main() {
-  let fun = run_jit();
+  let code = [0x48, 0xC7, 0xC0, 0x03, 0x00, 0x00, 0x00];
+  let fun = jit_code(&code);
+
   println!("{}", fun());
 }
