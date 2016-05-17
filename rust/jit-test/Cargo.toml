@@ -4,4 +4,4 @@ version = "0.1.0"
 authors = ["fmdkdd"]
 
 [dependencies]
-libc = "0.2.2"
+libc = "0.2.11"
