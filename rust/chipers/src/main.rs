@@ -9,6 +9,7 @@ use sdl2::pixels::Color;
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::render::Renderer;
+use sdl2::video::Window;
 
 const RAM_LENGTH: usize = 0x1000;
 const NUM_REGS: usize = 0x10;
@@ -20,11 +21,11 @@ struct Cpu<'a> {
   i: u16,
   stack: LinkedList<u16>,
 
-  screen: Renderer<'a>,
+  screen: Screen<'a>,
 }
 
 impl<'a> Cpu<'a> {
-  fn new<'b>(screen: Renderer<'b>) -> Cpu<'b> {
+  fn new<'b>(screen: Screen<'b>) -> Cpu<'b> {
     Cpu {
       ram: [0; RAM_LENGTH],
       v: [0; NUM_REGS],
@@ -166,7 +167,30 @@ impl<'a> Cpu<'a> {
   }
 }
 
+const SCREEN_HEIGHT: usize = 32;
+const SCREEN_WIDTH: usize = 64;
+
+struct Screen<'a> {
+  pixels: [u8; SCREEN_HEIGHT * SCREEN_WIDTH],
+  renderer: Renderer<'a>,
+}
+
+impl<'a> Screen<'a> {
+  fn new(window: Window) -> Screen<'a> {
+    let mut renderer = window.renderer().build().unwrap();
+
+    renderer.clear();
+    renderer.present();
+
+    Screen {
+      pixels: [0; SCREEN_HEIGHT * SCREEN_WIDTH],
+      renderer: renderer,
+    }
+  }
+}
+
 fn main() {
+  // Init SDL
   let sdl_context = sdl2::init().unwrap();
   let video_subsystem = sdl_context.video().unwrap();
 
@@ -175,11 +199,10 @@ fn main() {
     .build()
     .unwrap();
 
-  let mut renderer = window.renderer().build().unwrap();
+  // Init Screen
+  let mut screen = Screen::new(window);
 
-  renderer.clear();
-  renderer.present();
-
+  // Init CPU
   let args : Vec<String> = env::args().collect();
 
   let mut f = File::open(args[1].clone())
@@ -188,11 +211,12 @@ fn main() {
   f.read_to_end(&mut buf)
     .expect("Error reading ROM");
 
-  let mut cpu = Cpu::new(renderer);
+  let mut cpu = Cpu::new(screen);
 
   cpu.reset();
   cpu.load_rom(&buf);
 
+  // Main loop
   let mut event_pump = sdl_context.event_pump().unwrap();
 
   'running: loop {
