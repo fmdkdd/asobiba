@@ -1,6 +1,7 @@
 use std::io::prelude::*;
 use std::fs::File;
 use std::collections::LinkedList;
+use std::env;
 
 const RAM_LENGTH: usize = 0x1000;
 const NUM_REGS: usize = 0x10;
@@ -156,7 +157,9 @@ impl Cpu {
 }
 
 fn main() {
-  let mut f = File::open("../roms/logo.c8")
+  let args : Vec<String> = env::args().collect();
+
+  let mut f = File::open(args[1].clone())
     .expect("Error opening ROM");
   let mut buf = Vec::new();
   f.read_to_end(&mut buf)
