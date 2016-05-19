@@ -10,6 +10,7 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::render::Renderer;
 use sdl2::video::Window;
+use sdl2::rect::Point;
 
 const RAM_LENGTH: usize = 0x1000;
 const NUM_REGS: usize = 0x10;
@@ -74,7 +75,7 @@ impl<'a> Cpu<'a> {
       0x0000 => match opcode & 0x00FF {
         0x00 => {},
 
-        0xE0 => self.clear_screen(),
+        0xE0 => self.screen.clear(),
 
         0xEE => self.pc = self.stack.pop_front().unwrap(),
 
@@ -143,9 +144,24 @@ impl<'a> Cpu<'a> {
       },
 
       0xD000 => {
-        let n = (opcode & 0x000F) as u8;
-        println!("Screen stuff");
-        // FIXME: screen stuff
+        let n = opcode & 0x000F;
+
+        // Build sprite
+        let mut sprite = Vec::new();
+
+        for i in 0..n {
+          let mut p = self.ram[(self.i + i) as usize];
+          for _ in 0..8 {
+            sprite.push(if (p & 1) > 0 { true } else { false });
+            p >>= 1;
+          }
+        }
+
+        self.v[0xF] = self.screen.draw_sprite(self.v[x] as usize,
+                                              self.v[y] as usize,
+                                              &sprite) as u8;
+
+        // self.screen.repaint();
       },
 
       0xE000 => {
@@ -161,17 +177,15 @@ impl<'a> Cpu<'a> {
       _ => panic!("Unknown upcode {:x}", opcode)
     }
   }
-
-  fn clear_screen(&self) {
-
-  }
 }
 
 const SCREEN_HEIGHT: usize = 32;
 const SCREEN_WIDTH: usize = 64;
+const COLOR: Color = Color::RGB(100, 100, 220);
+const BLACK: Color = Color::RGB(0, 0, 0);
 
 struct Screen<'a> {
-  pixels: [u8; SCREEN_HEIGHT * SCREEN_WIDTH],
+  pixels: [bool; SCREEN_HEIGHT * SCREEN_WIDTH],
   renderer: Renderer<'a>,
 }
 
@@ -183,9 +197,56 @@ impl<'a> Screen<'a> {
     renderer.present();
 
     Screen {
-      pixels: [0; SCREEN_HEIGHT * SCREEN_WIDTH],
+      pixels: [false; SCREEN_HEIGHT * SCREEN_WIDTH],
       renderer: renderer,
     }
+  }
+
+  fn clear(&mut self) {
+    self.renderer.clear();
+  }
+
+  fn repaint(&mut self) {
+    self.renderer.present();
+  }
+
+  fn draw_pixel(&mut self, p: bool, x: usize, y: usize) -> bool {
+    if x > SCREEN_WIDTH { return false };
+    if y > SCREEN_HEIGHT { return false };
+
+    let pos = y * SCREEN_WIDTH + x;
+    let changed = self.pixels[pos] != p;
+    let collision = p && self.pixels[pos];
+    self.pixels[pos] ^= p;
+
+    if changed {
+      if self.pixels[pos] {
+        self.renderer.set_draw_color(COLOR);
+      }
+      else {
+        self.renderer.set_draw_color(BLACK);
+      }
+      let point = Point::from((x as i32, y as i32));
+      self.renderer.draw_point(point).unwrap();
+    }
+
+    collision
+  }
+
+  fn draw_sprite(&mut self, x: usize, y: usize, sprite: &[bool]) -> bool {
+    let width = 8;
+    let height = sprite.len() / 8;
+    let mut collision = false;
+
+    for yy in 0..height {
+      for xx in 0..width {
+        if self.draw_pixel(sprite[yy * width + xx], x + xx, y + yy) {
+          collision = true
+        }
+      }
+    }
+
+    collision
   }
 }
 
@@ -200,7 +261,7 @@ fn main() {
     .unwrap();
 
   // Init Screen
-  let mut screen = Screen::new(window);
+  let screen = Screen::new(window);
 
   // Init CPU
   let args : Vec<String> = env::args().collect();
