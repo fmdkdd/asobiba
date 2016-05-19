@@ -190,6 +190,7 @@ impl<'a> Cpu<'a> {
 
 const SCREEN_HEIGHT: usize = 32;
 const SCREEN_WIDTH: usize = 64;
+const SCREEN_SCALE: usize = 5;
 const COLOR: Color = Color::RGB(100, 100, 220);
 const BLACK: Color = Color::RGB(0, 0, 0);
 
@@ -202,6 +203,8 @@ impl<'a> Screen<'a> {
   fn new(window: Window) -> Screen<'a> {
     let mut renderer = window.renderer().build().unwrap();
 
+    renderer.set_scale(SCREEN_SCALE as f32,
+                       SCREEN_SCALE as f32).unwrap();
     renderer.clear();
     renderer.present();
 
@@ -264,7 +267,9 @@ fn main() {
   let sdl_context = sdl2::init().unwrap();
   let video_subsystem = sdl_context.video().unwrap();
 
-  let window = video_subsystem.window("chipers", 64, 32)
+  let window = video_subsystem.window("chipers",
+                                      (SCREEN_WIDTH * SCREEN_SCALE) as u32,
+                                      (SCREEN_HEIGHT * SCREEN_SCALE) as u32)
     .position_centered()
     .build()
     .unwrap();
