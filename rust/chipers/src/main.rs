@@ -161,7 +161,8 @@ impl<'a> Cpu<'a> {
                                               self.v[y] as usize,
                                               &sprite) as u8;
 
-        // self.screen.repaint();
+        // FIXME: throttle
+        self.screen.repaint();
       },
 
       0xE000 => {
@@ -170,8 +171,16 @@ impl<'a> Cpu<'a> {
       },
 
       0xF000 => {
-        // FIXME: timer stuff
-        println!("Timer stuff");
+        match opcode & 0x00FF {
+          0x1E => {
+            let mut r = self.i as u32;
+            r += self.v[x] as u32;
+            self.v[0xF] = if r > 0xFFFF { 1 } else { 0 };
+            self.i = r as u16;
+          }
+
+          _ => panic!("Unknown upcode {:x}", opcode)
+        }
       }
 
       _ => panic!("Unknown upcode {:x}", opcode)
