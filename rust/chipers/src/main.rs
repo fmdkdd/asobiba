@@ -1,27 +1,37 @@
+extern crate sdl2;
+
 use std::io::prelude::*;
 use std::fs::File;
 use std::collections::LinkedList;
 use std::env;
 
+use sdl2::pixels::Color;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
+use sdl2::render::Renderer;
+
 const RAM_LENGTH: usize = 0x1000;
 const NUM_REGS: usize = 0x10;
 
-struct Cpu {
+struct Cpu<'a> {
   ram: [u8; RAM_LENGTH],
   v: [u8; NUM_REGS],
   pc: u16,
   i: u16,
   stack: LinkedList<u16>,
+
+  screen: Renderer<'a>,
 }
 
-impl Cpu {
-  fn new() -> Cpu {
+impl<'a> Cpu<'a> {
+  fn new<'b>(screen: Renderer<'b>) -> Cpu<'b> {
     Cpu {
       ram: [0; RAM_LENGTH],
       v: [0; NUM_REGS],
       pc: 0,
       i: 0,
       stack: LinkedList::new(),
+      screen: screen,
     }
   }
 
@@ -157,6 +167,19 @@ impl Cpu {
 }
 
 fn main() {
+  let sdl_context = sdl2::init().unwrap();
+  let video_subsystem = sdl_context.video().unwrap();
+
+  let window = video_subsystem.window("chipers", 64, 32)
+    .position_centered()
+    .build()
+    .unwrap();
+
+  let mut renderer = window.renderer().build().unwrap();
+
+  renderer.clear();
+  renderer.present();
+
   let args : Vec<String> = env::args().collect();
 
   let mut f = File::open(args[1].clone())
@@ -165,12 +188,25 @@ fn main() {
   f.read_to_end(&mut buf)
     .expect("Error reading ROM");
 
-  let mut cpu = Cpu::new();
+  let mut cpu = Cpu::new(renderer);
 
   cpu.reset();
   cpu.load_rom(&buf);
 
-  loop {
+  let mut event_pump = sdl_context.event_pump().unwrap();
+
+  'running: loop {
+    for event in event_pump.poll_iter() {
+      match event {
+        Event::Quit {..}
+        | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+          break 'running
+        },
+
+        _ => {}
+      }
+    }
+
     cpu.step();
   }
 }
