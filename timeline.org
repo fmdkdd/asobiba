@@ -1548,3 +1548,50 @@ But even without macros, I don't think we would pick it up:
 ~src/bin/read-manifest.rs~ is a ~pub mod~ (via macro) in ~src/bin/cargo.rs~.
 But there's no target corresponding to read-manifest, so how do we know that's
 part of the ~cargo~ binary target?
+
+* [2016-05-20 ven.]
+** Toying with JITs
+Always wondered how you build one.  Another pretext to use more Rust.
+
+Found a [[http://www.hydrocodedesign.com/2014/01/17/jit-just-in-time-compiler-rust/][couple]] [[http://www.jonathanturner.org/2015/12/building-a-simple-jit-in-rust.html][tutos]].  They showed how to create a memory region, mark it as
+executable, write a few opcodes, and the magic ingredient: cast the memory
+region as a function.  Then, invoke the function, and boum.
+
+Technically, that's just injecting binary code at runtime.  A kind of "metal
+eval"... meteval?  meval?
+
+Anyway.
+
+I wanted to know the order of magnitude difference between JITed code and
+emulated code.
+
+I wanted to JIT the GB emu.  But that's not done yet.  So, I thought about a
+Chip8 emu.  But I didn't have that.  I do have a JS Chip8 emu.
+
+If I code a Chip8 pure interpreter in Rust, then code a JIT interpreter in Rust,
+I could compare the performance of each, and see how much a JIT would gain.
+
+I'm also curious as to whether I can compile most of the ROM code directly to
+native binary, without inspecting "hot loops" first.  So, technically, AOT.
+
+Started converting that Chip8 emu by following the JS code and looking up how to
+deal with slices, or build up an SDL screen as I went.
+
+Works, although there is a strange display bug at the moment.  But didn't have
+time for the JIT version tonight.
+
+So I thought, if I want to compare JIT performance to pure interp, and I already
+have a JIT for a fixed piece of x86 binary, why not quickly whip up a hackish
+x86 pure interp, and see how /that/ fare?
+
+My test program is a loop that counts down from 0xFF000000.  This takes 1.24
+seconds to execute JITed.
+
+The pure interpreter is hackish, but does minimal work on top of decoding and
+executing opcodes.  It takes 120.96 seconds in debug mode, and 23 seconds in
+release.
+
+So, this preliminary test shows a 20 times improvement in performance for the
+JITed version.  Quite impressive.
+
+That's enough to entice me to try that on a real emulator!

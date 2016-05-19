@@ -66,6 +66,88 @@ fn jit_code(code: &[u8]) -> (fn() -> i64) {
   unsafe { mem::transmute(jit.addr) }
 }
 
+fn emulate(code: &[u8]) -> u64 {
+  let mut pc = 0;
+  let mut rcx : u64 = 0;
+  let mut rax : u64 = 0;
+  let mut zero : bool = false;
+
+  'running: loop {
+    let opcode = code[pc];
+    pc += 1;
+
+    match opcode {
+      // wide reg
+      0x48 => {
+        let op = code[pc];
+        pc += 1;
+
+        match op {
+          // MOV RCX
+          0xB9 => {
+            let mut v : u64 = 0;
+            for b in 0..8 {
+              v |= (code[pc] as u64) << (8 * b);
+              pc += 1;
+            }
+
+            rcx = v;
+          },
+
+          // DEC RCX
+          0xFF => {
+            pc += 1;
+
+            rcx = rcx.wrapping_sub(1);
+          },
+
+          // CMP RCX
+          0x83 => {
+            pc += 1;
+            let v = code[pc] as u64;
+            pc += 1;
+
+            if rcx - v == 0 { zero = true }
+            else { zero = false }
+          },
+
+          // MOV RAX
+          0xC7 => {
+            pc += 1;
+
+            let mut v : u64 = 0;
+            for b in 0..4 {
+              v |= (code[pc] as u64) << (8 * b);
+              pc += 1;
+            }
+
+            rax = v;
+          },
+
+          _ => panic!("Unknown op {:x}", op)
+        }
+      },
+
+      // JNE
+      0x75 => {
+        pc += 1;
+
+        if !zero {
+          pc = 0xA;
+        }
+      },
+
+      // RET
+      0xC3 => break 'running,
+
+      _ => panic!("Unknown opcode {:x}", opcode)
+    }
+  }
+
+  rax
+}
+
+
 fn main() {
   // Return 3
   // let code = [0x48, 0xC7, 0xC0, 0x03, 0x00, 0x00, 0x00];
@@ -78,7 +160,10 @@ fn main() {
                0x48, 0xC7, 0xC0, 0x03, 0x00, 0x00, 0x00,                   // mov rax, 0x3
                0xC3 ];                                                     // ret
 
-  let fun = jit_code(&code);
+  // let fun = jit_code(&code);
+  // let r = fun();
 
-  println!("{}", fun());
+  let r = emulate(&code);
+
+  println!("{}", r);
 }
