@@ -61,8 +61,6 @@ impl<'a> Cpu<'a> {
     self.pc += 2;
 
     self.exec(opcode);
-
-    // self.cycles += 1;
   }
 
   fn exec(&mut self, opcode: u16) {
