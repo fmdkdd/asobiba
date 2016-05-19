@@ -1,3 +1,5 @@
+use std::io::prelude::*;
+use std::fs::File;
 use std::collections::LinkedList;
 
 const RAM_LENGTH: usize = 0x1000;
@@ -154,10 +156,18 @@ impl Cpu {
 }
 
 fn main() {
+  let mut f = File::open("../roms/logo.c8")
+    .expect("Error opening ROM");
+  let mut buf = Vec::new();
+  f.read_to_end(&mut buf)
+    .expect("Error reading ROM");
+
   let mut cpu = Cpu::new();
 
-  cpu.load_rom(&[0]);
-
   cpu.reset();
-  cpu.step();
+  cpu.load_rom(&buf);
+
+  loop {
+    cpu.step();
+  }
 }
