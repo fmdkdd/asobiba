@@ -1,4 +1,5 @@
 extern crate sdl2;
+extern crate rand;
 
 use std::io::prelude::*;
 use std::fs::File;
@@ -137,7 +138,7 @@ impl<'a> Cpu<'a> {
       0xB000 => self.pc = addr + self.v[0] as u16,
 
       0xC000 => {
-        let r = 4;              // FIXME: guaranteed to be random
+        let r : u8 = rand::random();
         self.v[x] = r & kk;
       },
 

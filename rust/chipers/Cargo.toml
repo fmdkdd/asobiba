@@ -4,4 +4,5 @@ version = "0.1.0"
 authors = ["fmdkdd"]
 
 [dependencies]
-sdl2 = "0.19.0"
+sdl2 = "0.19"
+rand = "0.3"
