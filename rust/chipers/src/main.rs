@@ -17,14 +17,17 @@ use rand::{ThreadRng, Rng};
 
 const RAM_LENGTH: usize = 0x1000;
 const NUM_REGS: usize = 0x10;
+const FREQUENCY: u16 = 10;
 
 struct Cpu<'a> {
   ram: [u8; RAM_LENGTH],
   v: [u8; NUM_REGS],
   pc: u16,
   i: u16,
+  delay_timer: u8,
   stack: LinkedList<u16>,
 
+  cycles: u16,
   screen: Screen<'a>,
   rng: ThreadRng,
 }
@@ -36,7 +39,10 @@ impl<'a> Cpu<'a> {
       v: [0; NUM_REGS],
       pc: 0,
       i: 0,
+      delay_timer: 0,
       stack: LinkedList::new(),
+
+      cycles: 0,
       screen: screen,
       rng: rand::thread_rng(),
     }
@@ -66,6 +72,18 @@ impl<'a> Cpu<'a> {
     self.pc += 2;
 
     self.exec(opcode);
+
+    self.cycles += 1;
+
+    if self.cycles == FREQUENCY {
+      self.cycles = 0;
+
+      if self.delay_timer > 0 {
+        self.delay_timer -= 1;
+      }
+
+      self.screen.repaint();
+    }
   }
 
   fn exec(&mut self, opcode: u16) {
@@ -163,9 +181,6 @@ impl<'a> Cpu<'a> {
         self.v[0xF] = self.screen.draw_sprite(self.v[x] as usize,
                                               self.v[y] as usize,
                                               &sprite) as u8;
-
-        // FIXME: throttle
-        self.screen.repaint();
       },
 
       0xE000 => {
@@ -175,12 +190,16 @@ impl<'a> Cpu<'a> {
 
       0xF000 => {
         match opcode & 0x00FF {
+          0x07 => self.v[x] = self.delay_timer,
+          0x15 => self.delay_timer = self.v[x],
+
           0x1E => {
             let mut r = self.i as u32;
             r += self.v[x] as u32;
             self.v[0xF] = if r > 0xFFFF { 1 } else { 0 };
             self.i = r as u16;
-          }
+          },
+
 
           _ => panic!("Unknown upcode {:x}", opcode)
         }
