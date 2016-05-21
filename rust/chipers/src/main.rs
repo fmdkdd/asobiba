@@ -13,6 +13,8 @@ use sdl2::render::Renderer;
 use sdl2::video::Window;
 use sdl2::rect::Point;
 
+use rand::{ThreadRng, Rng};
+
 const RAM_LENGTH: usize = 0x1000;
 const NUM_REGS: usize = 0x10;
 
@@ -24,6 +26,7 @@ struct Cpu<'a> {
   stack: LinkedList<u16>,
 
   screen: Screen<'a>,
+  rng: ThreadRng,
 }
 
 impl<'a> Cpu<'a> {
@@ -35,6 +38,7 @@ impl<'a> Cpu<'a> {
       i: 0,
       stack: LinkedList::new(),
       screen: screen,
+      rng: rand::thread_rng(),
     }
   }
 
@@ -138,7 +142,7 @@ impl<'a> Cpu<'a> {
       0xB000 => self.pc = addr + self.v[0] as u16,
 
       0xC000 => {
-        let r : u8 = rand::random();
+        let r : u8 = self.rng.gen();
         self.v[x] = r & kk;
       },
 
