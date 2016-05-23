@@ -170,11 +170,10 @@ impl<'a> Cpu<'a> {
         // Build sprite
         let mut sprite = Vec::new();
 
-        for i in 0..n {
-          let mut p = self.ram[(self.i + i) as usize];
-          for _ in 0..8 {
-            sprite.push(if (p & 1) > 0 { true } else { false });
-            p >>= 1;
+        for i in (self.i)..(self.i + n) {
+          let p = self.ram[i as usize];
+          for b in 0..8 {
+            sprite.push(if (p & (1 << (7 - b))) > 0 { true } else { false });
           }
         }
 
