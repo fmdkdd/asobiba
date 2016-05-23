@@ -124,14 +124,13 @@ impl<'a> Cpu<'a> {
         0x3 => self.v[x] ^= self.v[y],
 
         0x4 => {
-          let r = self.v[x] as u16 + self.v[y] as u16;
+          let r = (self.v[x] as u16) + (self.v[y] as u16);
           self.v[0xF] = if r > 0xFF { 1 } else { 0 };
           self.v[x] = r as u8;
         },
         0x5 => {
-          let r = self.v[x] as i16 - self.v[y] as i16;
-          self.v[0xF] = if r > 0x0 { 1 } else { 0 };
-          self.v[x] = r as u8;
+          self.v[0xF] = if self.v[x] > self.v[y] { 1 } else { 0 };
+          self.v[x] = self.v[x].wrapping_sub(self.v[y]);
         },
 
         0x6 => {
@@ -140,9 +139,8 @@ impl<'a> Cpu<'a> {
         },
 
         0x7 => {
-          let r = self.v[y] as i16 - self.v[x] as i16;
-          self.v[0xF] = if r > 0x0 { 1 } else { 0 };
-          self.v[x] = r as u8;
+          self.v[0xF] = if self.v[y] > self.v[x] { 1 } else { 0 };
+          self.v[y] = self.v[y].wrapping_sub(self.v[x]);
         },
 
         0x8 => {
@@ -157,7 +155,7 @@ impl<'a> Cpu<'a> {
 
       0xA000 => self.i = addr,
 
-      0xB000 => self.pc = addr + self.v[0] as u16,
+      0xB000 => self.pc = addr + (self.v[0] as u16),
 
       0xC000 => {
         let r : u8 = self.rng.gen();
