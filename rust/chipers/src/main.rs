@@ -25,6 +25,7 @@ struct Cpu<'a> {
   pc: u16,
   i: u16,
   delay_timer: u8,
+  sound_timer: u8,
   stack: LinkedList<u16>,
 
   cycles: u16,
@@ -40,6 +41,7 @@ impl<'a> Cpu<'a> {
       pc: 0,
       i: 0,
       delay_timer: 0,
+      sound_timer: 0,
       stack: LinkedList::new(),
 
       cycles: 0,
@@ -84,6 +86,9 @@ impl<'a> Cpu<'a> {
 
       self.screen.repaint();
     }
+  fn is_key_down(&self, key: u8) -> bool {
+    // FIXME: actually handle keys
+    false
   }
 
   fn exec(&mut self, opcode: u16) {
@@ -181,14 +186,20 @@ impl<'a> Cpu<'a> {
       },
 
       0xE000 => {
-        // FIXME: keyboard stuff
-        println!("Keyboard stuff");
+        match opcode & 0x00FF {
+          0x9E => if self.is_key_down(self.v[x]) { self.pc += 2 },
+          0xA1 => if !self.is_key_down(self.v[x]) { self.pc += 2 },
+
+          _ => panic!("Unknown upcode {:x}", opcode)
+        }
       },
 
       0xF000 => {
         match opcode & 0x00FF {
           0x07 => self.v[x] = self.delay_timer,
           0x15 => self.delay_timer = self.v[x],
+
+          0x18 => self.sound_timer = self.v[x],
 
           0x1E => {
             let mut r = self.i as u32;
@@ -197,6 +208,22 @@ impl<'a> Cpu<'a> {
             self.i = r as u16;
           },
 
+          0x29 => self.i = self.v[x] as u16 * 5,
+
+          0x33 => {
+            let h = self.v[x] / 100;
+            let d = (self.v[x] % 100) / 10;
+            let u = self.v[x] % 10;
+            self.ram[self.i as usize] = h;
+            self.ram[(self.i + 1) as usize] = d;
+            self.ram[(self.i + 2) as usize] = u;
+          },
+
+          0x65 => {
+            for i in 0..(x + 1) {
+              self.v[i] = self.ram[self.i as usize + i];
+            }
+          },
 
           _ => panic!("Unknown upcode {:x}", opcode)
         }
@@ -234,6 +261,7 @@ impl<'a> Screen<'a> {
   }
 
   fn clear(&mut self) {
+    self.renderer.set_draw_color(BLACK);
     self.renderer.clear();
   }
 
