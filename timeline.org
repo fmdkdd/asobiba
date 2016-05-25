@@ -1474,6 +1474,26 @@ can always be overridden by setting the `flycheck-rust-binary-name` manually.
 Reviewed the code and added a docstring.  No test suite this time (though it
 would not be a bad idea to ensure we don't break any convoluted setups).
 
+* [2016-05-10 mar.]
+** Checking the state of Rust tool support
+Error output seems to have changed in nightly: [[https://github.com/rust-lang/rust/pull/32756][PR#32756]].
+
+That means Flycheck will soon break in parsing them.  Luckily, there is also a
+new [[https://internals.rust-lang.org/t/rustcs-json-output-format/3446][unstable option for JSON output]].  The JSON format should hopefully stabilize
+soon.
+
+Speaking of which, using ~-Z no-trans~ for faster compilation is an unstable
+flag, and currently outputs a warning.  [[https://github.com/rust-lang/rust/issues/31847][This]] is the issue to follow if we want
+this flag to stabilize.
+
+On the horizon, there is also the [[https://github.com/rust-lang/rust/issues/31548][Rust Language Server]], which aims to be a
+direct interface for IDEs, providing error checking, completion candidates, find
+definition, etc.  But this is only a RFC, awaiting for incremental compilation
+progress in rustc.
+
+A good place to check for news on all of this is the [[https://internals.rust-lang.org/c/tools-and-infrastructure%0A][tools and infrastructure]]
+forum.
+
 * [2016-05-11 mer.]
 ** Checking that flycheck-rust works right for everyone's use case
 I've tested the basic layouts of src/lib, src/main and src/bin/.  But cargo
