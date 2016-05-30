@@ -86,6 +86,8 @@ impl<'a> Cpu<'a> {
 
       self.screen.repaint();
     }
+  }
+
   fn is_key_down(&self, key: u8) -> bool {
     // FIXME: actually handle keys
     false
@@ -274,11 +276,10 @@ impl<'a> Screen<'a> {
     if y > SCREEN_HEIGHT { return false };
 
     let pos = y * SCREEN_WIDTH + x;
-    let changed = self.pixels[pos] != p;
     let collision = p && self.pixels[pos];
     self.pixels[pos] ^= p;
 
-    if changed {
+    if p {
       if self.pixels[pos] {
         self.renderer.set_draw_color(COLOR);
       }
