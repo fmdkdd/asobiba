@@ -263,6 +263,10 @@ impl<'a> Screen<'a> {
   }
 
   fn clear(&mut self) {
+    for p in self.pixels.iter_mut() {
+      *p = false
+    }
+
     self.renderer.set_draw_color(BLACK);
     self.renderer.clear();
   }
