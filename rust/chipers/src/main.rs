@@ -5,6 +5,7 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::collections::LinkedList;
 use std::env;
+use std::time::Instant;
 
 use sdl2::pixels::Color;
 use sdl2::event::Event;
@@ -344,6 +345,9 @@ fn main() {
   cpu.load_rom(&buf);
 
   // Main loop
+  let mut cycles = 0;
+  let mut now = Instant::now();
+
   let mut event_pump = sdl_context.event_pump().unwrap();
 
   'running: loop {
@@ -359,5 +363,14 @@ fn main() {
     }
 
     cpu.step();
+
+    cycles += 1;
+    if cycles == 10000 {
+      let elapsed = now.elapsed();
+      println!("{} cycles/sec", 1e13 / elapsed.subsec_nanos() as f64);
+
+      cycles = 0;
+      now = Instant::now();
+    }
   }
 }
