@@ -5,7 +5,7 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::collections::LinkedList;
 use std::env;
-use std::time::Instant;
+use std::time::{Instant, Duration};
 
 use sdl2::pixels::Color;
 use sdl2::event::Event;
@@ -19,7 +19,6 @@ use rand::{ThreadRng, Rng};
 
 const RAM_LENGTH: usize = 0x1000;
 const NUM_REGS: usize = 0x10;
-const FREQUENCY: u16 = 10;
 
 struct Cpu<'a> {
   ram: [u8; RAM_LENGTH],
@@ -30,7 +29,6 @@ struct Cpu<'a> {
   sound_timer: u8,
   stack: LinkedList<u16>,
 
-  cycles: u16,
   screen: Screen<'a>,
   keyboard: Keyboard,
   rng: ThreadRng,
@@ -47,7 +45,6 @@ impl<'a> Cpu<'a> {
       sound_timer: 0,
       stack: LinkedList::new(),
 
-      cycles: 0,
       screen: screen,
       keyboard: keyboard,
       rng: rand::thread_rng(),
@@ -102,18 +99,22 @@ impl<'a> Cpu<'a> {
     self.pc += 2;
 
     self.exec(opcode);
+  }
 
-    self.cycles += 1;
-
-    if self.cycles == FREQUENCY {
-      self.cycles = 0;
-
-      if self.delay_timer > 0 {
-        self.delay_timer -= 1;
-      }
-
-      self.screen.repaint();
+  fn frame(&mut self) {
+    for _ in 0..CYCLES_PER_FRAME {
+      self.step();
     }
+
+    if self.delay_timer > 0 {
+      self.delay_timer -= 1;
+    }
+
+    if self.sound_timer > 0 {
+      self.sound_timer -= 1;
+    }
+
+    self.screen.repaint();
   }
 
   fn is_key_down(&self, key: u8) -> bool {
@@ -374,6 +375,9 @@ impl Keyboard {
   }
 }
 
+const FRAME_NS: u32 = 1000000000 / 60; // 60Hz
+const CYCLES_PER_FRAME: u64 = 10;
+
 fn main() {
   // Init SDL
   let sdl_context = sdl2::init().unwrap();
@@ -404,8 +408,10 @@ fn main() {
   cpu.load_rom(&buf);
 
   // Main loop
-  let mut cycles = 0;
+  let frame_duration = Duration::new(0, FRAME_NS);
+  let mut frames = 0;
   let mut now = Instant::now();
+  let mut last_frame = Instant::now();
 
   let mut event_pump = sdl_context.event_pump().unwrap();
 
@@ -455,14 +461,17 @@ fn main() {
       }
     }
 
-    cpu.step();
+    cpu.frame();
+    frames += 1;
 
-    cycles += 1;
-    if cycles == 10000 {
+    // std::thread::sleep(frame_duration - last_frame.elapsed());
+    // last_frame = Instant::now();
+
+    if frames == 10000 {
       let elapsed = now.elapsed();
-      println!("{} cycles/sec", 1e13 / elapsed.subsec_nanos() as f64);
+      println!("{} frames/sec", 1e13 / elapsed.subsec_nanos() as f64);
 
-      cycles = 0;
+      frames = 0;
       now = Instant::now();
     }
   }
