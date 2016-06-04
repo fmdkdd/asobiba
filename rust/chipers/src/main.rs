@@ -9,6 +9,7 @@ use std::time::Instant;
 
 use sdl2::pixels::Color;
 use sdl2::event::Event;
+use sdl2::event::Event::{KeyDown, KeyUp};
 use sdl2::keyboard::Keycode;
 use sdl2::render::Renderer;
 use sdl2::video::Window;
@@ -31,11 +32,12 @@ struct Cpu<'a> {
 
   cycles: u16,
   screen: Screen<'a>,
+  keyboard: Keyboard,
   rng: ThreadRng,
 }
 
 impl<'a> Cpu<'a> {
-  fn new<'b>(screen: Screen<'b>) -> Cpu<'b> {
+  fn new<'b>(screen: Screen<'b>, keyboard: Keyboard) -> Cpu<'b> {
     Cpu {
       ram: [0; RAM_LENGTH],
       v: [0; NUM_REGS],
@@ -47,6 +49,7 @@ impl<'a> Cpu<'a> {
 
       cycles: 0,
       screen: screen,
+      keyboard: keyboard,
       rng: rand::thread_rng(),
     }
   }
@@ -114,8 +117,7 @@ impl<'a> Cpu<'a> {
   }
 
   fn is_key_down(&self, key: u8) -> bool {
-    // FIXME: actually handle keys
-    false
+    self.keyboard.is_key_down(key)
   }
 
   fn exec(&mut self, opcode: u16) {
@@ -346,6 +348,32 @@ impl<'a> Screen<'a> {
   }
 }
 
+const NUM_KEYS: usize = 0x10;
+
+struct Keyboard {
+  pressed_keys: [bool; NUM_KEYS],
+}
+
+impl Keyboard {
+  fn new() -> Keyboard {
+    Keyboard {
+      pressed_keys: [false; NUM_KEYS],
+    }
+  }
+
+  fn down_key(&mut self, key: u8) {
+    self.pressed_keys[key as usize] = true
+  }
+
+  fn release_key(&mut self, key: u8) {
+    self.pressed_keys[key as usize] = false
+  }
+
+  fn is_key_down(&self, key: u8) -> bool {
+    self.pressed_keys[key as usize]
+  }
+}
+
 fn main() {
   // Init SDL
   let sdl_context = sdl2::init().unwrap();
@@ -370,7 +398,7 @@ fn main() {
   f.read_to_end(&mut buf)
     .expect("Error reading ROM");
 
-  let mut cpu = Cpu::new(screen);
+  let mut cpu = Cpu::new(screen, Keyboard::new());
 
   cpu.reset();
   cpu.load_rom(&buf);
@@ -385,9 +413,43 @@ fn main() {
     for event in event_pump.poll_iter() {
       match event {
         Event::Quit {..}
-        | Event::KeyDown { keycode: Some(Keycode::Escape), .. } => {
+        | KeyDown { keycode: Some(Keycode::Escape), .. } => {
           break 'running
         },
+
+        KeyDown { keycode: Some(Keycode::Num1), .. } => cpu.keyboard.down_key(0x1),
+        KeyDown { keycode: Some(Keycode::Num2), .. } => cpu.keyboard.down_key(0x2),
+        KeyDown { keycode: Some(Keycode::Num3), .. } => cpu.keyboard.down_key(0x3),
+        KeyDown { keycode: Some(Keycode::Q), .. } => cpu.keyboard.down_key(0x4),
+        KeyDown { keycode: Some(Keycode::W), .. } => cpu.keyboard.down_key(0x5),
+        KeyDown { keycode: Some(Keycode::F), .. } => cpu.keyboard.down_key(0x6),
+        KeyDown { keycode: Some(Keycode::A), .. } => cpu.keyboard.down_key(0x7),
+        KeyDown { keycode: Some(Keycode::R), .. } => cpu.keyboard.down_key(0x8),
+        KeyDown { keycode: Some(Keycode::S), .. } => cpu.keyboard.down_key(0x9),
+        KeyDown { keycode: Some(Keycode::Z), .. } => cpu.keyboard.down_key(0xA),
+        KeyDown { keycode: Some(Keycode::X), .. } => cpu.keyboard.down_key(0x0),
+        KeyDown { keycode: Some(Keycode::C), .. } => cpu.keyboard.down_key(0xB),
+        KeyDown { keycode: Some(Keycode::Num4), .. } => cpu.keyboard.down_key(0xC),
+        KeyDown { keycode: Some(Keycode::P), .. } => cpu.keyboard.down_key(0xD),
+        KeyDown { keycode: Some(Keycode::T), .. } => cpu.keyboard.down_key(0xE),
+        KeyDown { keycode: Some(Keycode::V), .. } => cpu.keyboard.down_key(0xF),
+
+        KeyUp { keycode: Some(Keycode::Num1), .. } => cpu.keyboard.release_key(0x1),
+        KeyUp { keycode: Some(Keycode::Num2), .. } => cpu.keyboard.release_key(0x2),
+        KeyUp { keycode: Some(Keycode::Num3), .. } => cpu.keyboard.release_key(0x3),
+        KeyUp { keycode: Some(Keycode::Q), .. } => cpu.keyboard.release_key(0x4),
+        KeyUp { keycode: Some(Keycode::W), .. } => cpu.keyboard.release_key(0x5),
+        KeyUp { keycode: Some(Keycode::F), .. } => cpu.keyboard.release_key(0x6),
+        KeyUp { keycode: Some(Keycode::A), .. } => cpu.keyboard.release_key(0x7),
+        KeyUp { keycode: Some(Keycode::R), .. } => cpu.keyboard.release_key(0x8),
+        KeyUp { keycode: Some(Keycode::S), .. } => cpu.keyboard.release_key(0x9),
+        KeyUp { keycode: Some(Keycode::Z), .. } => cpu.keyboard.release_key(0xA),
+        KeyUp { keycode: Some(Keycode::X), .. } => cpu.keyboard.release_key(0x0),
+        KeyUp { keycode: Some(Keycode::C), .. } => cpu.keyboard.release_key(0xB),
+        KeyUp { keycode: Some(Keycode::Num4), .. } => cpu.keyboard.release_key(0xC),
+        KeyUp { keycode: Some(Keycode::P), .. } => cpu.keyboard.release_key(0xD),
+        KeyUp { keycode: Some(Keycode::T), .. } => cpu.keyboard.release_key(0xE),
+        KeyUp { keycode: Some(Keycode::V), .. } => cpu.keyboard.release_key(0xF),
 
         _ => {}
       }
