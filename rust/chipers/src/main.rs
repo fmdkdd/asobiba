@@ -310,8 +310,8 @@ impl<'a> Screen<'a> {
   }
 
   fn draw_pixel(&mut self, p: bool, x: usize, y: usize) -> bool {
-    if x > SCREEN_WIDTH { return false };
-    if y > SCREEN_HEIGHT { return false };
+    let x = x % SCREEN_WIDTH;
+    let y = y % SCREEN_HEIGHT;
 
     let pos = y * SCREEN_WIDTH + x;
     let collision = p && self.pixels[pos];
