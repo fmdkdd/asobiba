@@ -247,6 +247,12 @@ impl<'a> Cpu<'a> {
             self.ram[(self.i + 2) as usize] = u;
           },
 
+          0x55 => {
+            let start = self.i as usize;
+            self.ram[start..(start + NUM_REGS)]
+              .copy_from_slice(&self.v);
+          },
+
           0x65 => {
             for i in 0..(x + 1) {
               self.v[i] = self.ram[self.i as usize + i];
