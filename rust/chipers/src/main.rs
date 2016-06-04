@@ -1,10 +1,11 @@
 extern crate sdl2;
 extern crate rand;
+extern crate rustc_serialize;
+extern crate docopt;
 
 use std::io::prelude::*;
 use std::fs::File;
 use std::collections::LinkedList;
-use std::env;
 use std::time::{Instant, Duration};
 
 use sdl2::pixels::Color;
@@ -16,6 +17,8 @@ use sdl2::video::Window;
 use sdl2::rect::Point;
 
 use rand::{ThreadRng, Rng};
+
+use docopt::Docopt;
 
 const RAM_LENGTH: usize = 0x1000;
 const NUM_REGS: usize = 0x10;
@@ -377,8 +380,34 @@ impl Keyboard {
 
 const FRAME_NS: u32 = 1000000000 / 60; // 60Hz
 const CYCLES_PER_FRAME: u64 = 10;
+const FPS_REPORT_INTERVAL: u64 = 100000; // Frames to wait before reporting FPS
+
+const USAGE: &'static str = "
+A Chip-8 emulator in Rust.
+
+Usage:
+  chipers [options] <rom>
+  chipers -h
+
+Options:
+  -h, --help     Show this help.
+  -l, --limit    Limit frames to 60Hz.
+  -v, --verbose  Show debug information.
+";
+
+#[derive(RustcDecodable)]
+struct Args {
+  arg_rom: String,
+  flag_limit: bool,
+  flag_verbose: bool,
+}
 
 fn main() {
+  // Process args
+  let args: Args = Docopt::new(USAGE)
+    .and_then(|d| d.decode())
+    .unwrap_or_else(|e| e.exit());
+
   // Init SDL
   let sdl_context = sdl2::init().unwrap();
   let video_subsystem = sdl_context.video().unwrap();
@@ -394,9 +423,7 @@ fn main() {
   let screen = Screen::new(window);
 
   // Init CPU
-  let args : Vec<String> = env::args().collect();
-
-  let mut f = File::open(args[1].clone())
+  let mut f = File::open(args.arg_rom)
     .expect("Error opening ROM");
   let mut buf = Vec::new();
   f.read_to_end(&mut buf)
@@ -410,7 +437,7 @@ fn main() {
   // Main loop
   let frame_duration = Duration::new(0, FRAME_NS);
   let mut frames = 0;
-  let mut now = Instant::now();
+  let mut last_fps = Instant::now();
   let mut last_frame = Instant::now();
 
   let mut event_pump = sdl_context.event_pump().unwrap();
@@ -462,17 +489,23 @@ fn main() {
     }
 
     cpu.frame();
-    frames += 1;
 
-    // std::thread::sleep(frame_duration - last_frame.elapsed());
-    // last_frame = Instant::now();
+    if args.flag_limit {
+      std::thread::sleep(frame_duration - last_frame.elapsed());
+      last_frame = Instant::now();
+    }
 
-    if frames == 10000 {
-      let elapsed = now.elapsed();
-      println!("{} frames/sec", 1e13 / elapsed.subsec_nanos() as f64);
+    if args.flag_verbose {
+      frames += 1;
+      if frames == FPS_REPORT_INTERVAL {
+        let dt = last_fps.elapsed();
+        let secs = dt.as_secs() as f64 + (dt.subsec_nanos() as f64 / 1e9);
 
-      frames = 0;
-      now = Instant::now();
+        println!("{} frames/sec", FPS_REPORT_INTERVAL as f64 / secs);
+
+        frames = 0;
+        last_fps = Instant::now();
+      }
     }
   }
 }
