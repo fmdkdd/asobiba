@@ -189,7 +189,7 @@ impl<'a> Cpu<'a> {
           self.v[y] = self.v[y].wrapping_sub(self.v[x]);
         },
 
-        0x8 => {
+        0xE => {
           self.v[0xF] = if (self.v[x] & 0x80) > 0 { 1 } else { 0 };
           self.v[x] <<= 1;
         },
