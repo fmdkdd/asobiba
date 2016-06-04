@@ -311,7 +311,6 @@ impl<'a> Cpu<'a> {
 
 const SCREEN_HEIGHT: usize = 32;
 const SCREEN_WIDTH: usize = 64;
-const SCREEN_SCALE: usize = 5;
 const COLOR: Color = Color::RGB(100, 100, 220);
 const BLACK: Color = Color::RGB(0, 0, 0);
 
@@ -321,11 +320,10 @@ struct Screen<'a> {
 }
 
 impl<'a> Screen<'a> {
-  fn new(window: Window) -> Screen<'a> {
+  fn new(window: Window, zoom: f32) -> Screen<'a> {
     let mut renderer = window.renderer().build().unwrap();
 
-    renderer.set_scale(SCREEN_SCALE as f32,
-                       SCREEN_SCALE as f32).unwrap();
+    renderer.set_scale(zoom, zoom).unwrap();
     renderer.clear();
     renderer.present();
 
@@ -425,15 +423,17 @@ Usage:
   chipers -h
 
 Options:
-  -h, --help     Show this help.
-  -l, --limit    Limit frames to 60Hz.
-  -v, --verbose  Show debug information.
+  -h, --help              Show this help.
+  -l, --limit             Limit frames to 60Hz.
+  -z <int>, --zoom <int>  Set the zoom factor of the window [default: 10].
+  -v, --verbose           Show debug information.
 ";
 
 #[derive(RustcDecodable)]
 struct Args {
   arg_rom: String,
   flag_limit: bool,
+  flag_zoom: usize,
   flag_verbose: bool,
 }
 
@@ -444,18 +444,19 @@ fn main() {
     .unwrap_or_else(|e| e.exit());
 
   // Init SDL
+  let zoom = args.flag_zoom;
   let sdl_context = sdl2::init().unwrap();
   let video_subsystem = sdl_context.video().unwrap();
 
   let window = video_subsystem.window("chipers",
-                                      (SCREEN_WIDTH * SCREEN_SCALE) as u32,
-                                      (SCREEN_HEIGHT * SCREEN_SCALE) as u32)
+                                      (SCREEN_WIDTH * zoom) as u32,
+                                      (SCREEN_HEIGHT * zoom) as u32)
     .position_centered()
     .build()
     .unwrap();
 
   // Init Screen
-  let screen = Screen::new(window);
+  let screen = Screen::new(window, zoom as f32);
 
   // Init CPU
   let mut f = File::open(args.arg_rom)
