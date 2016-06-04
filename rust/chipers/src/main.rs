@@ -65,6 +65,14 @@ impl<'a> Cpu<'a> {
       self.v[i] = 0;
     }
 
+    self.i = 0;
+    self.delay_timer = 0;
+    self.sound_timer = 0;
+    self.stack = LinkedList::new();
+
+    self.screen.clear();
+    self.screen.repaint();
+
     self.load_font();
   }
 
