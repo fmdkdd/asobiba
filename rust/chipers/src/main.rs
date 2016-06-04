@@ -207,6 +207,7 @@ impl<'a> Cpu<'a> {
           }
         }
 
+        // Draw
         self.v[0xF] = self.screen.draw_sprite(self.v[x] as usize,
                                               self.v[y] as usize,
                                               &sprite) as u8;
