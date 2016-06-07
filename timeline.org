@@ -1656,3 +1656,67 @@ that constructs the full byte of button states directly.
 Another hint of optimizations is to look for redundant operations, like the ~LD~
 above, and systematically coalesce them into one.  These optimizations would be
 useful for any piece of code, not just this snippet.
+
+* [2016-06-07 mar.]
+** The fastest Chip8 emulator
+So, I ported my Chip8 emu to Rust.  To have a smaller code base to test a JIT
+with.
+
+I have two ways to recompile a rom. It might be possible to compile the rom when
+loading it (AOT): just create a function that does as much as possible in native
+code, and jumps back to Rust code for things I don't know how to code in
+assembly (e.g., drawing).
+
+I don't yet know how I would jump back to a Rust function.  Is calling the
+pointer address enough?
+
+Otherwise, I can watch the code for hot loops, and try to compile those.  So I
+need to visualize hot paths, in order to understand what patterns I need to
+match.  Which brings me to the second point.
+
+** GUIs in Rust
+Been looking for a nice and minimalist way to view the rom disassembly that
+updates in real time as the interpreter goes through each opcode.
+
+There's nothing provided by SDL.  Nor OpenGL.  Even writing text in those is a
+PITA, and I don't want to be writing code to align two lines of text, to detect
+mouse clicks, etc.
+
+There are Rust bindings for GTK, but that does not strike me as friendly nor
+minimalist.  And I'm not sure about the portability.
+
+Luckily, I found ImGui which seems to fit the bill.  It renders to vertex
+buffers, which can be plugged into an OpenGL renderer, so it's as portable as
+OpenGL.  It's certainly minimalist, but it's good enough to have been used in
+games and emulators for... debuggers and disassemblers!
+
+Now, the only trouble is: the Rust bindings are light on the documentation
+(read: there is none).  The only code example uses Glium as a renderer.  But I
+already have an SDL window.  I could launch two windows: one with a SDL backend,
+and one with Glutin (the backend of Glium).  But do I have to use threads?  That
+could degenerate quickly, and seems opposed to the way ImGui is supposed to be
+used.
+
+Maybe I can just keep one loop that polls SDL, draws the frame, then does the
+same for the Glium window.
+
+Otherwise, I could switch my SDL rendering to Glium, or any other GL binding,
+replace the drawing code with OpenGL calls, then draw the ImGui on top of that.
+
+[later]
+
+Tried only one loop to handle the two windows: one SDL, one Glium.  The ImGui in
+Glium works fine, but the SDL windows does not update anymore.  Console is full
+of debug errors caught by /Glium/, but the backtrace indicates that the error
+originate in SDL2 calls.  Craziest thing.
+
+I can only guess that SDL2 uses a GL context under the hood for accelerated 2D
+rendering and, /somehow/, Glium takes hold of that GL context, and that,
+/somehow/, they do not like sharing.
+
+The errors caught by Glium are things like "~glVertex2f~ or ~glEnd~ is
+deprecated".  Maybe SDL2 uses the old OpenGL API, whereas Glium is only
+compatible with 3.0+?  Who knows.
+
+In any case, that means doing the right thing: sticking to OpenGL for drawing
+the emu AND ImGui.
