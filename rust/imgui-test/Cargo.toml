@@ -1,0 +1,9 @@
+[package]
+name = "imgui-test"
+version = "0.1.0"
+authors = ["fmdkdd"]
+
+[dependencies]
+imgui = "0.0"
+glium = "0.14"
+time = "0.1"
