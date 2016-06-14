@@ -13,20 +13,33 @@ struct Vertex {
 
 implement_vertex!(Vertex, position);
 
+fn point(vec: &mut Vec<Vertex>, x: u32, y: u32) {
+  let x = x as f32;
+  let x1 = x + 1.0;
+  let y = y as f32;
+  let y1 = y + 1.0;
+  vec.push(Vertex { position: [  x,  y ] });
+  vec.push(Vertex { position: [ x1,  y ] });
+  vec.push(Vertex { position: [  x, y1 ] });
+  vec.push(Vertex { position: [  x, y1 ] });
+  vec.push(Vertex { position: [ x1,  y ] });
+  vec.push(Vertex { position: [ x1, y1 ] });
+}
+
 fn main() {
   let display = glium::glutin::WindowBuilder::new()
+    .with_dimensions(640, 320)
+    .with_vsync()
     .build_glium().unwrap();
 
   let vertex_shader_src = r#"
       #version 140
 
       in vec2 position;
-      out vec2 my_attr;
 
       uniform mat4 matrix;
 
       void main() {
-        my_attr = position;
         gl_Position = matrix * vec4(position, 0.0, 1.0);
       }
   "#;
@@ -34,11 +47,10 @@ fn main() {
   let fragment_shader_src = r#"
     #version 140
 
-    in vec2 my_attr;
     out vec4 color;
 
     void main() {
-      color = vec4(my_attr, 0.0, 1.0);
+      color = vec4(1.0, 0.7, 1.0, 1.0);
     }
   "#;
 
@@ -46,37 +58,43 @@ fn main() {
     &display, vertex_shader_src, fragment_shader_src, None)
     .unwrap();
 
-  let vertex1 = Vertex{ position: [-0.5, -0.5] };
-  let vertex2 = Vertex{ position: [ 0.0,  0.5] };
-  let vertex3 = Vertex{ position: [ 0.5, -0.25] };
-  let shape = vec![vertex1, vertex2, vertex3];
+  let mut shape = Vec::new();
+  point(&mut shape, 0, 0);
+  point(&mut shape, 63,0);
+  point(&mut shape, 63,31);
+  point(&mut shape, 0,31);
   let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
 
   let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
-  let mut t: f32 = -0.5;
+  let mut shape2 = Vec::new();
+  point(&mut shape2, 61,0);
+  let vertex_buffer2 = glium::VertexBuffer::new(&display, &shape2).unwrap();
+
+  let uniforms = uniform! {
+    matrix: [
+      [ 2.0/64.0, 0.0,      0.0, 0.0],
+      [ 0.0,      2.0/32.0, 0.0, 0.0],
+      [ 0.0,      0.0,      1.0, 0.0],
+      [-1.0,     -1.0,      0.0, 1.0f32],
+    ],
+  };
 
   loop {
-    t += 0.002;
-    if t > 0.5 {
-      t = -0.5;
-    }
-
-    let uniforms = uniform! {
-      matrix: [
-        [ t.cos(), t.sin(), 0.0, 0.0],
-        [-t.sin(), t.cos(), 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0f32],
-      ]
-    };
 
     let mut target = display.draw();
-    target.clear_color(0.0, 0.0, 1.0, 1.0);
     target.draw(&vertex_buffer, &indices, &program, &uniforms,
                 &Default::default()).unwrap();
     target.finish().unwrap();
 
+    std::thread::sleep_ms(500);
+
+    let mut target = display.draw();
+    target.draw(&vertex_buffer2, &indices, &program, &uniforms,
+                &Default::default()).unwrap();
+    target.finish().unwrap();
+
+    std::thread::sleep_ms(500);
 
     for ev in display.poll_events() {
       match ev {
