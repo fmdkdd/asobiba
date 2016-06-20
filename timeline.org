@@ -1720,3 +1720,125 @@ compatible with 3.0+?  Who knows.
 
 In any case, that means doing the right thing: sticking to OpenGL for drawing
 the emu AND ImGui.
+
+* [2016-06-20 lun.]
+** Switching chipers to OpenGL
+Went full glium/glutin.  Glium is the library for high-level OpenGL bindings.
+As I understand, it takes care of allocating GL objects and disposing them for
+you.  It also help avoid the unsafeness of the GL API.
+
+Glutin deals with the display manager of your OS to give you keyboard and mouse
+events, to create a window, etc.  SDL handled both.  As I understand, Glium is
+not tied to Glutin, but both are from the same author, so...
+
+Anyway, using Glium/Glutin is not the hard part.  The hard part is understanding
+how to draw things in OpenGL, especially with shaders.
+
+** Drawing colored squares with triangles
+With SDL I was just drawing a "point" for each pixel of the Chip8 screen (cixel
+henceforth).  And since I only knew how to draw triangles in OpenGL, I thought:
+"Hey, let's draw a quad for each cixel!"
+
+And that was a few hours, just to get something on the screen.  Because I had to
+allocate a vertex buffer and modify it each frame, figure out how to pass my
+vertices to this VBO, how to setup shaders just to get something, how to use a
+projection matrix in the vertex buffer so that cixel coordinates would translate
+to screen coordinates...
+
+After a copious amount of ddging ([[https://tomaka.github.io/glium/book/tuto-01-getting-started.html][helpful tutorial]] from Glium dev
+notwithstanding), I managed to get a Chip8 screen back.  Albeit clipping when
+resizing.  And ... with horrible FPS performance after a few seconds.  What?
+
+** Switching to drawing on a texture
+I figured that, since I didn't know what I was doing in OpenGL, I must have done
+something wrong there.
+
+The SDL version was smooth in frame time (constant 16.666ms).  Since I hadn't
+touched that in the conversion, my GL-fu was to blame.
+
+Maybe I was allocating a new VBO needlessly every frame?  Surely that would cost
+me.  I don't know how Glium is implemented, but that looked like a potential
+inefficiency right there.
+
+So I started to question my rendering solution.  I knew that drawing triangles
+was not the only way to draw the Chip8 screen in OpenGL.  It was the only way I
+knew /how/.  But what solution did other choose?
+
+Turns out, there are at least 30 chip8 interpreters written in Rust on Github.
+And a dozen that use glium for rendering.  As far as I can tell, /every one of
+them/ elected to draw the screen to a 2D texture.
+
+The texture is then drawn to a single quad that spans the entire output screen.
+No VBO allocation after initialization.  Not even a new texture allocation.
+
+That... seemed alright.  And maybe even simpler that my approach, considering.
+
+Some re-create a new texture for the quad each frame.  I read somewhere on the
+Glium API that rewriting the texture contents can cause a CPU/GPU
+synchronization, which I guess is bad for performance.  Have not tried to
+compare the two approaches in frame time.  I just followed the [[https://github.com/Gekkio/mooneye-gb/blob/master/src/frontend/renderer.rs][guy who wrote a
+GB emulator in Rust]].  Good enough for GB, good enough for Chip8, right?
+
+Anyway, I was thrilled to see that the texture approach solved the clipping
+issue that drawing quads had.
+
+But, the horrible performance drop after a few seconds was still present.
+
+** Did I enable VSync?
+Lots of fumbling around, trying things with timing and what not.
+
+In the end, I /though/ I'd found the issue.  My Nvidia driver had "force VSync"
+enabled.  It's weird, because Glutin has a vsync option, which was disabled by
+default.  And based on the fact that, in the SDL version, disabling VSync
+actually worked, I figured it would be the same for Glutin.  Apparently not.
+
+Disabling this option made the performance drop disappear.. for a while.
+
+But I did encounter it a few times after that.  I guess it's a timing issue,
+like not meeting frame time and still going after it.  Then there must be a sort
+of mad race of the CPU trying to catch up to a shorter and shorter frame
+time...
+
+Probably should fix the main loop next.
+
+** Anyway, ImGui is great
+Once rendering to Glium was done, integrating ImGui was a breeze.
+
+Could had a FPS counter, a memory view, and register info.
+
+The only downside of using the Rust binding imgui-rs, is that porting C++ ImGui
+examples is not straightforward.
+
+The [[https://github.com/ocornut/imgui/wiki/memory_editor_example][memory editor example]] has nice features, like editing.  But you cannot just
+"port" its code imgui-rs, because the API is not at the same level.  ImGui has
+~begin~ and ~end~ blocks, while imgui-rs has closures.  Inside Rust closures,
+there are mutability issues: you cannot borrow ~self~ mutably more than once for
+instance.  I might find a way around it, or I might implement the memory view
+using imgui-sys, the low-level binding.
+
+** And GLSL can be great, too!
+After battling with GLSL just to get a single color on the screen, I at least
+put them to good use.
+
+In my JS version, I wanted a CRT-like effect, since straight big quads on LCD
+screen were boring.  Unfortunately, scared of OpenGL ES, I was rendering on
+canvas, which meant that the CRT effect was done in software.  JavaScript +
+software rendering effects = 10 FPS fullscreen for an emulated 64*32 screen.
+Rather sad.
+
+So I was delighted to see that fullscreen CRT + phosphor trail effects were
+easily achievable on my machine.  And since I was using GLSL, I figured
+/someone/ had battled the language long enough to produce a nice-looking CRT
+effect that I could re-use.
+
+Turns out, there are dozens of CRT shaders (especially for retro emulation).
+Some of them are in a defunct shader language for NVIDIA hardware, Cg.  Some of
+them target the D3D shader language, HLSL.  Some of them use various versions of
+GLSL (compatible with OpenGL 2 to 4.. with mystifying shader language versions).
+
+Anyway.  I took one that was convincing enough, banged on it until it worked for
+my setup, and voilà.  Convincing effect.
+
+Though I also tested it on my work box (integrated intel chipset from '07), and
+it is unbearably slow.  Will add a flag, and might look into optimizations later
+on...
