@@ -1491,7 +1491,7 @@ direct interface for IDEs, providing error checking, completion candidates, find
 definition, etc.  But this is only a RFC, awaiting for incremental compilation
 progress in rustc.
 
-A good place to check for news on all of this is the [[https://internals.rust-lang.org/c/tools-and-infrastructure%0A][tools and infrastructure]]
+A good place to check for news on all of this is the [[https://internals.rust-lang.org/c/tools-and-infrastructure][tools and infrastructure]]
 forum.
 
 * [2016-05-11 mer.]
