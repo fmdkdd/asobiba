@@ -1842,3 +1842,53 @@ my setup, and voilà.  Convincing effect.
 Though I also tested it on my work box (integrated intel chipset from '07), and
 it is unbearably slow.  Will add a flag, and might look into optimizations later
 on...
+
+* [2016-07-11 lun.]
+** Thinking about perspective in 2D games
+For a moonshot project.  I was envisioning a side-scrolling view, but I knew
+from games I'd played that a top-down view lent more to exploration.  It got me
+thinking of perspective choices in classic games.
+
+Zelda 1 is top down.  Top-down gives you two axes of freedom.  It's much more
+"open" than a side-scroller like Mario.   In Mario, it is evident you have to go
+to the right.  There's no choice.  The difficulty is in getting there.   The
+contrast with Zelda is evident: as you start, there are already four choices of
+directions: up, left, right, and a cave.  Most of the screens have two exits or
+more.  This choice helps convey a real sense of an open world, left to explore.
+There's no pressure to the player, even though there is an implicit progression
+path.
+
+Contrast that with Zelda 2.  Zelda 2 has top-down overworld, but side-scrolling
+dungeons, towns, and encounters.  The towns feel empty and repetitive, even
+though they have people moving around.  You are just passing by.  Contrast to
+Kokoriko village in Zelda 3: the structures there hamper your movements, they
+are real.
+
+But the overworld of Zelda 2 is rather limited as well: there are obvious
+paths you should take.  The map is too much gated: you cannot go there yet,
+cannot go there yet, etc.
+
+The dungeons in Zelda 2 mostly feel like corridors.  The side-scrolling make
+combat harder than it should be.  There are strong Castlevania vibes, except
+with a puny dagger instead of a satisfying flail.
+
+Castlevania, Megaman, Duck Tales... the side-scrolling lends itself more to
+action than exploration.
+
+But Metroid shows you can still pull off exploration in a side-scroller.
+
+Roguelikes have been predominently top-down.  Rogue, Nethack, and the like.
+Although this might have been motivated by technical limitations, the choice has
+been deliberate in modern variations: Isaac and Necrodancer.  Though Isaac was
+clearly inspired by Zelda 1, and Necrodancer rhythm component might have left
+only the top-down option.  Risk of Rain chose a side-scrolling view, and it
+makes the level much less interesting.  But again, that might just be because
+levels are mostly empty, rather than caused by the perspective choice.
+
+One thing is certain: in a side-scroller, the character usually obeys gravity.
+Jumping becomes the basic way to use the second axis of freedom.  Otherwise you
+have the clunky stairs of Castlevania.  Now, a game with jumping will lend
+itself more to platforming than pure exploration.  This opens opportunities for
+combat design: the fights in Zelda 2 are more involved than in Zelda 1.  But
+Isaac shows that a top-down perspective can also have deep combat: it's mostly
+about constraining the space the player can move to.
