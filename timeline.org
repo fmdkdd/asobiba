@@ -1892,3 +1892,149 @@ itself more to platforming than pure exploration.  This opens opportunities for
 combat design: the fights in Zelda 2 are more involved than in Zelda 1.  But
 Isaac shows that a top-down perspective can also have deep combat: it's mostly
 about constraining the space the player can move to.
+
+* [2016-07-26 mar.]
+** About DSLs
+So when you build any application, at some point you realize that you want a DSL
+for maximum expressivity.
+
+But there are various needs for a DSL, and various ways to build them.
+
+For instance, in JS, there's a common idiom called a fluent API:
+
+#+BEGIN_SRC js
+$('#a')
+  .css('color', 'blue')
+  .toggle()
+  .on('click', ...)
+#+END_SRC
+
+jQuery and D3 make heavy use of it.  I like to think of it as a DSL: it really
+is a different language than plain JS, with different composition rules.  When
+you begin an expression with ~$()~, you mentally switch into jQuery mode, to
+know what you can follow.
+
+The jQuery language is actually rather simple, the usual pattern is:
+
+: $(selector)
+:     .more_selection()
+:     .manipulation()
+
+First you target the elements you want to manipulate, then you manipulate them.
+Pretty simple.
+
+It happens to like the builder pattern used in Rust to build objects:
+
+#+BEGIN_SRC rust
+let display = glium::glutin::WindowBuilder::new()
+  .with_title("Chipers")
+  .with_dimensions((screen::SCREEN_WIDTH * zoom) as u32,
+                   (screen::SCREEN_HEIGHT * zoom) as u32)
+  .build_glium()
+#+END_SRC
+
+Here we are just building a configuration object.  The grammar is also rather
+simple:
+
+: FrobinatorBuilder::new()
+:          .with_a()
+:          .with_b()
+:          ...
+:          .build()
+
+Bonus: there are actual types to these functions so the compiler can complain if
+you mess up the grammar, like ~build~ before ~new~, or two ~build~ in a row.
+
+D3 also has a fluent API.  There, the grammar can be a little more complex, with
+the select/join mechanism, and things like ~enter~.
+
+A simple language is one that builds an AST, you just compose functions:
+
+: seq(assign(var(x), plus(num(1), num(2))), print(deref(x)))
+
+The grammar is simply:
+
+: expr: seq | assign | var | plus | num | print | deref
+
+I'm wondering what happens when you take object algebras, but you only really
+need one interpreter, not many?
+
+#+BEGIN_SRC js
+/* eslint-disable */
+
+var e1 = m => { with(m) {
+  return plus(num(1), num(2))
+}}
+
+e1 //: function
+
+var interp = {
+  plus(a, b) { return a + b },
+  num(n) { return n },
+}
+
+e1(interp) //: 3
+
+// Might as well
+
+var plus = (a, b) => a + b
+var num = n => n
+
+var e2 = plus(num(1), num(2))
+
+e2 //: 3
+
+// thunk it
+
+var e2t = _ => plus(num(1), num(2))
+
+e2t //: function
+e2t() //: 3
+
+// How about partial evaluation?
+
+// Here is a program
+
+var e3 = m => { with(m) {
+  _def('rec', _ =>
+       _if(_less(0, 2),
+           _ => 1,
+           _ => _call('rec')))
+  return _call('rec')
+}}
+
+e3 //: function
+
+var _eval = {
+    _v(n) { return  },
+    _def(f, b) {
+      this[f] = b()
+    },
+    _if(c, t, e) {
+      if (c) { return t() } else { return e() }
+    },
+    _less(a, b) { return a < b },
+    _call(f, a) {
+      return this[f]
+    }
+  }
+
+e3(_eval) //: 1
+
+// Well, that's not very interesting
+
+// Thunk everything?
+
+var ast = {
+  plus(a, b) { return {
+    eval() { return a.eval() + b.eval() }
+  }},
+  num(n) { return {
+    eval() { return n }
+  }},
+}
+
+e1(ast).eval() //: 3
+#+END_SRC
+
+Okay, that was crap.  Time to forget.
