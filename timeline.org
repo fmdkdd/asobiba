@@ -2038,3 +2038,142 @@ e1(ast).eval() //: 3
 #+END_SRC
 
 Okay, that was crap.  Time to forget.
+
+* [2016-07-29 ven.]
+** Revisiting the Game Loop
+All [[https://www.youtube.com/watch?v=fdAOPHgW7qM][these]] [[https://www.youtube.com/watch?v=jTzIDmjkLQo][talks]] helped me understand how a game loop should work.  But it also
+applies to any simulation, including emulation.
+
+As usual, I prefer to go from most straightforward solution, and understand
+/why/ it's wrong, and /why/ the correct solution is not the first that pops into
+my mind.
+
+So, the first game loop I remember writing was an OpenGL Pong.
+
+I lifted code from NeHe's OpenGL tutorials, and hacked it until I had a game
+working.  The tutorial code already took care of pushing a triangle to the
+screen.  It used OpenGL direct mode, which was easy to pick up, so I just
+changed it to have two rectangles at the edges of the screen.
+
+Then came input.  Here again, the tutorial had code for grabbing input from
+Win32.  I just had to find the right place, the correct keycode, and move the
+rectangles by a reasonable amount.  The code looked like so:
+
+#+BEGIN_SRC c++
+void handle_input(...) {
+  ...
+
+  if (is_keydown(VK_UP)) {
+    player1 += 0.12f;
+  }
+  if (is_keydown(VK_DOWN)) {
+    player1 -= 0.12f;
+  }
+  if (is_keydown(VK_A)) {
+    player2 += 0.12f;
+  }
+  if (is_keydown(VK_X)) {
+    player2 -= 0.12f;
+  }
+
+  ...
+}
+#+END_SRC
+
+Now I had moving rectangles!  Then I moved to collision detection, which as I
+remember was solved with a bunch of ~if~.  Anyway, it worked great!  Surely I
+had to tweak the move values above until if felt right–not too slow, but not too
+fast either.  At this point I was rather proud.
+
+So I copied the game onto a floppy, and brought it into school.  It so happens
+that we had a computer room, to which I had access at any time between classes
+because I helped set it up, along with other students.  So I put the floppy in,
+launch the executable and behold!
+
+Oh wait, it's all going /much too fast/.  Even the slightest input will move the
+paddle half a screen worth; it's barely playable.  And the ball just passed
+right through the right paddle without hitting it!  What happened?  It was
+working right on my machine.  Needless to say, my friends were only mildly
+impressed.
+
+Of course, now I understand perfectly why it happened, and why I made that
+mistake.  The computers at my school were simply faster than the one I had at
+home.  I don't remember if there was any syncing to a fixed framerate or to the
+monitor refresh rate in the NeHe code.  If there was, it might be that I was not
+hitting that framerate at home, but I doubt it as it was /OpenGL/ for rendering
+two rectangles paddles and a square ball, not software rendering.  So maybe
+there wasn't any framerate limit in place, and the computer at the school just
+went as fast as possible.
+
+Now, having only written a handful of programs, this was my first simulation.  I
+had written interactive text-based games, but these were turn-based.  You print
+something to the screen, wait for user input, then print something else.
+Running it on different computers would get you the same results.  For other
+programs that sort numbers or print something to the screen even without
+interaction, you usually /want/ them to run faster on beefier computers.  So I
+did not even think twice at how that would play out for a simulation.
+
+In a game like Pong, you want it to behave the same from one computer to
+another, regardless of the specific hardware that supports it.  If you think
+that the ball moves at 1 pixel per frame, then the game will feel faster at a
+lower resolution, or at a higher frame rate.  OpenGL already frees you from the
+actual display resolution, by giving you a continuous space for positioning
+objects: the paddle moves by ~0.12f~ each frame, not 1 pixel.  You have to think
+of time as being continuous as well: say, the ball at ~0.3f~ each 60th of a
+second.
+
+Then you understand why you cannot write the game with a ~while(true)~ loop that
+just simulates and renders as fast as possible.
+
+** Sampling player input
+One thing that I might have missed from my [[*What’s the ideal solution to input latency anyway?][previous discussion on input latency]].
+
+Consider sampling a simple button press:
+
+: __________----------__________
+:  10ms        10ms      10ms
+
+This is continuous from the player point of view.  But if we sample, say, every
+20ms, depending on where the sampling begins, we might miss the button press
+altogether:
+
+: __________----------__________  signal
+:    |   20ms            |        samples
+: ______________________________  reconstructed
+
+Because the game has to reconstruct the signal from the sampled points, and the
+two samples are 0 (button up), the game never sees that the player has pressed
+the button:
+
+Now if have a 6ms sample rate:
+
+: __________----------__________
+:   |     |     |     |     |
+: _________------____________
+: _________-----------_______
+: ______________------_______
+: ____________-----__________
+
+If the signal changes between two sample points, there is an issue.  You don't
+know exactly when the signal changed, so you have many ways to interpret it.
+
+Usually in the code I write, I just look if the button is pressed, then simulate
+as if it was pressed for the duration of the frame.  So you end up with:
+
+: __________----------__________
+:   |     |     |     |     |
+: ______________------_______
+
+we see that are already losing information.
+
+Now, if we are sampling every 4ms:
+
+: __________----------__________
+:   |   |   |   |   |   |    |
+: __________------------_____
+
+it does not matter if we are below the Nyquist frequency for sampling, because
+the function is not continuous I guess?
+
+Anyway, if we sample at a high enough rate, hopefully the user won't notice the
+discrepancy between their input and the input synthesized at the screen.
