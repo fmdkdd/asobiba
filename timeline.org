@@ -2268,3 +2268,29 @@ the nearest parent expression.
 Okay, wrapping the expression in a try/catch allows me to prevent errors from
 polluting the rest of the results.  I added an alternative syntax for this
 behavior though, as it can be unexpected inside a try/catch.
+
+* [2016-07-31 dim.]
+** Updating ESLint
+So I want to update ESLint because the parser is out of date.  And the
+browserified file is disgustingly huge (671K).  I get the latest version, well
+they are still using browserify.  The output is now 2.7M.
+
+Okay, been looking around.  It's a bit ridiculous to charge that 2.7M, but there
+might not be an easier way to get an up to date version of ESLint.
+
+I've noticed that ESLInt is using a fork of Esprima, espree, so I can't factor
+that out.  It might make sense to use espree as well, or even Acorn.  Shouldn't
+be too much a bother since the interface seems compatible with Esprima's.
+
+Maybe I'll just try to uglify ESLint and see how that goes.
+
+Making a note here that there's a way to get back the parsed AST from ESLint.
+Should I want to reuse it.  But I'm not sure it would make a difference.
+
+Using Uglifyjs compression and mangling slims down ESLint to 808K.  An
+acceptable size bloat for the gained functionality.  Okay, let's minimize
+everything while I'm at it.
+
+aaand updated CodeMirror to latest version.
+
+Done & uploaded.
