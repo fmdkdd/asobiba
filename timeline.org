@@ -2177,3 +2177,94 @@ the function is not continuous I guess?
 
 Anyway, if we sample at a high enough rate, hopefully the user won't notice the
 discrepancy between their input and the input synthesized at the screen.
+
+* [2016-07-30 sam.]
+** Revamping S3C for evaluation inside blocks
+See [[https://github.com/fmdkdd/s3c/issues/4][issue 4]].
+
+Managed to make it work using esprima + estraverse + escodegen.
+
+First: using those on the browser is kind of a shitty situation without modules.
+I can install esprima with bower and use that directly.  Fine.  Then, estraverse
+is also on bower, so I install that.  But the file is not browser compatible,
+you have to use browserify.  Ok fine, I install browserify and run it, then get
+something I can import in my HTML and it works.  Finally I need escodegen.
+Surprise, the bower package does not work.  I try npm, I see that one can build
+a browser version from that (not using browserify mind you, but another tool,
+cjsify).  Does not build.  Ok, there's an issue and even a pull request for
+that.  You can't build the browser version from the npm package; you have to
+clone.  I clone, build, and now I have a browser build!
+
+Three related modules, three ways to get the browser version.
+
+So at the moment I have the basic functionality of evaluation markers working,
+even in blocks.  There are changes from the previous evaluation model though.
+
+Previously, we split the evaluation of the code everywhere there was a marker.
+So if an expression evaluated to an error (even a syntax error), we would
+evaluate the rest of the program without the error impacting us.
+
+Now, we evaluate the whole program at once, and collect the values of the
+expressions that have markers.  If there is an error at the start of the file,
+it's less resilient.  Also, esprima will fail to produce an AST if there is a
+single syntax error.
+
+I don't have errors working yet, but we are already losing functionality I'm not
+sure I can get back.
+
+Cleaning up the logic.  I can't use the backlog method because now because
+markers in blocks may receive multiple results.
+
+Cleaning up more, I have errors and timeouts working again.  For the moment one
+error stops evaluation for the whole program.  Maybe I can capture them by
+wrapping the expression statements in a try/catch...
+
+Speaking of which, I tried to put a marker inside a try/catch and it did not
+work.  Must investigate later.
+
+Now I'm trying to see if the code I have from my PhD manuscript works with the
+new logic.  And... SYNTAX ERROR AT LINE 2.  Esprima fails to parse ES6
+syntax... sigh.  Wait, the README says it /does/ support ES6.  Latest version is
+2.7.2, and ... the heck.  I have 2.0.0.  Well, thanks bower.  Guess I'll just
+grab the latest version and manage it by hand then.
+
+Ah, now that's funny.  Because ESLint also uses esprima, but an obsolete
+version that's bundled inside the file.  That's at least three different parser
+for the same project.
+
+Anyway, updated Esprima, and the example works!  Except I have to try/catch the
+one deliberate error.
+
+Oookay.  Fixed evaluation markers in IIFEs.
+
+Problem was twofold: first could have multiple markers associated with the same
+evaluation comment.  But only one them would receive a result back from the
+worker.  So ~undefined~.
+
+I fixed this by using a map to keep track of comments already seen and the
+marker we constructed for it.
+
+The we did not associate evaluation comments to the nearest parent expression
+statement, but to all expression statements above.  Thus, in an IIFE like:
+
+(function(x) {
+  x //:
+})(1)
+
+there would be two ExpressionStatements: ~x~, and the IIFE.  Both would be
+associated to the one evaluation comment, and receive a result from the worker.
+And the second result would overwrite the first, so ~undefined~.
+
+I fixed that by doing a first traversal of the AST to find evaluation comments
+and associate them with the nearest parent expression statement.
+
+IIFEs work.  Try/catch works.  Loops work.  ~with~ works.  Useless braces blocks
+work.
+
+I have slightly changed the semantics of the evaluation marker though.  Before,
+it would give the result of the /last expression/.  Now it gives the result of
+the nearest parent expression.
+
+Okay, wrapping the expression in a try/catch allows me to prevent errors from
+polluting the rest of the results.  I added an alternative syntax for this
+behavior though, as it can be unexpected inside a try/catch.
