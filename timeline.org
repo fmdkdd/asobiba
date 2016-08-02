@@ -2347,3 +2347,30 @@ rewrite.
 But, only now I finally find that the worker takes 25ms to actually eval the
 code.  And from hitting Ctrl+Enter to seeing the eval results, it's around
 350ms, mostly of waiting around for debouncing.
+
+* [2016-08-02 mar.]
+** Links on incremental parsing
+Not sure it would be worth it for the scale of the code that s3c deals with, but
+here are some resources on incremental parsing would I want to pursue it (or
+just out of curiosity):
+
+- [[http://harmonia.cs.berkeley.edu/papers/twagner-parsing.pdf][this paper]] from 1998 seems to cover the theory, and even provides the Java
+  code for its algorithms for incremental parsing based on LR grammars.
+- [[https://github.com/Eliah-Lakhin/papa-carlo][this project]] is an incremental parser in Scala using PEG grammars.
+
+Intuitively, we might get good mileage out of a few heuristics like looking at
+blocks: if I change a character inside function ~f~, then at worst we only need
+to reparse the node for this function.  Given a change, walk up the tree to the
+first block, throw the node, reparse and replace.  Now, 1) I don't know how
+sound that actually is, and 2) now sure how it holds with larger changes (a find
+and replace, or an undo).  The pathological example would be: erase everything.
+Now parsing from scratch the empty string should be faster than walking the tree
+checking if every node is still there.
+
+The problem can also be entirely side-stepped with an editor that would only
+allow actions that modify the AST without ever creating an invalid one.  Rather
+than editing at the character level, you edit at the AST node level.  But I
+don't know how practical that can be in the end.
+
+Anyway, all of that might not even matter for speeding up s3c, since parsing
+might not even be the biggest bottleneck.
