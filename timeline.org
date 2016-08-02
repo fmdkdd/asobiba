@@ -2294,3 +2294,56 @@ everything while I'm at it.
 aaand updated CodeMirror to latest version.
 
 Done & uploaded.
+
+* [2016-08-01 lun.]
+** Performance issues
+It didn't feel like the new version of s3c was any slower than the previous
+one.  On my home machine.  On my work machine there is perceptible delay.
+Around 500ms I would say, but can't say exactly since profiling does not even
+work under Firefox.
+
+So on my machine a full eval cycle + rewrites takes 75ms:
+- triggering the eval takes 45ms with 35ms spent in ~reval~ (15ms parsing, 8ms
+  clearing the markers on the page) and 10ms lost in ~endOperation~.
+- the remaining 30ms are spent in ~write~ calls.  Each write averages 1.5ms.
+
+And that is /after/ doing a first optimization, which is fixing the size of the
+editor.  Previously the editor had ~height: auto~.  But that meant that any
+change to its content would be written back to the DOM, even if that content was
+outside of view.  CodeMirror does not do a hit test to check if it's in view.
+Instead, you should let CodeMirror handle the scrolling.  Doing that shaved 30ms
+off.
+
+Also of note is the time to evaluate the JS: 277ms, and 47ms to finish ~init~.
+
+Reusing the AST from ESLint is a big improvement.  But, it's not equivalent.
+Linting happens sporadically (debounce + 500ms), so Ctrl+enter just after an
+edit will have an outdated AST.  Linting takes 121ms on the same buffer: 50ms
+parsing and the rest applying rules and update the DOM.  121ms is the first
+time, after I get around or below 50ms.  Maybe JIT optimizations kicking in?
+Might be worthwhile to reduce the linting delay and have linting always happen
+before we have time to trigger evaluation.  Then we reuse the AST.
+
+Was trying to reuse the ESLint AST in this fashion, but hit a weird behavior
+where after a first eval, the subsequent evals did not refresh the markers.
+The markers are empty the second time around.  Not sure why.  But it negates the
+visual feedback of clearing the markers.  Maybe I can get the visual feedback by
+flashing the Run button instead?
+
+Reusing the AST shaves 15ms off, but is not quite correct yet, since we have to
+detect if the text has changed since before the last lint, otherwise triggering
+eval reuses the obsolete AST and it does nothing.  I have to think through the
+whole pipeline as:
+
+user changed text -> debounce to 250ms -> reparse (ideally, with a parser that
+does not start from scratch) -> give AST to linter
+
+But if reval is triggered and we don't have a fresh AST, then reparse, eval, and
+save the AST for linting afterwards.
+
+In the meantime, I've got it down to spending only 10ms to reval and 10ms to
+rewrite.
+
+But, only now I finally find that the worker takes 25ms to actually eval the
+code.  And from hitting Ctrl+Enter to seeing the eval results, it's around
+350ms, mostly of waiting around for debouncing.
