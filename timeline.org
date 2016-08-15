@@ -2374,3 +2374,37 @@ don't know how practical that can be in the end.
 
 Anyway, all of that might not even matter for speeding up s3c, since parsing
 might not even be the biggest bottleneck.
+
+* [2016-08-13 sam.]
+** Using the JSON error format of rust for flycheck
+*** Restoring functionality
+Previous message parser was rather straightforward: error appeared as errors,
+warnings as warnings, and note or help lines appeared as info squiggles.
+
+In the JSON output, we have multiple spans that corresponds to squiggles.  One
+span is the primary (the root cause or main line of the error), and the others
+seem to correspond to notes in the compiler human readable output.
+
+*** Passing tests
+The JSON output is the same format for stable and nightly, but the exact output
+can change from version to version.
+
+*** Changing flags triggers a rebuild?
+There was a mention on a thread somewhere that using RUSTFLAGS to ask for
+~--error-format~ in IDE can trigger a full rebuild of cargo.  Can't reproduce in
+our setting; maybe because we don't use RUSTFLAGS but call ~cargo rustc~?
+
+*** Flycheck does not use line or column end points
+Squiggles only overlap the symbol at the given line/column, but rustc will
+output the start and end position already.  Flycheck does extra calculation for
+nothing, and it's less accurate than rustc's info.
+
+Sebastian outlined the steps for accepting column pairs in flycheck ([[https://github.com/flycheck/flycheck/issues/89][issue 89]]),
+but that might be outdated.
+
+*** Looking up explanations from Emacs
+rustc provides explanations, but I don't think that's flycheck's job to show
+them to us.  I could write a function ~explain-rust-error~ that looks at the
+code of the error under the cursor (when flycheck is loaded) and opens a
+temporary help buffer with the explanation.  Without flycheck, it asks for an
+error code interactively.
