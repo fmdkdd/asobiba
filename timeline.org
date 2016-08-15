@@ -2408,3 +2408,25 @@ them to us.  I could write a function ~explain-rust-error~ that looks at the
 code of the error under the cursor (when flycheck is loaded) and opens a
 temporary help buffer with the explanation.  Without flycheck, it asks for an
 error code interactively.
+
+* [2016-08-15 lun.]
+** Using column end points for rustc in flycheck
+I started by using cons cell for columns instead of a number.  Then flycheck
+complained the checker returned an error.  But since it caught the error, I
+could not use the debugger to trace it.
+
+There are multiple places where columns are used.  I managed to hack my way
+through them until it worked.
+
+I had assumed that just reusing the column value of rustc for the overlays would
+work... but overlays only use a single coordinate for their start and end
+points.  I had to convert the (line column) information to a single character by
+piggy-backing on ~flycheck-error-column-region~.
+
+And it works!
+
+But it is at odds with the notion of flycheck highlighting modes.  I think the
+behavior we want is: try to use the line/column info returned by the checker,
+otherwise fallback on the selected mode: lines, columns, symbols, sexps.
+
+We want to fallback because not all tools might give column end information.
