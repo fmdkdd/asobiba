@@ -2430,3 +2430,142 @@ behavior we want is: try to use the line/column info returned by the checker,
 otherwise fallback on the selected mode: lines, columns, symbols, sexps.
 
 We want to fallback because not all tools might give column end information.
+
+* [2016-08-16 mar.]
+** Imaginary property
+This morning when coming over to work, I was having an internal debate about one
+of my pet peeves: copyright.  Or, how I prefer to call it, /imaginary property/.
+
+Note that I have no claim of originality on this moniker.  To the extent that
+someone /can/ claim precedent on a juxtaposition of two words.  But after all,
+since many companies do hold rights to such juxtapositions in the form of
+slogans, brands, or product names, you never know.  I can however cast any doubt
+that I thought of it first, as I encountered it years ago on the news site
+Slashdot, where a user went by the asserting handle
+"I_do_not_believe_in_imaginary_property".
+
+I was having this internal debate.  Oh, an internal debate is basically what it
+says on the cover: me having an argument in my head, with at least two voices
+making their points in order.  These debates tend to play like a mix of chess
+and golf.  Each side is carefully considering their next move to find the best
+play.  They want to corner the opponent, and not leave him options to escape.
+At the same time, I, as the observer, want to find arguments that have the most
+weight, that raise the most interesting questions.  I try to take each argument
+charitably, as the purpose is not so to that one side wins, but to better
+understand each side's point of view.
+
+Thus, this morning debate's was about imaginary property.  Now, I like this term
+because it is not neutral at all; it's a moral statement.  Not unlike the word
+"copyright" itself: the "rights of copying" is not an innocent denomination.  If
+you accept the word, you accept its moral premise: that copying should be
+regulated by rights.  The same happens In the french terminology, where our
+copyright law is an "intellectual property law".  If you silently accept the
+name, you tacitly agree that there is such a thing as an intellectual property.
+The assumption here is that coining terms such as "intellectual property" is a
+weasely way to conjoin your mental representations of both concepts.  With this
+connection unconsciously made in your brain, you are eased into taking this
+chimeric concept as a fact.  The choice of words here is truly Orwellian.
+
+One of my mental orator disagrees with this premise, and counters with a loaded
+term of his own: you speak of intellectual property, but I say it is imaginary.
+The whole premise is refuted, so that any further arguments on the specifics of
+copyright is moot.  It steers the debate to whether it is even /possible/ to own
+thoughts in the first place.  It is powerful opening move.
+
+The answer may seem obvious.  /Cogito ergo/ dibs.  Who is doing the thinking?
+/I/ do, therefore the thoughts are mine.  Consequently, any product of these
+thoughts is also mine.  Well, that may be tautological for some, but I do not
+see how it follows.  We could again argue the premises: that there is an "I",
+that there are thoughts to be had, that our experience of individuality is not
+just an illusion, a side effect to the working of our brains.  However, at this
+point in the debate most interlocutors would question my sanity and leave the
+room (through my ears).
+
+Fine, we'll take another route.  We can concede the reality of consciousness and
+individuality.  These are convenient concepts after all—allowing me to use "I"
+all along this text without eliciting existential conundrums.  But we can still
+question the ownership of thoughts.  For me, ownership by the thinker is not
+obvious.  Here's how I /think/ it works: thoughts are not created; they are not
+elaborated by the sheer power of our will, they are merely witnessed as they
+happen in the brain.  The brain is made of neurons; neurons stimulate each other
+by chemistry and electricity; so much we know for a fact.  Now, to the best of
+my knowledge there are no sound explanation of what a thought is in term of
+neurons.  It might forever be an ill-defined notion, even if we someday crack
+the brain's secrets.  I will make the reasonable assumption that if we have any
+thoughts, they are caused by neuronal activity.  I like to picture the neurons
+as a large and dense graph.  Millions of nodes, billions of edges.  A thought is
+then a collection of /bounded walks/ along the graph.  Some neurons are excited,
+they light up, thinking happens.  Due to the size of the graph, the number of
+different walks in just one brain is practically infinite.  In this view, one
+can have infinitely many different, unique thoughts.  But two exact same walks
+would produce the exact same two thoughts.  All our thoughts thus depend on two
+factors: the brain configuration, the way it is wired up; and the initial
+stimuli, the start of the neuronal promenade.
+
+If we accept this model, we must see that in order to claim ownership over these
+thoughts, we must be in total control of these two factors.  But how can it be
+the case?  The initial stimuli is clearly not entirely in our control.  We have
+no way of forcing thoughts through some neuronal pathways.  It can /feel/ like
+we are steering the boat, but there clearly is something happening at the
+unconscious level that is doing the heavy lifting.  And the other factor is
+mostly genetic and/or environmental, depending on your stance.  If you do not
+believe in free will, then trivially you cannot say to be in control of your
+thoughts.  If you do believe in free will then you can think your daily actions
+may have an impact on your brain configuration.  But this impact is at best
+indirect.  Your thoughts are what they are because you where brought up in
+/that/ city, in /that/ neighborhood, in /that/ country, on /that/ planet, and
+you grew up with /that/ family, /these/ friends, and you read /these/ books, and
+listened to /that/ music, and visited /that/ place where you had all /these/
+memories...  All of that shaped who you are, and what you think, and it
+continually keeps doing so.  And you cannot reasonably claim ownership of all of
+these factors.
+
+-----
+
+Most proponents of copyright conflate two topics: the regulation of copying
+intellectual works, and the remuneration of the authors of said works.  A
+simplified, but too common argument goes like this: "Well, copyright is a good
+thing because that's how artists get paid."  To which one would answer: "No,
+copyright is /wrong/, because it goes against our instincts to share".  Stop!
+You are arguing different things!  One is for the remuneration of artists, while
+the other is against the criminalization of sharing!
+
+How I can conceive that we have these views:
+
+- making your mark in imaginary space, obtaining a plot of intellectual land
+
+That's by analogy to physical property.  But maybe this analogy is not
+appropriate?
+
+Intellectual colonists?  Who go and appropriate themselves a plot of
+intellectual land.  We do seem to treat intellectual property as we do physical
+property.  We can cede these lands: rights of exploitation.  We even have a word
+for intellectual property trespassing: plagiarism.
+
+
+The view of an untainted vision, the lone genius:
+
+- seeing your work as optimal?  Then any deviation would invariably lessen it.
+
+I stumble upon an indie gameboy color game.  The sources are given in a CC-NC
+license, but the music strictly forbids /derivatives/.  How can anyone sustain
+this position?
+
+Here are the musicians in question:
+
+#+BEGIN_QUOTE
+The discussion and copyrights are mostly to protect the original score and its
+original vision. I can't really give you much more info than that, mostly
+because I wasn't the one who was negotiating all of this.
+
+I had a lot of fun converting and worked really hard with the music translating
+it to GBC though. It'd be a shame to hear it modified. So I believe the
+negotiations were meant to protect our involvement as well.
+#+END_QUOTE
+
+#+BEGIN_QUOTE
+The status of the game as of now is open source with special rights, music
+cannot be used elsewhere/modified without my consent (Eric E. Hache) and no
+commercial endeavours. For the rest of the licensing, please check Affinix’s
+Github license file.
+#+END_QUOTE
