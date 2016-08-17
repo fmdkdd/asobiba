@@ -2643,3 +2643,120 @@ obviously because the inner ones shadow the ~alist~ variable.  This is a hygiene
 issue.
 
 So, two bugs for nesting.  Thanks, ~let-alist~!
+
+** Checking out the competition
+Saw a thread on users.rust about how IntelliJ-rust had great support for rust.
+Struck by a sudden fear of missing out, I investigate.
+
+IntelliJ does it own font aliasing, which has clearly gone wrong, because every
+piece of text has a thin blue outline.  Subpixel aliasing problem?  If only use
+"Greyscale" aliasing it's bearable.  But, I'm using OpenJDK, and they note that
+it is unsupported, so let's not throw the stone here.
+
+Well, first it complains that the project is using a virtual ~Cargo.toml~ file.
+Ok, I'm using vulkano to test it out, and I just read that the rust plugin does
+/not/ support this setup.  But it works with flycheck, so I assumed it was fair
+game!
+
+Okay, switching to the vulkano library inside the meta project.
+
+I can get feedback on parse errors rather quickly.  I suppose that's a plus of
+using their own parser.  On the other hand, I can't seem to get errors from the
+compiler.  I can't seem to build from the 'Build' menu, as it requires an SDK,
+but I see only Java options in there.
+
+Okay, I can use cargo commands in the 'Run' menu.  Let's try ~cargo build~.  It
+opens up a lower panel with the command output.  There are two errors (that I
+inserted), but no visual feedback in the file itself.
+
+But maybe this just a work in progress.  It does notify when a constructor field
+is missing.  So I guess they are just using their own sauce to give error
+feedback, rather than using what the compiler tell them.  That's a waste.
+
+Okay, not impressed on this front.  I thought I would at least parse the errors
+and put them in the current buffer.  Especially as there is a cool fringe
+preview: to the right of the buffer is the fringe, that shows points of
+interest.
+
+The fringe is a mix between the overview map of Sublime Text and the left margin
+of Eclipse.  The fringe always represent the whole file, not just the current
+view.  You have lines with different colors in the fringe that give different
+information.  For starts, it highlights all the places where there is a ~TODO~
+comment.  The nice thing is that if you just mouse over the fringe line, you get
+an instant preview of that place in the code.  You don't have to jump there.
+Similarly, when the cursor is on a symbol, it highlights all instances of this
+symbol in the buffer, and places line in the fringe for all of them.
+
+But, I see that the highlighting only works for symbols that are defined in the
+file.  The upshot is that it's not just a text search, it's really trying to
+give you the occurrences of /this/ symbol, and avoid false positives.  The
+downside is that sometimes it does not work at all.
+
+The find usage is the same thing, but can also report the usage across different
+files.  That's definitely a useful feature.  I wonder if it's something ~racer~
+could provide.  Having a text search with ~ag~ is useful regardless of the
+language, but having no false positives is also great.
+
+There is a block selection thing like ~expand-region~.  It is more fine grained
+than ~expand-region~ does for me in Rust, which reminds that ~expand-region~ is
+extensible and that it may be worthwhile to make it work a bit better with Rust.
+
+Automatically matching of braces when editing.  Well, this is basically
+~electric-insert~, except that:
+
+: Cpu {}
+
+deleting the closing brace in IntelliJ does not delete the opening one.  So it's
+not matched anymore.  But funnily enough, electric has the complementary quirk
+where deleting the /opening/ brace does not work when they are on different
+lines:
+
+: Cpu {
+: }
+
+I'm always fighting these modes anyway.
+
+Go to definition works, but mostly on definitions from the project.  It can go
+to structs from the stdlib, but not inside crates.  I think racer does it for
+stdlib, not sure for crates.  Curiously enough, the "Find symbol" feature can
+find those functions in crates.  Maybe it cannot determine the definition place?
+Again, no false positives, which is good.
+
+Then there are snippets.  One thing I'm not sure ~yasnippet~ provides is
+surrounding a piece of code with a snippet: start with a line, then surround by
+a loop for instance.
+
+So:
+
+- check if racer can find definitions and usages, and how to leverage that in
+  Emacs
+
+(for a quasi-correct solution that's also fast, check ~dumb-jump~ which seem to
+support rust)
+
+Other minor features:
+- see how to teach ~expand-region~ about Rust
+- check if we can surround code with a snippet
+- see how a whole-buffer fringe and buffer previews would work
+
+Currently, when doing a symbol search with ~ag~ in Spacemacs, it opens up a Helm
+window with multiple candidates.  Since there can be false positives, I need to
+to quickly glance at each line to see it's the file/location I'm interested in.
+Unfortunately, I can't seem to get Helm to open the current line in a preview
+buffer, /while keeping the list of candidates open/.  I can recall the list of
+candidates, and keep going, but that's not as fast as just glancing.
+
+I'm pretty sure that having a preview like the fringe from IntelliJ would be
+difficult to add without hacking emacs itself.  And I'm also pretty sure it has
+zero chances of being adopted.  But, we'll see what we can do.
+
+** Preview in helm-ag
+Oh, I just looked up the bindings for Helm, and hitting ~TAB~ on a candidate
+does what I want.  Even faster is ~helm-swoop~, but this works preferably on
+open buffers.
+
+Good news!
+
+** Testing dumb-jump
+Er... it works.  Sometimes.  And it's slow.  Maybe something can be done to
+improve the functionality there.  But really, I think racer covers it and more.
