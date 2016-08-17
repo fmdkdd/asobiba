@@ -2569,3 +2569,77 @@ cannot be used elsewhere/modified without my consent (Eric E. Hache) and no
 commercial endeavours. For the rest of the licensing, please check Affinix’s
 Github license file.
 #+END_QUOTE
+
+* [2016-08-17 mer.]
+** Chasing a failing build under emacs snapshot
+Trying to reproduce the Travis errors on my machine.
+
+~./autogen.sh~ suggest I run ~./autogen.sh git~ after it.  This is not done in
+the makefile.
+
+Trying to run the tests with emacs 25, cannot find ~dash~.  ~make clean~ and
+~make init~ fixes it, and now I have an error because warnings (same thing as
+the Travis build):
+
+#+BEGIN_EXAMPLE
+In toplevel form:
+flycheck.el:5443:1:Warning: Unused lexical variable ‘\.label’
+flycheck.el:5443:1:Warning: Unused lexical variable ‘\.column_start’
+flycheck.el:5443:1:Warning: Unused lexical variable ‘\.line_start’
+flycheck.el:5443:1:Warning: Unused lexical variable ‘\.file_name’
+flycheck.el:5443:1:Warning: Unused lexical variable ‘\.is_primary’
+#+END_EXAMPLE
+
+So just having warnings trigger a non-zero exit in Emacs 25?
+
+As I suspected, the warnings are caused by nested ~let-alist~ calls.  With just
+one ~let-alist~ the compiler does not complain, but when they are nested all the
+~.name~ inside the nested calls are considered free variables.
+
+Unnesting these calls make the warnings disappear.
+
+But why are warnings appearing in the first place?  My understanding is that
+~let-alist~ is a macro that adds syntactic sugar for looking up the alist.  This
+is expanded at compile-time, and thus all ~.name~ should disappear.  But the
+byte compiler still sees those that are in nested calls to ~let-alist~, so the
+macro expansion is not recursively done?
+
+#+BEGIN_SRC emacs-lisp
+(cl-prettyexpand
+ '(let-alist '((a . 1) (b . 2)) .a))
+
+(let ((alist '((a . 1) (b . 2))))
+  (let ((\.a (cdr (assq 'a alist))))
+    \.a))
+#+END_SRC
+
+#+RESULTS:
+: 1
+
+#+BEGIN_SRC emacs-lisp
+(cl-prettyexpand
+ '(let-alist '((a . 1) (b . 2))
+    (let-alist '((c . 3) (d . 4))
+      .c)))
+
+(let ((alist '((a . 1) (b . 2))))
+  (let ((\.c (cdr (assq 'c alist))))
+    (let ((alist '((c . 3) (d . 4))))
+      (let ((\.c (cdr (assq 'c alist))))
+        \.c))))
+#+END_SRC
+
+
+Ah!  The first ~let~ line triggers the warning.  This is because ~let-alist~
+thinks every ~.name~ under it should apply to it, but this is false when nesting
+calls.
+
+If the expansion happened from the innermost ~let-alist~ first, I guess this
+would work.  So it's a bug in ~let-alist~.
+
+The docstring of ~let-alist~ acknowledges that you can nest it, with the
+downside that you cannot access the variables of the outer ~let-alist~.  This is
+obviously because the inner ones shadow the ~alist~ variable.  This is a hygiene
+issue.
+
+So, two bugs for nesting.  Thanks, ~let-alist~!
