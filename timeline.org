@@ -2787,3 +2787,133 @@ And using ~pcase~:
 
 but this one requires ~alist-get-keys~, which presumably is in Emacs 25.  But
 Emacs 25 also includes ~alist-get~, which already reduces the noise a bit.
+
+* [2016-08-22 lun.]
+** Testing C# under Linux
+To see if it's bearable, and whether there are no obvious discrepancies between
+platforms when running the same app.
+
+First I installed 'dotnet-cli' from AUR.  Took forever to build.  It had a
+dependency (lttng-ust) that was in AUR also, and cower does not handle that.
+Luckily, that was the only one.
+
+Then the example of:
+
+: dotnet new
+: dotnet restore
+: dotnet run
+
+works as advertised.  Though the notice to dotnet is chilling:
+
+#+BEGIN_QUOTE
+Telemetry
+--------------
+The .NET Core tools collect usage data in order to improve your experience. The
+data is anonymous and does not include commandline arguments. The data is
+collected by Microsoft and shared with the community.  You can opt out of
+telemetry by setting a DOTNET_CLI_TELEMETRY_OPTOUT environment variable to 1
+using your favorite shell.  You can read more about .NET Core tools telemetry @
+https://aka.ms/dotnet-cli-telemetry.
+-------------------
+#+END_QUOTE
+
+Now, onto a more serious app, one from [[https://github.com/merwaaan/shader-study/][merwaaan]].  Let's build that.
+
+Wait, it does not have a 'package.json' file?  Only a 'csproj' you say?  Hmm.
+
+Do I need visual studio as well?  Ah, [[https://blogs.msdn.microsoft.com/dotnet/2015/03/18/msbuild-engine-is-now-open-source-on-github/][maybe not]], just 'msbuild.exe' should do
+it.  Let's build that.  Again, it's in AUR.  Waiting.
+
+Now let's build it.
+
+#+BEGIN_EXAMPLE
+> msbuild.exe Shaders.csproj
+Microsoft (R) Build Engine version 14.1.0.0
+Copyright (C) Microsoft Corporation. All rights reserved.
+
+...
+
+ /tmp/shader-study/Shaders/Shaders.csproj(229,5): error : This project
+references NuGet package(s) that are missing on this computer. Use NuGet Package
+Restore to download them.  For more information, see
+http://go.microsoft.com/fwlink/?LinkID=322105. The missing file is
+..\packages\AssimpNet.3.3.1\build\AssimpNet.targets.
+#+END_EXAMPLE
+
+Oh.  I need to install dependencies.  Fair enough.  Let's get this nuget thing.
+This time it's in Arch.
+
+#+BEGIN_EXAMPLE
+> nuget install
+Installing 'AssimpNet 3.3.1'.
+
+...
+
+The 'System.Runtime.InteropServices 4.1.0' package requires NuGet client version
+'2.12' or above, but the current NuGet version is '2.11.0.0'.
+#+END_EXAMPLE
+
+Hmm, okay.  Let's get nuget3 from AUR then.
+
+Once more:
+
+#+BEGIN_EXAMPLE
+> nuget install
+Feeds used:
+  /home/fmdkdd/.local/share/NuGet/Cache
+  /home/fmdkdd/.nuget/packages/
+  https://api.nuget.org/v3/index.json
+
+Restoring NuGet package System.Runtime.InteropServices.4.1.0.
+Adding package 'System.Runtime.InteropServices.4.1.0' to folder '/tmp/shader-study/Shaders'
+Added package 'System.Runtime.InteropServices.4.1.0' to folder '/tmp/shader-study/Shaders'
+#+END_EXAMPLE
+
+Smooth.  Ah, but wait, it doesn't build.  msbuild is still confused.
+
+Hmm, let's try that again.
+
+: rm -rf shader-study
+: git clone --depth=1 ...
+: cd shader-study
+: nuget restore
+
+And now...
+
+#+BEGIN_EXAMPLE
+> msbuild.exe Shaders.csproj
+GUI.cs(18,23): error CS0227: Unsafe code may only appear if compiling with /unsafe [/tmp/shader-study/Shaders/Shaders.csproj]
+GUI.cs(52,28): error CS0227: Unsafe code may only appear if compiling with /unsafe [/tmp/shader-study/Shaders/Shaders.csproj]
+GUI.cs(102,29): error CS0227: Unsafe code may only appear if compiling with /unsafe [/tmp/shader-study/Shaders/Shaders.csproj]
+#+END_EXAMPLE
+
+Interesting.  Let's try this flag:
+
+#+BEGIN_EXAMPLE
+> msbuild.exe /unsafe Shaders.csproj
+MSBUILD : error MSB1001: Unknown switch.
+Switch: /unsafe
+#+END_EXAMPLE
+
+Kidding me.  Let me ddg that for you.  Hey, that's actually the "property"
+"AllowUnsafeBlocks".
+
+#+BEGIN_EXAMPLE
+> msbuild.exe /p:AllowUnsafeBlocks="true" Shaders.csproj
+
+GUI.cs(15,33): error CS1069: The type name 'Vector4' could not be found in the
+namespace 'System.Numerics'. This type has been forwarded to assembly
+'System.Numerics, Version=4.0.0.0, Culture=neutral,
+PublicKeyToken=b77a5c561934e089' Consider adding a reference to that
+assembly. [/tmp/shader-study/Shaders/Shaders.csproj]
+#+END_EXAMPLE
+
+Hmm that looks problematic.
+
+I /do see/ a ~System.Numerics.Vectors~ package.  Maybe not quite the right
+version?  Trying to change the version in the packages.config does not work, nor
+does changing it in the (bloody XML!) csproj.
+
+I'm puzzled.
+
+And yet, surprised that it went that far.
