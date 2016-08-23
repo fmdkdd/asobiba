@@ -2917,3 +2917,40 @@ does changing it in the (bloody XML!) csproj.
 I'm puzzled.
 
 And yet, surprised that it went that far.
+
+* [2016-08-23 mar.]
+** More on that C# error
+#+BEGIN_EXAMPLE
+> strings packages/System.Numerics.Vectors.4.1.1/lib/net46/System.Numerics.Vectors.dll
+  | grep Vector4
+Vector4
+#+END_EXAMPLE
+
+There is a trace of ~Vector4~ in the package.  Not sure if it's the class
+needed, but maybe it's not loading the right thing?
+
+In the sources I built dotnet with, I can find the class:
+
+#+BEGIN_EXAMPLE
+> find . -name 'Vector4.cs'
+./src/corefx-1.0.0/src/System.Numerics.Vectors/src/System/Numerics/Vector4.cs
+#+END_EXAMPLE
+
+When calling ~msbuild.exe~, we can actually see the included libraries.  And
+here is the relevant excerpt:
+
+#+BEGIN_EXAMPLE
+-reference:/usr/lib/mono/4.5/System.Numerics.dll
+-reference:/tmp/shader-study/packages/System.Numerics.Vectors.4.1.1/lib/net46/System.Numerics.Vectors.dll
+#+END_EXAMPLE
+
+It loads ~System.Numerics~ from mono first, which is 4.5.  And then
+~System.Numerics.Vectors~ from the local package.  But [[https://msdn.microsoft.com/en-us/library/dn877639(v=vs.110).aspx][MSDN lists]] ~Vector4~ as
+"available since 4.6".
+
+Now, it seems that whatever is defined in ~Vector4.cs~ from corefx is not what's
+known as ~System.Numerics.Vector4~ in 4.6.
+
+But crucially, it means that even though the .NET runtime was open sourced, it
+still relies on Mono, the free implementation.  And Mono is lagging behind on
+versions.  What's the point?
