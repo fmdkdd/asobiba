@@ -2954,3 +2954,344 @@ known as ~System.Numerics.Vector4~ in 4.6.
 But crucially, it means that even though the .NET runtime was open sourced, it
 still relies on Mono, the free implementation.  And Mono is lagging behind on
 versions.  What's the point?
+* [2016-08-26 ven.]
+** More tries at let-alist
+Ronan gave me a couple of tips that may help.
+
+- https://www.reddit.com/r/emacs/comments/2u5uzq/i_wrote_a_somewhat_useful_elisp_macro/
+- http://www.greghendershott.com/fear-of-macros/
+
+*** Can ~eval~ help?
+The [[https://www.reddit.com/r/emacs/comments/2u5uzq/i_wrote_a_somewhat_useful_elisp_macro/][first link]] highlights the use of ~eval~ around a macro call.
+
+#+BEGIN_SRC elisp
+(cl-prettyexpand
+ '(let-alist '((a . 1) (b . 2))
+  .a
+  (let-alist '((a . 2) (c . 3))
+    .c)))
+
+(let ((alist '((a . 1) (b . 2))))
+  (let ((\.a (cdr (assq 'a alist)))
+        (\.c (cdr (assq 'c alist))))
+    \.a
+    (let ((alist '((a . 2) (c . 3))))
+      (let ((\.c (cdr (assq 'c alist))))
+        \.c))))
+
+
+;; Trying to add `eval' to force evaluation of the inner let-alist.
+(cl-prettyexpand
+ '(let-alist '((a . 1) (b . 2))
+    .a
+    (eval '(let-alist '((a . 2) (c . 3))
+             .c))))
+
+(let ((alist '((a . 1) (b . 2))))
+  (let ((\.a (cdr (assq 'a alist)))
+        (\.c (cdr (assq 'c alist))))
+    \.a
+    (eval '(let-alist (quote ((a . 2) (c . 3))) \.c))))
+
+
+;; Okay, maybe with backquotes?
+(cl-prettyexpand
+ '(let-alist '((a . 1) (b . 2))
+    .a
+    (eval `(let-alist '((a . 2) (c . 3))
+             .c))))
+
+(let ((alist '((a . 1) (b . 2))))
+  (let ((\.a (cdr (assq 'a alist)))
+        (\.c (cdr (assq 'c alist))))
+    \.a
+    (eval '(let-alist (quote ((a . 2) (c . 3))) \.c))))
+
+
+;; Nah, backquotes are like quotes when there are no commas
+#+END_SRC
+
+So ~eval~ does not actually force the evaluation of the inner let-alist, but
+rather delays the macro-expansion.  That's not what I want here.
+
+*** Fixing let-alist
+Failed to mention last time that I spent hours trying to come up with a correct
+macro to do what let-alist does.
+
+One fix that worked was to prevent ~let-alist--deep-dot-search~ from expanding
+dot symbols ('.a.b') inside another ~let-alist~.  Actually, I even made it to
+stop searching when a supplied predicate function would return true on the
+current node.
+
+(Which could have been made more generally into a tree recursing function
+operating on a predicate, like ~-tree-map-nodes~ from dash)
+
+So the first ~let~ did not generate unused bindings.  But we could still not
+access outer let-alist bindings, because if you look at this expansion:
+
+#+BEGIN_SRC elisp
+(cl-prettyexpand
+ '(let-alist '((a . 1) (b . 2))
+   (let-alist '((a . 2) (c . 3))
+    .b)))
+
+(let ((alist '((a . 1) (b . 2))))
+  (let ((\.b (cdr (assq 'b alist))))
+    (let ((alist '((a . 2) (c . 3))))
+      (let ((\.b (cdr (assq 'b alist))))
+        \.b))))
+#+END_SRC
+
+The second let will always bind all dotted symbols under it, shadowing the outer
+bindings.  Even though 'b' is not a key in the inner alist, it still tries to
+get that key.
+
+Now, let-alist supports looking up deeply into nested alists:
+
+#+BEGIN_SRC elisp
+(let-alist '((a . 1) (b . ((a . 2) (b . 3))))
+    .b.a)
+#+END_SRC
+
+#+RESULTS:
+: 2
+
+But in our case the JSON objects has arrays, so that's why we need a second
+let-alist call.
+
+I tried to define a macro, ~alist-let~ that would have worked like so:
+
+#+BEGIN_SRC elisp
+(alist-let (a. '((a . 1) (b . 2)))
+   (a. 'a))
+;; => 1
+#+END_SRC
+
+The plan was for that to expand to:
+
+#+BEGIN_SRC elisp
+(let ((alist-a '((a . 1) (b . 2))))
+  (cl-macrolet  ((a. (field) `(cdr (assq ,field alist-a))))
+    (a. 'a)))
+#+END_SRC
+
+which in turn would expand to:
+
+#+BEGIN_SRC elisp
+(let ((alist-a '((a . 1) (b . 2))))
+   (cdr (assq 'a alist-a)))
+#+END_SRC
+
+But since ~alist-let~ was a macro that invoked ~cl-macrolet~, I never got it to
+work correctly.  The tricky part was to pass ~alist-a~ to ~cl-macrolet~ even
+though the binding inside ~cl-macrolet~ is inside a backquote.
+
+Maybe I should have used two macros?
+
+Also, it's not zero-cost still, since all calls to ~a.~ would expand to ~cdr
+assq~.  With ~let-alist~, the looking up is done once in a surround ~let~.
+
+So the expansion of ~alist-let~ that you want is:
+
+#+BEGIN_SRC elisp
+(let* ((alist-a '((a . 1) (b . 2)))
+       (alist-a-0 (cdr (assq 'a alist-a))))
+   alist-a-0)
+#+END_SRC
+
+*** Gensym trouble
+Version 1 of my ~alist-let~ macro:
+
+#+BEGIN_SRC elisp
+(defmacro alist-let (getter alist &rest body)
+  (declare (indent 2))
+  `(let ((alist-a ,alist))
+     (cl-macrolet ((,getter (field) `(cdr (assq ,field alist-a))))
+       ,@body)))
+
+(cl-prettyexpand
+ '(alist-let a. '((a . 1) (b . 2))
+    (a. 'a)))
+
+(let ((alist-a '((a . 1) (b . 2))))
+  (progn
+    (cdr (assq 'a alist-a))))
+#+END_SRC
+
+Works, but ~alist-a~ is not hygienic:
+
+#+BEGIN_SRC elisp
+(defmacro alist-let (getter alist &rest body)
+  (declare (indent 2))
+  `(let ((alist-a ,alist))
+     (cl-macrolet ((,getter (field) `(cdr (assq ,field alist-a))))
+       ,@body)))
+
+(alist-let a. '((a . 1) (b . 2))
+  alist-a)
+#+END_SRC
+
+#+RESULTS:
+: ((a . 1) (b . 2))
+
+So you want to generate a symbol to use instead of ~alist-a~:
+
+#+BEGIN_SRC elisp
+(defmacro alist-let (getter alist &rest body)
+  (declare (indent 2))
+  (let ((alist-a (gensym)))
+    `(let ((,alist-a ,alist))
+       (cl-macrolet ((,getter (field) `(cdr (assq ,field ,alist-a))))
+         ,@body))))
+#+END_SRC
+
+Now, as I understand it, ~alist-a~ is a symbol that's generated at expansion
+time by ~gensym~.  The macro expands to the same let as before, except now the
+binding ~alist-a~ is variable, that's why there is a comma in front.  Inside
+~cl-macrolet~, ~alist-a~ must also refer to the generated symbol, hence the
+comma.
+
+The problem is that the expansion of ~cl-macrolet~ fails to find ~alist-a~.
+
+We can check that binding the gensym at expansion works:
+
+#+BEGIN_SRC elisp
+(defmacro alist-let (getter alist &rest body)
+  (declare (indent 2))
+  (let ((alist-a (gensym)))
+    `(let ((,alist-a ,alist))
+         ,@body)))
+
+(cl-prettyexpand
+ '(alist-let a. '((a . 1) (b . 2))
+    (a. 'a)))
+
+(let ((G23147 '((a . 1) (b . 2))))
+  (a\. 'a))
+#+END_SRC
+
+Using ~pp-macroexpand~, we can see that indeed after expanding ~alist-let~, but
+not ~cl-macrolet~, we get:
+
+#+BEGIN_SRC elisp
+(pp-macroexpand-expression
+ '(alist-let a. '((a . 1) (b . 2))
+    (a. 'a)))
+
+(let ((G23158 '((a . 1) (b . 2))))
+  (cl-macrolet
+      ((a\. (field) `(cdr (assq ,field ,alist-a))))
+    (a\. 'a)))
+#+END_SRC
+
+~alist-a~ is not expanded, and the binding is lost.  So that's why it fails.
+
+Is it because of the second backquote?
+
+#+BEGIN_SRC elisp
+(defmacro test ()
+  (let ((var "somethin"))
+    `(,var `(,var))))
+
+(cl-prettyexpand
+ '(test))
+
+("somethin" (list var))
+#+END_SRC
+
+#+BEGIN_SRC elisp
+(defmacro test ()
+  (let ((var "somethin"))
+    `(,var (,var))))
+
+(cl-prettyexpand
+ '(test))
+("somethin" ("somethin"))
+#+END_SRC
+
+Ah, indeed.
+
+Another way to see why it's wrong is to look at the line of the macrolet:
+
+: (cl-macrolet ((,getter (field) `(cdr (assq ,field ,alist-a))))
+
+See, both ~field~ and ~alist-a~ have a comma in front.  But clearly, we want
+~alist-a~ to be expanded when ~alist-let~ expands, and ~field~ to be expanded
+only when the macrolet ~getter~ expands.
+
+So what if we build the binding form of ~cl-macrolet~ beforehand?
+
+#+BEGIN_SRC elisp
+(defmacro alist-let (getter alist &rest body)
+  (declare (indent 2))
+  (let* ((alist-a (gensym))
+         (str (read (format "`(cdr (assq ,field %s))" alist-a))))
+    `(let ((,alist-a ,alist))
+       (cl-macrolet ((,getter (field) ,str))
+         ,@body))))
+
+(cl-prettyexpand
+ '(alist-let a. '((a . 1) (b . 2))
+    (a. 'a)))
+
+(let ((G23159 '((a . 1) (b . 2))))
+  (progn
+    (cdr (assq 'a G23159))))
+#+END_SRC
+
+Ah!  It works.  Gosh.  I spent hours trying to workaround that, and even tried
+the string route with ~eval~.  I was so tired that I did not bother taking notes
+as I went along, but taking notes would have forced me to work out what was
+wrong in the approach.
+
+Anyway, there is still the downside of not saving all these lookups into a let.
+
+*** Another alternative to let-alist
+The [[http://www.greghendershott.com/fear-of-macros/pattern-matching.html#%2528part._hash..refs%2529][second link]] Ronan gave me was about a Racket macro with a very similar goal.
+Given a parsed JSON 'js' (in Racket, these are parsed to hashmaps), we can get a
+value out of it using dot notation:
+
+: (hash.refs js.a.b.c)
+
+which is just syntactic sugar for:
+
+: (hash-refs js '(a b c))
+
+which is just a function.
+
+Maybe following this route would be easier for an alternative to ~let-alist~
+work.  But you really want a zero-cost abstraction, so using a macro to provide
+syntactic sugar for a function call is a no go.  You need to generate the code
+for lookups at compile time.
+
+*** Destructuring using dash
+Ronan also found that there is alist destructuring in the latest dash (2.13).
+
+#+BEGIN_SRC elisp
+(-let [(&alist 'a a) '((a . 1) (b . 2))]
+  a)
+#+END_SRC
+
+#+RESULTS:
+: 1
+
+And to get values from nested alists:
+
+#+BEGIN_SRC elisp
+(-let [(&alist
+        'a a
+        'c (&alist 'ca ca))
+       '((a . 1) (b . 2) (c . ((ca . 3))))]
+  ca)
+#+END_SRC
+
+#+RESULTS:
+: 3
+
+So this would definitely work.  You just have to destructure in advance.
+
+*** Silence the warnings
+Otherwise, since the issue is that nested ~let-alist~ calls issue a warning when
+byte-compiling, but the expanded code is actually harmless, why not just silence
+the warnings?  ~with-no-warnings~ silence warnings in its body.  The problem is
+it disables /all/ warnings, and not just the unused variables.
