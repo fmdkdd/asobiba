@@ -3246,6 +3246,86 @@ wrong in the approach.
 
 Anyway, there is still the downside of not saving all these lookups into a let.
 
+But elisp has one last surprise in store for me!  When I try to nest ~alist-let~
+calls:
+
+#+BEGIN_SRC elisp
+(alist-let a. '((a . 1) (b . 2))
+  (alist-let b. '((c . 3) (d . 4))
+    (b. 'c)))
+;; => Symbol's value as a variable is void: G23170
+#+END_SRC
+
+Damned!  How does the expansion looks like?
+
+#+BEGIN_SRC elisp
+(cl-prettyexpand
+'(alist-let a. '((a . 1) (b . 2))
+  (alist-let b. '((c . 3) (d . 4))
+   (b. 'c))))
+
+(let ((G23198 '((a . 1) (b . 2))))
+  (progn
+    (let ((G23199 '((c . 3) (d . 4))))
+      (progn
+        (cdr (assq 'c G23199))))))
+#+END_SRC
+
+#+RESULTS:
+: 3
+
+Wait, it works?  What the hell?  Expansion works, but not evaluation?
+
+Actually, it also fails without nesting:
+
+#+BEGIN_SRC elisp
+(defmacro alist-let (getter alist &rest body)
+  (declare (indent 2))
+  (let* ((alist-a (gensym))
+         (str (read (format "`(cdr (assq ,field %s))" alist-a))))
+    `(let ((,alist-a ,alist))
+       (cl-macrolet ((,getter (field) ,str))
+         ,@body))))
+
+(alist-let a. '((a . 1) (b . 2))
+  (a. 'b))
+;; => Symbol's value as a variable is void: G23199
+#+END_SRC
+
+Now, a clue might be that even a simple ~macroexpand~ also fails:
+
+#+BEGIN_SRC elisp
+(macroexpand
+ (alist-let a. '((a . 1) (b . 2))
+     (a. 'b)))
+;; => Symbol's value as a variable is void: G23200
+#+END_SRC
+
+Whereas ~cl-prettyexpand~ does not.  I've read somewhere that CommonLisp has
+different macro expansion semantics than Elisp.  The ~cl-~ prefix stands for
+CommonLisp.  Coincidence?
+
+Well, macrostep-mode seems to agree with me:
+
+#+BEGIN_SRC elisp
+(let
+    ((G24180 '((a . 1) (b . 2))))
+  (cl-macrolet
+      ((a\. (field) `(cdr (assq ,field G24180))))
+    (a\. 'b)))
+#+END_SRC
+
+then:
+
+#+BEGIN_SRC lisp
+(let
+    ((G24180 '((a . 1) (b . 2))))
+  (progn
+    (cdr (assq 'b G24180))))
+#+END_SRC
+
+I think I need to consult an expert.
+
 *** Another alternative to let-alist
 The [[http://www.greghendershott.com/fear-of-macros/pattern-matching.html#%2528part._hash..refs%2529][second link]] Ronan gave me was about a Racket macro with a very similar goal.
 Given a parsed JSON 'js' (in Racket, these are parsed to hashmaps), we can get a
