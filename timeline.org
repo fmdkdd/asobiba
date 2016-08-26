@@ -3324,6 +3324,44 @@ then:
     (cdr (assq 'b G24180))))
 #+END_SRC
 
+So if the expansion under CommonLisp rules is not the same as under the Elisp
+rules, I get a working expression but evaluating the expression without
+expanding it first fails.  Still, it's weird that macrostep concurs with
+~cl-prettyexpand~ then.
+
+But the debugger reveals that is not the correct explanation.  If I 'C-x C-e'
+the expression:
+
+#+BEGIN_SRC elisp
+(alist-let a. '((a . 1) (b . 2))
+  (a. 'b))
+#+END_SRC
+
+Here is what the debugger says:
+
+#+BEGIN_SRC elisp
+Debugger entered--Lisp error: (void-variable G56132)
+  (assq (quote b) G56132)
+  (cdr (assq (quote b) G56132))
+  (progn (cdr (assq (quote b) G56132)))
+  (let ((G56132 (quote ((a . 1) (b . 2))))) (progn (cdr (assq (quote b) G56132))))
+  eval((let ((G56132 (quote ((a . 1) (b . 2))))) (progn (cdr (assq (quote b) G56132)))) nil)
+#+END_SRC
+
+So actually, the debugger sees exactly what ~cl-prettyexpand~ gives me.  But for
+some reason, it claims to fail evaluating that?
+
+If I execute myself:
+
+#+BEGIN_SRC elisp
+(let ((G56132 (quote ((a . 1) (b . 2))))) (progn (cdr (assq (quote b) G56132))))
+#+END_SRC
+
+#+RESULTS:
+: 2
+
+It works.  Grumble.
+
 I think I need to consult an expert.
 
 *** Another alternative to let-alist
