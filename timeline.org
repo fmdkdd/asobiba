@@ -3364,6 +3364,185 @@ It works.  Grumble.
 
 I think I need to consult an expert.
 
+Trying one more thing.  I read on the emacs-devel thread announcing ~let-alist~
+that ~make-symbol~ is to be preferred to ~gensym~.  Don't know why.  Does it
+make a difference here?
+
+#+BEGIN_SRC elisp
+(defmacro alist-let (getter alist &rest body)
+  (declare (indent 2))
+  (let* ((alist-a (make-symbol "alist"))
+         (str (read (format "`(cdr (assq ,field %s))" alist-a))))
+    `(let ((,alist-a ,alist))
+       (cl-macrolet ((,getter (field) ,str))
+         ,@body))))
+
+(cl-prettyexpand
+ '(alist-let a. '((a . 1) (b . 2))
+   (a. 'b)))
+
+(let ((alist '((a . 1) (b . 2))))
+  (progn
+    (cdr (assq 'b alist))))
+
+
+(alist-let a. '((a . 1) (b . 2))
+           (a. 'b))
+;; => Error
+#+END_SRC
+
+Nope.
+
+I want to get to the bottom of this.  Let's make a minimal test case.
+
+This still fails, but executing the expansion does not:
+
+#+BEGIN_SRC elisp
+(defmacro test-gensym ()
+  (let* ((sym (gensym))
+         (sexp (read (format "%s" sym))))
+    `(let ((,sym 12))
+       ,sexp)))
+
+(cl-prettyexpand
+ '(test-gensym))
+
+(let ((G57457 12))
+  G57457) ; => 12
+
+(test-gensym) ; => Error
+#+END_SRC
+
+While the very similar:
+
+#+BEGIN_SRC elisp
+(defmacro test-gensym ()
+  (let* ((sym (gensym))
+         (sexp `,sym))
+    `(let ((,sym 12))
+       ,sexp)))
+#+END_SRC
+
+works.
+
+So I'm assuming that reading a symbol makes it different somehow?
+
+#+BEGIN_SRC elisp
+(let (sym (gensym))
+  (eq sym `,sym)) ; => t
+
+(let (sym (gensym))
+  (eq sym (read (format "%s" sym)))) ; => t
+#+END_SRC
+
+Nope.  Weird.
+
+Still:
+
+#+BEGIN_SRC elisp
+(defmacro test-gensym ()
+  (let* ((sym (gensym))
+         (read-sym (read (format "%s" sym))))
+    `(let ((,sym 42))
+       ,sym)))
+
+(cl-prettyexpand
+ '(test-gensym))
+
+(let ((G57812 42))
+  G57812) ; => 42
+
+(test-gensym) ; => 42
+#+END_SRC
+
+Reading about gensym in the manual, I find a related gentemp that creates an
+interned symbol.  With gentemp, it works:
+
+#+BEGIN_SRC elisp
+(defmacro test-gensym ()
+  (let* ((sym (gentemp))
+         (read-sym (read (format "%s" sym))))
+    `(let ((,sym 42))
+       ,read-sym)))
+
+(test-gensym) ; => 42
+#+END_SRC
+
+Does interning means we can still have name clashes?  If I know G57833 to be the
+next generated symbol?
+
+#+BEGIN_SRC elisp
+(defmacro test-gensym (&rest body)
+  (let* ((sym (gentemp)))
+    `(let ((,sym 42))
+       ,@body)))
+
+(test-gensym G57833) ; => error G57833 not found
+#+END_SRC
+
+Hmm.  Actually, gentemp keeps increasing when the symbol exists.  So it's
+guaranteed to be fresh.
+
+Does this mean...?
+
+#+BEGIN_SRC elisp :results verbatim
+(defmacro alist-let (getter alist &rest body)
+  (declare (indent 2))
+  (let* ((alist-name (gentemp))
+         (str (read (format "`(cdr (assq ,field %s))" alist-name))))
+    `(let ((,alist-name ,alist))
+       (cl-macrolet ((,getter (field) ,str))
+         ,@body))))
+
+(alist-let a. '((a . 1) (b . 2))
+  (alist-let b. '((c . 3) (d . 4))
+    (list (a. 'a) (b. 'c))))
+#+END_SRC
+
+#+RESULTS:
+: (1 3)
+
+Yes!  YES!
+
+So it:
+- provides a shortcut for getting values out of alists
+- can be nested
+- is hygienic
+
+The only downside is that each call to ~(a. 'a)~ expands to ~(cdr (assq~, which
+maybe you want to avoid.  But, the good news is, if you want to save the result,
+you can do it YOURSELF:
+
+#+BEGIN_SRC elisp :results verbatim
+(defmacro alist-let (getter alist &rest body)
+  (declare (indent 2))
+  (let* ((alist-name (gentemp))
+         (str (read (format "`(cdr (assq ,field %s))" alist-name))))
+    `(let ((,alist-name ,alist))
+       (cl-macrolet ((,getter (field) ,str))
+         ,@body))))
+
+(cl-prettyexpand
+'(alist-let a. '((a . 1) (b . 2))
+  (alist-let b. '((c . 3) (d . 4))
+    (let ((val (a. 'a)))
+     (list val val (b. 'c))))))
+
+(let ((G57854 '((a . 1) (b . 2))))
+  (progn
+    (let ((G57855 '((c . 3) (d . 4))))
+      (progn
+        (let ((val (cdr (assq 'a G57854))))
+          (list val val (cdr (assq 'c G57855))))))))
+#+END_SRC
+
+#+RESULTS:
+(1 1 3)
+
+Considering that to have results auto-memoize you would need to do a tree
+recursion when macro expanding... which led to one of the (fixable) issue with
+~let-alist~... I'd say it's not worth it.  I prefer to be explicit anyway.
+
 *** Another alternative to let-alist
 The [[http://www.greghendershott.com/fear-of-macros/pattern-matching.html#%2528part._hash..refs%2529][second link]] Ronan gave me was about a Racket macro with a very similar goal.
 Given a parsed JSON 'js' (in Racket, these are parsed to hashmaps), we can get a
