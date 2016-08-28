@@ -3592,3 +3592,26 @@ Otherwise, since the issue is that nested ~let-alist~ calls issue a warning when
 byte-compiling, but the expanded code is actually harmless, why not just silence
 the warnings?  ~with-no-warnings~ silence warnings in its body.  The problem is
 it disables /all/ warnings, and not just the unused variables.
+
+* [2016-08-28 dim.]
+** Compiling chipers on Windows
+Following the instructions on rust-lang, `cargo update` to update the
+dependencies, and it failed to build in my code.
+
+Turns out imgui updated to use glium 0.15 now, and I was using 0.14, which
+caused hairy "unsatisfied trait bound" errors since we weren't targeting the
+same code... sigh.
+
+Anyway, after that and a trivial arguments update, it built.
+
+** Compiling rust windows binaries from linux
+Can I cross-compile easily?
+
+[[https://github.com/rust-lang-nursery/rustup.rs#cross-compilation][Let's see]].
+
+: rustup target add x86_64-pc-windows-msvc
+: rustup run stable cargo build --release --target=x86_64-pc-windows-msvc
+
+Argh, an error because std was not compiled with the correct version.  Hmm, this
+looks like a deep rabbit hole I don't want to go into right now.  Here is [[#+BEGIN_EXAMPLE][a
+guide]] for the moment.
