@@ -3615,3 +3615,8 @@ Can I cross-compile easily?
 Argh, an error because std was not compiled with the correct version.  Hmm, this
 looks like a deep rabbit hole I don't want to go into right now.  Here is [[#+BEGIN_EXAMPLE][a
 guide]] for the moment.
+
+* [2016-08-29 lun.]
+** Low-resolution rendering in OpenGL
+To achieve a more low-tech look.  [[https://stackoverflow.com/questions/7071090/low-resolution-in-opengl-to-mimic-older-games][This SO answer]] seems to be it.  Just have to
+find out how to do the same thing in glium.
