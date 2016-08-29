@@ -46,6 +46,45 @@ fn main() {
   let mut ui_state = UiState::new();
   let mut last_ui_time = Instant::now();
 
+  // Init the hero
+  let shape = vec![
+    Vertex { position: [-0.5, -0.5] },
+    Vertex { position: [ 0.0,  0.5] },
+    Vertex { position: [ 0.0, -0.25] },
+    Vertex { position: [ 0.5, -0.5] },
+    Vertex { position: [ 0.0,  0.5] },
+    Vertex { position: [ 0.0, -0.25] },
+  ];
+
+  let mut position = [0.0f32, 0.0f32];
+
+  let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
+  let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+
+  let vertex_shader_src = r#"
+    #version 140
+
+    in vec2 position;
+
+    uniform vec2 displacement;
+
+    void main() {
+        gl_Position = vec4(position + displacement, 0.0, 1.0);
+    }
+"#;
+
+  let fragment_shader_src = r#"
+    #version 140
+
+    out vec4 color;
+
+    void main() {
+        color = vec4(1.0, 1.0, 0.0, 1.0);
+    }
+"#;
+
+  let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
+
   // Main loop
   'running: loop {
     for event in display.poll_events() {
@@ -54,17 +93,15 @@ fn main() {
           | Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Escape))
           => { break 'running },
 
-        // Event::KeyboardInput(ElementState::Pressed, _, Some(vkey)) => {
-        //   match vkey {
-        //     _ => ()
-        //   }
-        // },
-
-        // Event::KeyboardInput(ElementState::Released, _, Some(vkey)) => {
-        //   match vkey {
-        //     _ => ()
-        //   }
-        // },
+        Event::KeyboardInput(ElementState::Pressed, _, Some(vkey)) => {
+          match vkey {
+            VirtualKeyCode::A => position[0] -= 0.1,
+            VirtualKeyCode::S => position[0] += 0.1,
+            VirtualKeyCode::W => position[1] += 0.1,
+            VirtualKeyCode::R => position[1] -= 0.1,
+            _ => ()
+          }
+        },
 
         Event::MouseMoved(x, y) => ui_state.mouse_pos = (x, y),
         Event::MouseInput(state, MouseButton::Left) =>
@@ -85,23 +122,38 @@ fn main() {
     ui_state.update_mouse(&mut imgui);
     ui_state.mouse_wheel = 0.0; // Clear value for this frame
 
-    // Create frame and signal ImGui
     let now = Instant::now();
     let delta = now - last_ui_time;
     let delta_s = delta.as_secs() as f32 + delta.subsec_nanos() as f32 / 1_000_000_000.0;
     last_ui_time = now;
 
+    // Create frame
     let mut frame = display.draw();
     frame.clear_color(0.0, 0.0, 0.0, 0.0);
 
+    // Draw the hero
+    frame.draw(&vertex_buffer, &indices, &program,
+               &uniform! { displacement: position },
+               &Default::default()).unwrap();
+
+    // Draw GUI
     let window = display.get_window().unwrap();
     let size_points = window.get_inner_size_points().unwrap();
     let size_pixels = window.get_inner_size_pixels().unwrap();
     let ui = imgui.frame(size_points, size_pixels, delta_s);
 
-    ui.text(format!("Hello!").into());
+    ui.text(format!("{:?}", position).into());
 
+    // Render
     imgui_renderer.render(&mut frame, ui).unwrap();
     frame.finish().unwrap();
   }
 }
+
+
+#[derive(Copy, Clone)]
+struct Vertex {
+  position: [f32; 2],
+}
+
+implement_vertex!(Vertex, position);
