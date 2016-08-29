@@ -1,0 +1,8 @@
+[package]
+name = "space-bang-bang"
+version = "0.1.0"
+authors = ["fmdkdd <fmdkdd@gmail.com>"]
+
+[dependencies]
+glium = "0.15"
+imgui = { git = "https://github.com/Gekkio/imgui-rs" }
