@@ -3620,3 +3620,22 @@ guide]] for the moment.
 ** Low-resolution rendering in OpenGL
 To achieve a more low-tech look.  [[https://stackoverflow.com/questions/7071090/low-resolution-in-opengl-to-mimic-older-games][This SO answer]] seems to be it.  Just have to
 find out how to do the same thing in glium.
+
+* [2016-08-31 mer.]
+** Reading up on how modern (>1) OpenGL works
+My knowledge of OpenGL is largely based on direct mode.  Pre-shaders.
+
+The r/opengl subreddit has a few links to get started.
+
+Here is [[http://duriansoftware.com/joe/An-intro-to-modern-OpenGL.-Table-of-Contents.html][the one]] I'm reading right now.
+
+It confirms that framebuffer objects are just target to render to.  I could
+render to several different FBOs without directly rendering to the screen.
+But how to render an FBO to the screen?  By using it as texture and drawing it
+on a quad?
+
+Also, I did not understand how to combine shaders or do "multiple pass" of
+rendering in chipers.  I just baked two fragment shaders in one.  But it seems
+we can actually have multiple draw calls, with potentially different programs
+(hence, different shaders, or even buffer objects).  How do the multiple draw
+calls compose however?
