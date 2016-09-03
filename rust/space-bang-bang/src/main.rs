@@ -66,7 +66,6 @@ fn main() {
   let mut position = [0.0f32, 0.0f32];
   let mut heading: u8 = 0u8;
   const HEADING_TO_RADS: f32 = std::f32::consts::PI / (128 as f32);
-  let mut acceleration = 0.0f32;
   let mut velocity = [0.0f32, 0.0f32];
 
   let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
@@ -106,6 +105,12 @@ fn main() {
 
   let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
 
+  // Keep track of player actions we need to emulate during the frame
+  let mut turning_left = false;
+  let mut turning_right = false;
+  let mut boosting = false;
+  let mut braking = false;
+
   // Main loop
   'running: loop {
     for event in display.poll_events() {
@@ -116,10 +121,20 @@ fn main() {
 
         Event::KeyboardInput(ElementState::Pressed, _, Some(vkey)) => {
           match vkey {
-            VirtualKeyCode::A => heading = heading.wrapping_add(4),
-            VirtualKeyCode::S => heading = heading.wrapping_sub(4),
-            VirtualKeyCode::W => acceleration = 0.01,
-            VirtualKeyCode::R => acceleration = -0.5,
+            VirtualKeyCode::A => turning_left = true,
+            VirtualKeyCode::S => turning_right = true,
+            VirtualKeyCode::W => boosting = true,
+            VirtualKeyCode::R => braking = true,
+            _ => ()
+          }
+        },
+
+        Event::KeyboardInput(ElementState::Released, _, Some(vkey)) => {
+          match vkey {
+            VirtualKeyCode::A => turning_left = false,
+            VirtualKeyCode::S => turning_right = false,
+            VirtualKeyCode::W => boosting = false,
+            VirtualKeyCode::R => braking = false,
             _ => ()
           }
         },
@@ -154,15 +169,24 @@ fn main() {
     // Clear the frame, otherwise welcome to Windows 95 error mode.
     frame.clear_color(0.0, 0.0, 0.0, 0.0);
 
-    // Update the ship position based on its current heading and acceleration
-    let r = heading as f32 * HEADING_TO_RADS;
-    velocity[0] += acceleration * r.cos();
-    velocity[1] += acceleration * r.sin();
+    // Turning changes the heading
+    if turning_left { heading = heading.wrapping_add(4) }
+    if turning_right { heading = heading.wrapping_sub(4) }
+
+    // Boosting increases velocity in the direction we are headed
+    let heading_rad = heading as f32 * HEADING_TO_RADS;
+    if boosting {
+      velocity[0] += 0.01 * heading_rad.cos();
+      velocity[1] += 0.01 * heading_rad.sin();
+    }
 
     // Clamp velocity by its magnitude.  So, convert to polar and back
     {
       let mut r = f32::sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
       let p = velocity[1].atan2(velocity[0]);
+
+      // Braking reduces velocity magnitude (multiply by <1)
+      if braking { r *= 0.9 }
 
       r = clamp(r, 0.0, 0.2);
 
@@ -170,6 +194,7 @@ fn main() {
       velocity[1] = r * p.sin();
     }
 
+    // Update the ship position based on its velocity
     position[0] += velocity[0];
     position[1] += velocity[1];
 
@@ -180,10 +205,10 @@ fn main() {
     else if position[1] > SHIP_SCALE { position[1] -= 2.0 * SHIP_SCALE }
 
     // Update the ship projection matrix
-    projection[0][0] = r.cos();
-    projection[0][1] = r.sin();
-    projection[1][0] = -r.sin();
-    projection[1][1] = r.cos();
+    projection[0][0] = heading_rad.cos();
+    projection[0][1] = heading_rad.sin();
+    projection[1][0] = -heading_rad.sin();
+    projection[1][1] = heading_rad.cos();
     projection[3][0] = position[0];
     projection[3][1] = position[1];
 
@@ -201,16 +226,12 @@ fn main() {
     ui.text(format!("position: {:?}", position).into());
     ui.text(format!("heading: {}", heading).into());
     ui.text(format!("velocity: {:?}", velocity).into());
-    ui.text(format!("acceleration: {}", acceleration).into());
 
     // Tell ImGUI to render on this frame
     imgui_renderer.render(&mut frame, ui).unwrap();
 
     // Swap buffers
     frame.finish().unwrap();
-
-    // Reset acceleration after ImGUI has drawn it
-    acceleration = 0.0;
   }
 }
 
