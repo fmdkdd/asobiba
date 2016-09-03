@@ -74,11 +74,12 @@ fn main() {
 
   // We rotate the ship in the vertex shader using a projection matrix
   let r = heading as f32 * HEADING_TO_RADS;
+  const SHIP_SCALE: f32 = 1.0 / 10.0;
   let mut projection = [
     [ r.cos(), r.sin(), 0.0, 0.0],
     [-r.sin(), r.cos(), 0.0, 0.0],
     [0.0, 0.0, 1.0, 0.0],
-    [0.0, 0.0, 0.0, 1.0],
+    [0.0, 0.0, 0.0, 1.0 / SHIP_SCALE],
   ];
 
   let vertex_shader_src = r#"
