@@ -158,6 +158,18 @@ fn main() {
     let r = heading as f32 * HEADING_TO_RADS;
     velocity[0] += acceleration * r.cos();
     velocity[1] += acceleration * r.sin();
+
+    // Clamp velocity by its magnitude.  So, convert to polar and back
+    {
+      let mut r = f32::sqrt(velocity[0] * velocity[0] + velocity[1] * velocity[1]);
+      let p = velocity[1].atan2(velocity[0]);
+
+      r = clamp(r, 0.0, 0.2);
+
+      velocity[0] = r * p.cos();
+      velocity[1] = r * p.sin();
+    }
+
     position[0] += velocity[0];
     position[1] += velocity[1];
 
@@ -209,3 +221,10 @@ struct Vertex {
 }
 
 implement_vertex!(Vertex, position);
+
+fn clamp(x: f32, min: f32, max: f32) -> f32 {
+  // Hmm, have to use min/max specific to floats to handle NaN properly.
+  // An alternative would be to use a number type that /cannot/ be NaN, since it
+  // does not make sense in our context.
+  f32::min(f32::max(x, min), max)
+}
