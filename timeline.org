@@ -3639,3 +3639,32 @@ rendering in chipers.  I just baked two fragment shaders in one.  But it seems
 we can actually have multiple draw calls, with potentially different programs
 (hence, different shaders, or even buffer objects).  How do the multiple draw
 calls compose however?
+
+* [2016-09-03 sam.]
+** Experimenting with multiple draw calls
+So if I understand the pipeline correctly, a single Frame.draw call takes a
+vertex buffer and a shader program.  I get that a vertex shader will only work
+with the vertices from the vertex buffer.  Presumably, if the vertex buffer has
+4 vertices, there will be 4 instances of the vertex shader running in parallel
+to produce a ~gl_Position~.  Then, using the index buffer, it constructs
+triangles, rasterizes them, and now the fragment shader is called for every
+pixel in these triangles.
+
+We can use a fragment shader like this to show that is the case:
+
+: color = vec4(gl_FragCoord.x / 2000, gl_FragCoord.y / 2000, 0.0, 1.0);
+
+every pixel of the triangle has a different color, depending on its position on
+the screen.
+
+** Tools for browsing documentation locally
+Discovered [[https://zealdocs.org/download.html][Zeal]] to browse documentation à la Devdocs, but Devdocs did not have
+OpenGL documentation :(
+
+Zeal actually uses the same documentation format than Dash.  There are plenty of
+frontends to read these formats.  I tried a terminal-based one (dasht), did not
+get anything inside the terminal when looking for ~gl_FragCoord~, and the
+browser opening did not work either.  I was enthusiast for the Helm-based one,
+but only the search works correctly from inside Emacs, the viewing should happen
+in the browser (using eww does not work for XML file apparently).  Zeal is a
+dedicated GUI for local docs, and it's fast.  Good enough.
