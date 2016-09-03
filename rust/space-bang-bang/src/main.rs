@@ -182,6 +182,7 @@ fn main() {
 
     ui.text(format!("position: {:?}", position).into());
     ui.text(format!("heading: {}", heading).into());
+    ui.text(format!("velocity: {:?}", velocity).into());
     ui.text(format!("acceleration: {}", acceleration).into());
 
     // Tell ImGUI to render on this frame
