@@ -67,6 +67,7 @@ fn main() {
   let mut heading: u8 = 0u8;
   const HEADING_TO_RADS: f32 = std::f32::consts::PI / (128 as f32);
   let mut acceleration = 0.0f32;
+  let mut velocity = [0.0f32, 0.0f32];
 
   let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
   let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
@@ -116,7 +117,7 @@ fn main() {
           match vkey {
             VirtualKeyCode::A => heading = heading.wrapping_add(4),
             VirtualKeyCode::S => heading = heading.wrapping_sub(4),
-            VirtualKeyCode::W => acceleration = 1.0,
+            VirtualKeyCode::W => acceleration = 0.01,
             VirtualKeyCode::R => acceleration = -0.5,
             _ => ()
           }
@@ -152,12 +153,20 @@ fn main() {
     // Clear the frame, otherwise welcome to Windows 95 error mode.
     frame.clear_color(0.0, 0.0, 0.0, 0.0);
 
-    // Update the ship projection matrix
+    // Update the ship position based on its current heading and acceleration
     let r = heading as f32 * HEADING_TO_RADS;
+    velocity[0] += acceleration * r.cos();
+    velocity[1] += acceleration * r.sin();
+    position[0] += velocity[0];
+    position[1] += velocity[1];
+
+    // Update the ship projection matrix
     projection[0][0] = r.cos();
     projection[0][1] = r.sin();
     projection[1][0] = -r.sin();
     projection[1][1] = r.cos();
+    projection[3][0] = position[0];
+    projection[3][1] = position[1];
 
     // Draw the ship
     frame.draw(&vertex_buffer, &indices, &program,
@@ -179,6 +188,9 @@ fn main() {
 
     // Swap buffers
     frame.finish().unwrap();
+
+    // Reset acceleration after ImGUI has drawn it
+    acceleration = 0.0;
   }
 }
 
