@@ -52,6 +52,12 @@ fn main() {
   let mut ui_state = UiState::new();
   let mut last_ui_time = Instant::now();
 
+  // To hold UI debug info
+  const FRAME_PERIOD_HISTORY_SIZE: usize = 128;
+  let mut frame_period_history = [0f32; FRAME_PERIOD_HISTORY_SIZE];
+  let mut frame_period_history_idx = 0;
+  let mut avg_frame_period = 0.0;
+
   // Init the ship
   let shape = vec![
     Vertex { position: [-0.5,   0.5] },
@@ -159,8 +165,8 @@ fn main() {
 
     // Time how long we spend between frames
     let now = Instant::now();
-    let delta = now - last_ui_time;
-    let delta_s = delta.as_secs() as f32 + delta.subsec_nanos() as f32 / 1_000_000_000.0;
+    let frame_period = now - last_ui_time;
+    let frame_period_s = frame_period.as_secs() as f32 + frame_period.subsec_nanos() as f32 / 1_000_000_000.0;
     last_ui_time = now;
 
     // Create frame to draw on
@@ -221,11 +227,27 @@ fn main() {
     let window = display.get_window().unwrap();
     let size_points = window.get_inner_size_points().unwrap();
     let size_pixels = window.get_inner_size_pixels().unwrap();
-    let ui = imgui.frame(size_points, size_pixels, delta_s);
+    let ui = imgui.frame(size_points, size_pixels, frame_period_s);
 
     ui.text(format!("position: {:?}", position).into());
     ui.text(format!("heading: {}", heading).into());
     ui.text(format!("velocity: {:?}", velocity).into());
+
+    frame_period_history[frame_period_history_idx % FRAME_PERIOD_HISTORY_SIZE] =
+      frame_period_s * 1000.0;
+    frame_period_history_idx += 1;
+
+    ui.plot_histogram(
+      format!("frame period (ms)\navg: {:.3}ms",
+              avg_frame_period).into(), &frame_period_history)
+      .values_offset(frame_period_history_idx)
+      .graph_size(imgui::ImVec2::new(FRAME_PERIOD_HISTORY_SIZE as f32, 40.0))
+      .scale_min(0.0)
+      .scale_max(30.0)
+      .build();
+
+    avg_frame_period = frame_period_history.iter().fold(0f32, |a, &b| a + b)
+      / FRAME_PERIOD_HISTORY_SIZE as f32;
 
     // Tell ImGUI to render on this frame
     imgui_renderer.render(&mut frame, ui).unwrap();
