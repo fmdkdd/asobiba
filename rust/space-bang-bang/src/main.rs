@@ -74,12 +74,12 @@ fn main() {
 
   // We rotate the ship in the vertex shader using a projection matrix
   let r = heading as f32 * HEADING_TO_RADS;
-  const SHIP_SCALE: f32 = 1.0 / 10.0;
+  const SHIP_SCALE: f32 = 10.0;
   let mut projection = [
     [ r.cos(), r.sin(), 0.0, 0.0],
     [-r.sin(), r.cos(), 0.0, 0.0],
     [0.0, 0.0, 1.0, 0.0],
-    [0.0, 0.0, 0.0, 1.0 / SHIP_SCALE],
+    [0.0, 0.0, 0.0, SHIP_SCALE],
   ];
 
   let vertex_shader_src = r#"
@@ -160,6 +160,12 @@ fn main() {
     velocity[1] += acceleration * r.sin();
     position[0] += velocity[0];
     position[1] += velocity[1];
+
+    // Wrap around the screen
+    if position[0] < -SHIP_SCALE { position[0] += 2.0 * SHIP_SCALE }
+    else if position[0] > SHIP_SCALE { position[0] -= 2.0 * SHIP_SCALE }
+    if position[1] < -SHIP_SCALE { position[1] += 2.0 * SHIP_SCALE }
+    else if position[1] > SHIP_SCALE { position[1] -= 2.0 * SHIP_SCALE }
 
     // Update the ship projection matrix
     projection[0][0] = r.cos();
