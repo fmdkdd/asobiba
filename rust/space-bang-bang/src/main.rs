@@ -7,7 +7,13 @@ use std::time::Instant;
 
 use glium::glutin::{Event, ElementState, VirtualKeyCode, MouseButton,
                     MouseScrollDelta, TouchPhase};
-use glium::{DisplayBuild, Surface};
+
+use glium::index::PrimitiveType;
+use glium::{DisplayBuild, Surface, VertexBuffer, IndexBuffer};
+use glium::texture::{UncompressedFloatFormat, MipmapsOption};
+use glium::texture::texture2d::Texture2d;
+use glium::uniforms::{MagnifySamplerFilter, MinifySamplerFilter};
+
 use imgui::ImGui;
 
 // The state we hold for ImGUI
@@ -61,12 +67,12 @@ fn main() {
 
   // Init the ship
   let shape = vec![
-    Vertex { position: [-0.5,   0.5] },
-    Vertex { position: [ 0.5,   0.0] },
-    Vertex { position: [-0.25,  0.0] },
-    Vertex { position: [-0.5,  -0.5] },
-    Vertex { position: [ 0.5,   0.0] },
-    Vertex { position: [-0.25,  0.0] },
+    Vertex { position: [-0.5,   0.5], tex_coords: [0.0, 0.0] },
+    Vertex { position: [ 0.5,   0.0], tex_coords: [0.0, 0.0] },
+    Vertex { position: [-0.25,  0.0], tex_coords: [0.0, 0.0] },
+    Vertex { position: [-0.5,  -0.5], tex_coords: [0.0, 0.0] },
+    Vertex { position: [ 0.5,   0.0], tex_coords: [0.0, 0.0] },
+    Vertex { position: [-0.25,  0.0], tex_coords: [0.0, 0.0] },
   ];
 
   // The ship can rotate and move on its own.
@@ -75,7 +81,7 @@ fn main() {
   const HEADING_TO_RADS: f32 = std::f32::consts::PI / (128 as f32);
   let mut velocity = [0.0f32, 0.0f32];
 
-  let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
+  let vertex_buffer = VertexBuffer::new(&display, &shape).unwrap();
   let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
   // We rotate the ship in the vertex shader using a projection matrix
@@ -111,6 +117,55 @@ fn main() {
 "#;
 
   let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
+
+  // We want to render to a low resolution framebuffer and use it as a texture
+  // that we will draw to the screen afterwards
+  let texture = Texture2d::empty_with_format(&display,
+                                             UncompressedFloatFormat::U8U8U8U8,
+                                             MipmapsOption::NoMipmap,
+                                             256, 256).unwrap();
+
+  let mut framebuffer = glium::framebuffer::SimpleFrameBuffer::new(&display, &texture).unwrap();
+
+  // The quad to draw the texture on
+  let quad_vertices = [
+    Vertex { position: [-1.0, -1.0], tex_coords: [0.0, 0.0] },
+    Vertex { position: [-1.0,  1.0], tex_coords: [0.0, 1.0] },
+    Vertex { position: [ 1.0,  1.0], tex_coords: [1.0, 1.0] },
+    Vertex { position: [ 1.0, -1.0], tex_coords: [1.0, 0.0] }
+  ];
+
+  let quad_vertex_buffer = VertexBuffer::immutable(&display, &quad_vertices).unwrap();
+  let quad_index_buffer = IndexBuffer::immutable(
+    &display, PrimitiveType::TriangleStrip, &[1u16, 2, 0, 3]).unwrap();
+
+  let quad_vertex_shader_src = r#"
+    #version 140
+
+    in vec2 position;
+    in vec2 tex_coords;
+    out vec2 v_tex_coords;
+
+    void main() {
+        v_tex_coords = tex_coords;
+        gl_Position = vec4(position, 0.0, 1.0);
+    }
+"#;
+
+  let quad_fragment_shader_src = r#"
+    #version 140
+
+    in vec2 v_tex_coords;
+    out vec4 color;
+
+    uniform sampler2D tex;
+
+    void main() {
+        color = texture(tex, v_tex_coords);
+    }
+"#;
+
+  let quad_program = glium::Program::from_source(&display, quad_vertex_shader_src, quad_fragment_shader_src, None).unwrap();
 
   // Keep track of player actions we need to emulate during the frame
   let mut turning_left = false;
@@ -174,7 +229,7 @@ fn main() {
     let mut frame = display.draw();
 
     // Clear the frame, otherwise welcome to Windows 95 error mode.
-    frame.clear_color(0.0, 0.0, 0.0, 0.0);
+    framebuffer.clear_color(0.0, 0.0, 0.0, 0.0);
 
     // Turning changes the heading
     if turning_left { heading = heading.wrapping_add(4) }
@@ -220,9 +275,20 @@ fn main() {
     projection[3][1] = position[1];
 
     // Draw the ship
-    frame.draw(&vertex_buffer, &indices, &program,
-               &uniform! { matrix: projection },
-               &Default::default()).unwrap();
+    framebuffer.draw(&vertex_buffer, &indices, &program,
+                     &uniform! { matrix: projection },
+                     &Default::default()).unwrap();
+
+    // Draw the framebuffer to the actual screen
+    frame.draw(&quad_vertex_buffer,
+               &quad_index_buffer,
+               &quad_program,
+               &uniform! {
+                 tex: texture.sampled()
+                   .minify_filter(MinifySamplerFilter::Nearest)
+                   .magnify_filter(MagnifySamplerFilter::Nearest),
+               }, &Default::default()).unwrap();
+
 
     // Draw the GUI
     let window = display.get_window().unwrap();
@@ -262,9 +328,9 @@ fn main() {
 #[derive(Copy, Clone)]
 struct Vertex {
   position: [f32; 2],
+  tex_coords: [f32; 2],
 }
-
-implement_vertex!(Vertex, position);
+implement_vertex!(Vertex, position, tex_coords);
 
 fn clamp(x: f32, min: f32, max: f32) -> f32 {
   // Hmm, have to use min/max specific to floats to handle NaN properly.

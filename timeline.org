@@ -3693,6 +3693,44 @@ launch the application once.
 Still, better enable vsync for this application until I make the logic
 independent of frame rate.
 
+** Low-resolution render on framebuffer
+So that's what I had in mind [[*Low-resolution rendering in OpenGL][the other day]].  A low-resolution effect.  Now that
+I understand how this ties together a bit better, I can explain how it works.
+
+Instead of rendering directly to the framebuffer that is presented to the
+screen, we draw the scene to a framebuffer object of a lower resolution.  The
+framebuffer tied to the screen has as many pixels as the window contains, but
+the framebuffer object has the resolution we want.  Creating a framebuffer that
+renders to a texture is rather simple in Glium:
+
+: SimpleFrameBuffer::new(&display, &texture);
+
+Of course we need a texture, so I reused the code from chipers:
+
+#+BEGIN_EXAMPLE
+  let texture = Texture2d::empty_with_format(&display,
+                                             UncompressedFloatFormat::U8,
+                                             MipmapsOption::NoMipmap,
+                                             256, 256).unwrap();
+#+END_EXAMPLE
+
+Here we draw on a 256*256 virtual screen, the same resolution as the original
+Macintosh.
+
+Then it's just a matter of drawing the ship on this virtual framebuffer, then
+drawing the texture on a quad to the screen framebuffer.
+
+Of course we need different shaders for the quad, a vertex buffer, index
+buffer...  It's a bit verbose, but it works!
+
+Hmm... why is the ship red?  Shouldn't it be white?
+
+Ah, it's the ~UncompressedFloatFormat::U8~: it stores only the first color
+component, which is red.  I used a single u8 for chipers because the texture
+there as a boolean: either the pixel is on, or it is off.  Switching to an
+U8U8U8U8 fixes the redness.
+
 ** M
 
-- render on low resolution
+- make simulation independent of frame rate
+- import ship model from Blender
