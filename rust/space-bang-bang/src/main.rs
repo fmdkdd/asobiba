@@ -54,12 +54,12 @@ fn main() {
 
   // Init the ship
   let shape = vec![
-    Vertex { position: [-0.5, -0.5] },
-    Vertex { position: [ 0.0,  0.5] },
-    Vertex { position: [ 0.0, -0.25] },
-    Vertex { position: [ 0.5, -0.5] },
-    Vertex { position: [ 0.0,  0.5] },
-    Vertex { position: [ 0.0, -0.25] },
+    Vertex { position: [-0.5,   0.5] },
+    Vertex { position: [ 0.5,   0.0] },
+    Vertex { position: [-0.25,  0.0] },
+    Vertex { position: [-0.5,  -0.5] },
+    Vertex { position: [ 0.5,   0.0] },
+    Vertex { position: [-0.25,  0.0] },
   ];
 
   // The ship can rotate and move on its own.
