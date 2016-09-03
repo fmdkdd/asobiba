@@ -3730,7 +3730,5 @@ component, which is red.  I used a single u8 for chipers because the texture
 there as a boolean: either the pixel is on, or it is off.  Switching to an
 U8U8U8U8 fixes the redness.
 
-** M
-
-- make simulation independent of frame rate
-- import ship model from Blender
+*** TODO make simulation independent of frame rate
+*** TODO import ship model from Blender
