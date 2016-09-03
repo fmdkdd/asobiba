@@ -10,6 +10,7 @@ use glium::glutin::{Event, ElementState, VirtualKeyCode, MouseButton,
 use glium::{DisplayBuild, Surface};
 use imgui::ImGui;
 
+// The state we hold for ImGUI
 struct UiState {
   mouse_pos: (i32, i32),
   mouse_pressed: (bool, bool, bool),
@@ -25,15 +26,20 @@ impl UiState {
     }
   }
 
-  fn update_mouse(&self, imgui: &mut ImGui) {
+  fn update_mouse(&mut self, imgui: &mut ImGui) {
     imgui.set_mouse_pos(self.mouse_pos.0 as f32, self.mouse_pos.1 as f32);
     imgui.set_mouse_down(&[self.mouse_pressed.0, self.mouse_pressed.1,
                            self.mouse_pressed.2, false, false]);
     imgui.set_mouse_wheel(self.mouse_wheel);
+
+    // Need to clear the mouse wheel value for this frame after feeding to
+    // ImGUI, otherwise... see what happens.
+    self.mouse_wheel = 0.0;
   }
 }
 
 fn main() {
+  // Init window
   let display = glium::glutin::WindowBuilder::new()
     .with_title("Space Bang Bang")
     .build_glium().unwrap();
@@ -46,7 +52,7 @@ fn main() {
   let mut ui_state = UiState::new();
   let mut last_ui_time = Instant::now();
 
-  // Init the hero
+  // Init the ship
   let shape = vec![
     Vertex { position: [-0.5, -0.5] },
     Vertex { position: [ 0.0,  0.5] },
@@ -120,23 +126,25 @@ fn main() {
     }
 
     ui_state.update_mouse(&mut imgui);
-    ui_state.mouse_wheel = 0.0; // Clear value for this frame
 
+    // Time how long we spend between frames
     let now = Instant::now();
     let delta = now - last_ui_time;
     let delta_s = delta.as_secs() as f32 + delta.subsec_nanos() as f32 / 1_000_000_000.0;
     last_ui_time = now;
 
-    // Create frame
+    // Create frame to draw on
     let mut frame = display.draw();
+
+    // Clear the frame, otherwise welcome to Windows 95 error mode.
     frame.clear_color(0.0, 0.0, 0.0, 0.0);
 
-    // Draw the hero
+    // Draw the ship
     frame.draw(&vertex_buffer, &indices, &program,
                &uniform! { displacement: position },
                &Default::default()).unwrap();
 
-    // Draw GUI
+    // Draw the GUI
     let window = display.get_window().unwrap();
     let size_points = window.get_inner_size_points().unwrap();
     let size_pixels = window.get_inner_size_pixels().unwrap();
@@ -144,8 +152,10 @@ fn main() {
 
     ui.text(format!("{:?}", position).into());
 
-    // Render
+    // Tell ImGUI to render on this frame
     imgui_renderer.render(&mut frame, ui).unwrap();
+
+    // Swap buffers
     frame.finish().unwrap();
   }
 }
