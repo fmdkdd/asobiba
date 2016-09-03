@@ -42,6 +42,7 @@ fn main() {
   // Init window
   let display = glium::glutin::WindowBuilder::new()
     .with_title("Space Bang Bang")
+    .with_vsync()
     .build_glium().unwrap();
 
   // Init ImGui

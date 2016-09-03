@@ -3679,10 +3679,20 @@ rather long time to get there, but hey.  Still incorrect.
 Using a small integer that wraps around you are guaranteed to avoid rounding
 errors.
 
+** Vsync on my machine
+Ah!  I did not enable vsync in the application, but I still obviously got
+60fps.  Adding the frame period histogram confirmed it.
+
+So I double-check my nvidia settings to confirm I had disabled vsync, yes I did.
+But hey, after quitting the nvidia settings application, now when I launch my
+glium window vsync is indeed off (avg frame period: 0.2 ms, nice).
+
+So on my machine somehow my nvidia settings are not taken into account until I
+launch the application once.
+
+Still, better enable vsync for this application until I make the logic
+independent of frame rate.
+
 ** M
 
-- make the ship rotate and advance, like a proper ship
-- zoom out
 - render on low resolution
-- add FPS histograph in ImGUI
-- check if vsync is default
