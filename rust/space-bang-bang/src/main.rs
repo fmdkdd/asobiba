@@ -64,16 +64,18 @@ fn main() {
 
   // The ship can rotate and move on its own.
   let mut position = [0.0f32, 0.0f32];
-  let mut heading = 0.0f32;
+  let mut heading: u8 = 0u8;
+  const HEADING_TO_RADS: f32 = std::f32::consts::PI / (128 as f32);
   let mut acceleration = 0.0f32;
 
   let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
   let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
   // We rotate the ship in the vertex shader using a projection matrix
+  let r = heading as f32 * HEADING_TO_RADS;
   let mut projection = [
-    [ heading.cos(), heading.sin(), 0.0, 0.0],
-    [-heading.sin(), heading.cos(), 0.0, 0.0],
+    [ r.cos(), r.sin(), 0.0, 0.0],
+    [-r.sin(), r.cos(), 0.0, 0.0],
     [0.0, 0.0, 1.0, 0.0],
     [0.0, 0.0, 0.0, 1.0],
   ];
@@ -112,8 +114,8 @@ fn main() {
 
         Event::KeyboardInput(ElementState::Pressed, _, Some(vkey)) => {
           match vkey {
-            VirtualKeyCode::A => heading += 0.1,
-            VirtualKeyCode::S => heading -= 0.1,
+            VirtualKeyCode::A => heading = heading.wrapping_add(4),
+            VirtualKeyCode::S => heading = heading.wrapping_sub(4),
             VirtualKeyCode::W => acceleration = 1.0,
             VirtualKeyCode::R => acceleration = -0.5,
             _ => ()
@@ -151,10 +153,11 @@ fn main() {
     frame.clear_color(0.0, 0.0, 0.0, 0.0);
 
     // Update the ship projection matrix
-    projection[0][0] = heading.cos();
-    projection[0][1] = heading.sin();
-    projection[1][0] = -heading.sin();
-    projection[1][1] = heading.cos();
+    let r = heading as f32 * HEADING_TO_RADS;
+    projection[0][0] = r.cos();
+    projection[0][1] = r.sin();
+    projection[1][0] = -r.sin();
+    projection[1][1] = r.cos();
 
     // Draw the ship
     frame.draw(&vertex_buffer, &indices, &program,
@@ -168,8 +171,8 @@ fn main() {
     let ui = imgui.frame(size_points, size_pixels, delta_s);
 
     ui.text(format!("position: {:?}", position).into());
-    ui.text(format!("heading: {:?}", heading).into());
-    ui.text(format!("acceleration: {:?}", acceleration).into());
+    ui.text(format!("heading: {}", heading).into());
+    ui.text(format!("acceleration: {}", acceleration).into());
 
     // Tell ImGUI to render on this frame
     imgui_renderer.render(&mut frame, ui).unwrap();

@@ -3668,3 +3668,21 @@ browser opening did not work either.  I was enthusiast for the Helm-based one,
 but only the search works correctly from inside Emacs, the viewing should happen
 in the browser (using eww does not work for XML file apparently).  Zeal is a
 dedicated GUI for local docs, and it's fast.  Good enough.
+
+** A potential rotation bug
+By keeping the current heading in a float, we can potentially grow to very large
+value by holding one direction, and then hitting float inaccuracies.
+
+Testing, after 2^20 you cannot turn left anymore.  Admittedly, you would take a
+rather long time to get there, but hey.  Still incorrect.
+
+Using a small integer that wraps around you are guaranteed to avoid rounding
+errors.
+
+** M
+
+- make the ship rotate and advance, like a proper ship
+- zoom out
+- render on low resolution
+- add FPS histograph in ImGUI
+- check if vsync is default
