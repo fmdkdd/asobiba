@@ -3732,3 +3732,20 @@ U8U8U8U8 fixes the redness.
 
 *** TODO make simulation independent of frame rate
 *** TODO import ship model from Blender
+
+* [2016-09-04 dim.]
+*** DONE Maintain aspect ratio
+CLOSED: [2016-09-04 dim. 15:33]
+I always have trouble will all these matrix multiplications that pile onto each
+other.  Anyway, the strategy here has two part:
+
+First, we adjust the model coordinates for the aspect ratio of the virtual
+framebuffer.  The intent is that, regardless of the dimensions of the
+framebuffer, the ship is always the same size/shape.
+
+But that's not all, because when drawing the framebuffer to the quad, the quad
+is still stretched out to fill the window.  So there also we have to stretch the
+quad so that it fills the window, while maintaining its aspect ratio.  And
+that's another matrix multiplication.
+
+*** TODO Add tweakable gameplay values to GUI

@@ -94,15 +94,23 @@ fn main() {
     [0.0, 0.0, 0.0, SHIP_SCALE],
   ];
 
+  let mut view = [
+    [ 1.0, 0.0, 0.0, 0.0],
+    [ 0.0, 1.0, 0.0, 0.0],
+    [ 0.0, 0.0, 1.0, 0.0],
+    [ 0.0, 0.0, 0.0, 1.0f32],
+  ];
+
   let vertex_shader_src = r#"
     #version 140
 
     in vec2 position;
 
     uniform mat4 matrix;
+    uniform mat4 view;
 
     void main() {
-        gl_Position = matrix * vec4(position, 0.0, 1.0);
+        gl_Position = view * matrix * vec4(position, 0.0, 1.0);
     }
 "#;
 
@@ -120,10 +128,12 @@ fn main() {
 
   // We want to render to a low resolution framebuffer and use it as a texture
   // that we will draw to the screen afterwards
+  let mut virtual_resolution = (320, 200);
+
   let texture = Texture2d::empty_with_format(&display,
                                              UncompressedFloatFormat::U8U8U8U8,
                                              MipmapsOption::NoMipmap,
-                                             256, 256).unwrap();
+                                             virtual_resolution.0, virtual_resolution.1).unwrap();
 
   let mut framebuffer = glium::framebuffer::SimpleFrameBuffer::new(&display, &texture).unwrap();
 
@@ -146,9 +156,11 @@ fn main() {
     in vec2 tex_coords;
     out vec2 v_tex_coords;
 
+    uniform mat4 perspective;
+
     void main() {
         v_tex_coords = tex_coords;
-        gl_Position = vec4(position, 0.0, 1.0);
+        gl_Position = perspective * vec4(position, 0.0, 1.0);
     }
 "#;
 
@@ -166,6 +178,13 @@ fn main() {
 "#;
 
   let quad_program = glium::Program::from_source(&display, quad_vertex_shader_src, quad_fragment_shader_src, None).unwrap();
+
+  let mut perspective = [
+    [ 1.0, 0.0, 0.0, 0.0],
+    [ 0.0, 1.0, 0.0, 0.0],
+    [ 0.0, 0.0, 1.0, 0.0],
+    [ 0.0, 0.0, 0.0, 1.0f32],
+  ];
 
   // Keep track of player actions we need to emulate during the frame
   let mut turning_left = false;
@@ -229,7 +248,7 @@ fn main() {
     let mut frame = display.draw();
 
     // Clear the frame, otherwise welcome to Windows 95 error mode.
-    framebuffer.clear_color(0.0, 0.0, 0.0, 0.0);
+    framebuffer.clear_color(0.02, 0.02, 0.024, 0.0);
 
     // Turning changes the heading
     if turning_left { heading = heading.wrapping_add(4) }
@@ -275,11 +294,27 @@ fn main() {
     projection[3][1] = position[1];
 
     // Draw the ship
+
+    // Adjust for aspect ratio of framebuffer
+    view[0][0] = virtual_resolution.1 as f32 / virtual_resolution.0 as f32;
+
     framebuffer.draw(&vertex_buffer, &indices, &program,
-                     &uniform! { matrix: projection },
+                     &uniform! {
+                       matrix: projection,
+                       view: view,
+                     },
                      &Default::default()).unwrap();
 
     // Draw the framebuffer to the actual screen
+
+    // This stretches the virtual framebuffer to fill the screen while
+    // maintaining the aspect ratio of the framebuffer.
+    let (width, height) = frame.get_dimensions();
+    perspective[0][0] = virtual_resolution.0 as f32 / width as f32;
+    perspective[1][1] = virtual_resolution.1 as f32 / height as f32;
+    perspective[3][3] = f32::max(perspective[0][0], perspective[1][1]);
+
+    frame.clear_color(0.0, 0.0, 0.0, 0.0);
     frame.draw(&quad_vertex_buffer,
                &quad_index_buffer,
                &quad_program,
@@ -287,6 +322,7 @@ fn main() {
                  tex: texture.sampled()
                    .minify_filter(MinifySamplerFilter::Nearest)
                    .magnify_filter(MagnifySamplerFilter::Nearest),
+                 perspective: perspective,
                }, &Default::default()).unwrap();
 
 
