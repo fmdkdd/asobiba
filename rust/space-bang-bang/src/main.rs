@@ -63,7 +63,7 @@ fn main() {
   const FRAME_PERIOD_HISTORY_SIZE: usize = 128;
   let mut frame_period_history = [0f32; FRAME_PERIOD_HISTORY_SIZE];
   let mut frame_period_history_idx = 0;
-  let mut avg_frame_period = 0.0;
+  let mut avg_frame_period;
 
   // Init the ship
   let shape = vec![
@@ -340,6 +340,9 @@ fn main() {
       frame_period_s * 1000.0;
     frame_period_history_idx += 1;
 
+    avg_frame_period = frame_period_history.iter().fold(0f32, |a, &b| a + b)
+      / FRAME_PERIOD_HISTORY_SIZE as f32;
+
     ui.plot_histogram(
       format!("frame period (ms)\navg: {:.3}ms",
               avg_frame_period).into(), &frame_period_history)
@@ -348,9 +351,6 @@ fn main() {
       .scale_min(0.0)
       .scale_max(30.0)
       .build();
-
-    avg_frame_period = frame_period_history.iter().fold(0f32, |a, &b| a + b)
-      / FRAME_PERIOD_HISTORY_SIZE as f32;
 
     // Tell ImGUI to render on this frame
     imgui_renderer.render(&mut frame, ui).unwrap();
