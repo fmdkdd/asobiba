@@ -128,14 +128,10 @@ fn main() {
 
   // We want to render to a low resolution framebuffer and use it as a texture
   // that we will draw to the screen afterwards
-  let mut virtual_resolution = (320, 200);
 
-  let texture = Texture2d::empty_with_format(&display,
-                                             UncompressedFloatFormat::U8U8U8U8,
-                                             MipmapsOption::NoMipmap,
-                                             virtual_resolution.0, virtual_resolution.1).unwrap();
-
-  let mut framebuffer = glium::framebuffer::SimpleFrameBuffer::new(&display, &texture).unwrap();
+  // This is the texture resolution.  Since the resolution can be changed
+  // through the GUI, the texture is created on the fly in the main loop.
+  let mut virtual_resolution = (320i32, 200);
 
   // The quad to draw the texture on
   let quad_vertices = [
@@ -247,6 +243,15 @@ fn main() {
     // Create frame to draw on
     let mut frame = display.draw();
 
+    // Create the framebuffer
+    let texture = Texture2d::empty_with_format(&display,
+                                               UncompressedFloatFormat::U8U8U8U8,
+                                               MipmapsOption::NoMipmap,
+                                               virtual_resolution.0 as u32,
+                                               virtual_resolution.1 as u32).unwrap();
+
+    let mut framebuffer = glium::framebuffer::SimpleFrameBuffer::new(&display, &texture).unwrap();
+
     // Clear the frame, otherwise welcome to Windows 95 error mode.
     framebuffer.clear_color(0.02, 0.02, 0.024, 0.0);
 
@@ -351,6 +356,13 @@ fn main() {
       .scale_min(0.0)
       .scale_max(30.0)
       .build();
+
+    ui.slider_int(im_str!("Virtual width"),
+                  &mut virtual_resolution.0,
+                  1, 2000).build();
+    ui.slider_int(im_str!("Virtual height"),
+                  &mut virtual_resolution.1,
+                  1, 2000).build();
 
     // Tell ImGUI to render on this frame
     imgui_renderer.render(&mut frame, ui).unwrap();
