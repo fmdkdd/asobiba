@@ -3748,4 +3748,5 @@ is still stretched out to fill the window.  So there also we have to stretch the
 quad so that it fills the window, while maintaining its aspect ratio.  And
 that's another matrix multiplication.
 
-*** TODO Add tweakable gameplay values to GUI
+*** DONE Add tweakable gameplay values to GUI
+CLOSED: [2016-09-04 dim. 16:43]

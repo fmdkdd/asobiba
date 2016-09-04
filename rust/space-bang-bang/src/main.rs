@@ -188,6 +188,12 @@ fn main() {
   let mut boosting = false;
   let mut braking = false;
 
+  // Gameplay tweakables
+  let mut turn_speed = 4i32;
+  let mut boost_speed = 0.01f32;
+  let mut brake_factor = 0.9f32;
+  let mut max_velocity = 0.2f32;
+
   // Main loop
   'running: loop {
     for event in display.poll_events() {
@@ -256,14 +262,14 @@ fn main() {
     framebuffer.clear_color(0.02, 0.02, 0.024, 0.0);
 
     // Turning changes the heading
-    if turning_left { heading = heading.wrapping_add(4) }
-    if turning_right { heading = heading.wrapping_sub(4) }
+    if turning_left { heading = heading.wrapping_add(turn_speed as u8) }
+    if turning_right { heading = heading.wrapping_sub(turn_speed as u8) }
 
     // Boosting increases velocity in the direction we are headed
     let heading_rad = heading as f32 * HEADING_TO_RADS;
     if boosting {
-      velocity[0] += 0.01 * heading_rad.cos();
-      velocity[1] += 0.01 * heading_rad.sin();
+      velocity[0] += boost_speed * heading_rad.cos();
+      velocity[1] += boost_speed * heading_rad.sin();
     }
 
     // Clamp velocity by its magnitude.  So, convert to polar and back
@@ -272,9 +278,9 @@ fn main() {
       let p = velocity[1].atan2(velocity[0]);
 
       // Braking reduces velocity magnitude (multiply by <1)
-      if braking { r *= 0.9 }
+      if braking { r *= brake_factor }
 
-      r = clamp(r, 0.0, 0.2);
+      r = clamp(r, 0.0, max_velocity);
 
       velocity[0] = r * p.cos();
       velocity[1] = r * p.sin();
@@ -363,6 +369,19 @@ fn main() {
     ui.slider_int(im_str!("Virtual height"),
                   &mut virtual_resolution.1,
                   1, 2000).build();
+
+    ui.slider_int(im_str!("Turn speed"),
+                  &mut turn_speed,
+                  1, 64).build();
+    ui.slider_float(im_str!("Boost speed"),
+                    &mut boost_speed,
+                    0.0, 1.0).build();
+    ui.slider_float(im_str!("Brake factor"),
+                    &mut brake_factor,
+                    0.0, 1.0).build();
+    ui.slider_float(im_str!("Max velocity"),
+                    &mut max_velocity,
+                    0.0, 1.0).build();
 
     // Tell ImGUI to render on this frame
     imgui_renderer.render(&mut frame, ui).unwrap();
