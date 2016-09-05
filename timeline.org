@@ -3750,3 +3750,29 @@ that's another matrix multiplication.
 
 *** DONE Add tweakable gameplay values to GUI
 CLOSED: [2016-09-04 dim. 16:43]
+
+* [2016-09-05 lun.]
+** Making a note of a nice way to deal with opcodes in Rust
+As done in [[https://github.com/yupferris/rustendo64/blob/master/src/n64/cpu/opcode.rs][Rustendo]], a Nintendo 64 emulator in Rust.  Opcodes are transformed
+into an enum:
+
+#+BEGIN_SRC rust
+pub enum Opcode {
+        Special = 0b000000,
+        RegImm =  0b000001,
+
+        Addi =    0b001000,
+Addiu = 0b001001,
+#+END_SRC
+
+so the code that executes these opcodes can match on enum variants, rather than
+binary:
+
+#+BEGIN_SRC rust
+match instr.opcode() {
+  RegImm =>
+  Addi =>
+  Addiu =>
+#+END_SRC
+
+I'm sure this emulator has other Rust tricks as well.  Good source.
