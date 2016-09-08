@@ -102,9 +102,9 @@ fn main() {
   ];
 
   let vertex_shader_src = r#"
-    #version 140
+    #version 120
 
-    in vec2 position;
+    attribute vec2 position;
 
     uniform mat4 matrix;
     uniform mat4 view;
@@ -115,12 +115,10 @@ fn main() {
 "#;
 
   let fragment_shader_src = r#"
-    #version 140
-
-    out vec4 color;
+    #version 120
 
     void main() {
-        color = vec4(1.0, 1.0, 1.0, 1.0);
+        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
 "#;
 
@@ -146,11 +144,11 @@ fn main() {
     &display, PrimitiveType::TriangleStrip, &[1u16, 2, 0, 3]).unwrap();
 
   let quad_vertex_shader_src = r#"
-    #version 140
+    #version 120
 
-    in vec2 position;
-    in vec2 tex_coords;
-    out vec2 v_tex_coords;
+    attribute vec2 position;
+    attribute vec2 tex_coords;
+    varying vec2 v_tex_coords;
 
     uniform mat4 perspective;
 
@@ -161,15 +159,14 @@ fn main() {
 "#;
 
   let quad_fragment_shader_src = r#"
-    #version 140
+    #version 120
 
-    in vec2 v_tex_coords;
-    out vec4 color;
+    varying vec2 v_tex_coords;
 
     uniform sampler2D tex;
 
     void main() {
-        color = texture(tex, v_tex_coords);
+        gl_FragColor = texture2D(tex, v_tex_coords);
     }
 "#;
 
