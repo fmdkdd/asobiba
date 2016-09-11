@@ -46,6 +46,24 @@ impl UiState {
   }
 }
 
+
+struct Bullet {
+  position: [f32; 2],
+  velocity: [f32; 2],
+  heading: u8,
+}
+
+impl Bullet {
+  fn new() -> Self {
+    Bullet {
+      position: [0.0, 0.0],
+      velocity: [0.0, 0.0],
+      heading: 0,
+    }
+  }
+}
+
+
 fn main() {
   // Init window
   let display = glium::glutin::WindowBuilder::new()
@@ -128,6 +146,9 @@ fn main() {
 
   let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
 
+  // Bullets!
+  let mut bullets: Vec<Bullet> = Vec::new();
+
   // We want to render to a low resolution framebuffer and use it as a texture
   // that we will draw to the screen afterwards
 
@@ -188,6 +209,7 @@ fn main() {
   let mut turning_right = false;
   let mut boosting = false;
   let mut braking = false;
+  let mut firing = false;
 
   // Gameplay tweakables
   let mut turn_speed = 4i32;
@@ -209,6 +231,7 @@ fn main() {
             VirtualKeyCode::S => turning_right = true,
             VirtualKeyCode::W => boosting = true,
             VirtualKeyCode::R => braking = true,
+            VirtualKeyCode::Space => firing = true,
             _ => ()
           }
         },
@@ -219,6 +242,7 @@ fn main() {
             VirtualKeyCode::S => turning_right = false,
             VirtualKeyCode::W => boosting = false,
             VirtualKeyCode::R => braking = false,
+            VirtualKeyCode::Space => firing = false,
             _ => ()
           }
         },
@@ -297,6 +321,11 @@ fn main() {
     if position[1] < -SHIP_SCALE { position[1] += 2.0 * SHIP_SCALE }
     else if position[1] > SHIP_SCALE { position[1] -= 2.0 * SHIP_SCALE }
 
+    // Spawn missiles when firing
+    if firing {
+      bullets.push(Bullet::new());
+    }
+
     // Update the ship projection matrix
     projection[0][0] = heading_rad.cos();
     projection[0][1] = heading_rad.sin();
@@ -347,6 +376,7 @@ fn main() {
     ui.text(format!("position: {:?}", position).into());
     ui.text(format!("heading: {}", heading).into());
     ui.text(format!("velocity: {:?}", velocity).into());
+    ui.text(format!("bullets count: {}", bullets.len()).into());
 
     ui.window(im_str!("Framerate"))
       .build(|| {
