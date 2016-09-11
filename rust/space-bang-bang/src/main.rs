@@ -69,12 +69,16 @@ struct BulletDrawer {
 
 impl BulletDrawer {
   fn new<F: Facade>(display: &F) -> Self {
-    let shape = vec![
-      Vertex { position: [ 1.0, 0.0, 0.0], tex_coords: [0.0, 0.0] },
-      Vertex { position: [ 0.0,-0.5, 0.0], tex_coords: [0.0, 0.0] },
-      Vertex { position: [ 0.0, 0.5, 0.0], tex_coords: [0.0, 0.0] },
-    ];
+    let stl_file = File::open("../assets/bullet.stl").unwrap();
+    let mut stl_reader = BufReader::new(stl_file);
+    let stl_data = stl::read_stl(&mut stl_reader).unwrap();
 
+    let mut shape: Vec<Vertex> = Vec::new();
+    for i in 0..stl_data.header.num_triangles {
+      shape.push(stl_data.triangles[i as usize].v1.into());
+      shape.push(stl_data.triangles[i as usize].v2.into());
+      shape.push(stl_data.triangles[i as usize].v3.into());
+    }
     let vertex_buffer = VertexBuffer::new(display, &shape).unwrap();
 
     let vertex_shader_src = r#"
@@ -83,9 +87,10 @@ impl BulletDrawer {
     in vec3 position;
 
     uniform mat4 model;
+    uniform mat4 view;
 
     void main() {
-        gl_Position = model * vec4(position, 1.0);
+        gl_Position = view * model * vec4(position, 1.0);
     }
 "#;
 
@@ -107,7 +112,7 @@ impl BulletDrawer {
     }
   }
 
-  fn draw<S: Surface>(&self, framebuffer: &mut S, bullet: &Bullet) {
+  fn draw<S: Surface>(&self, framebuffer: &mut S, view: &[[f32; 4]; 4], bullet: &Bullet) {
     let h = bullet.heading as f32 * HEADING_TO_RADS;
     let p = bullet.position;
 
@@ -123,6 +128,7 @@ impl BulletDrawer {
                      &self.program,
                      &uniform! {
                        model: model,
+                       view: *view,
                      },
                      &Default::default()).unwrap();
   }
@@ -418,7 +424,7 @@ fn main() {
     // Update and draw the bullets
     for b in bullets.iter_mut() {
       b.update();
-      bullet_drawer.draw(&mut framebuffer, &b);
+      bullet_drawer.draw(&mut framebuffer, &view, &b);
     }
 
     // Draw the framebuffer to the actual screen
