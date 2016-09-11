@@ -74,18 +74,9 @@ fn main() {
 
   let mut shape: Vec<Vertex> = Vec::new();
   for i in 0..ship_stl.header.num_triangles {
-    shape.push(Vertex {
-      position: ship_stl.triangles[i as usize].v1,
-      tex_coords: [0.0, 0.0],
-    });
-    shape.push(Vertex {
-      position: ship_stl.triangles[i as usize].v2,
-      tex_coords: [0.0, 0.0],
-    });
-    shape.push(Vertex {
-      position: ship_stl.triangles[i as usize].v3,
-      tex_coords: [0.0, 0.0],
-    });
+    shape.push(ship_stl.triangles[i as usize].v1.into());
+    shape.push(ship_stl.triangles[i as usize].v2.into());
+    shape.push(ship_stl.triangles[i as usize].v3.into());
   }
 
   // The ship can rotate and move on its own.
@@ -408,6 +399,15 @@ struct Vertex {
   tex_coords: [f32; 2],
 }
 implement_vertex!(Vertex, position, tex_coords);
+
+impl From<[f32; 3]> for Vertex {
+  fn from(v: [f32; 3]) -> Self {
+    Vertex {
+      position: v,
+      tex_coords: [0.0, 0.0],
+    }
+  }
+}
 
 fn clamp(x: f32, min: f32, max: f32) -> f32 {
   // Hmm, have to use min/max specific to floats to handle NaN properly.
