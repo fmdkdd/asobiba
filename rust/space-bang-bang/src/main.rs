@@ -287,6 +287,7 @@ fn main() {
   let mut boost_speed = 0.01f32;
   let mut brake_factor = 0.9f32;
   let mut max_velocity = 0.2f32;
+  let mut bullet_initial_velocity = 0.1f32;
 
   // Main loop
   'running: loop {
@@ -396,7 +397,10 @@ fn main() {
     if firing {
       bullets.push(Bullet {
         position: position,
-        velocity: velocity,
+        velocity: [
+          velocity[0] + bullet_initial_velocity * heading_rad.cos(),
+          velocity[1] + bullet_initial_velocity * heading_rad.sin()
+        ],
         heading: heading,
       });
     }
@@ -498,6 +502,9 @@ fn main() {
                         0.0, 1.0).build();
         ui.slider_float(im_str!("Max velocity"),
                         &mut max_velocity,
+                        0.0, 1.0).build();
+        ui.slider_float(im_str!("Bullet initial velocity"),
+                        &mut bullet_initial_velocity,
                         0.0, 1.0).build();
       });
 
