@@ -3,6 +3,8 @@ extern crate glium;
 #[macro_use]
 extern crate imgui;
 
+use std::io::BufReader;
+use std::fs::File;
 use std::time::Instant;
 
 use glium::glutin::{Event, ElementState, VirtualKeyCode, MouseButton,
@@ -66,14 +68,25 @@ fn main() {
   let mut avg_frame_period;
 
   // Init the ship
-  let shape = vec![
-    Vertex { position: [-0.5,   0.5], tex_coords: [0.0, 0.0] },
-    Vertex { position: [ 0.5,   0.0], tex_coords: [0.0, 0.0] },
-    Vertex { position: [-0.25,  0.0], tex_coords: [0.0, 0.0] },
-    Vertex { position: [-0.5,  -0.5], tex_coords: [0.0, 0.0] },
-    Vertex { position: [ 0.5,   0.0], tex_coords: [0.0, 0.0] },
-    Vertex { position: [-0.25,  0.0], tex_coords: [0.0, 0.0] },
-  ];
+  let ship_stl_file = File::open("../assets/ship.stl").unwrap();
+  let mut ship_stl_reader = BufReader::new(ship_stl_file);
+  let ship_stl = stl::read_stl(&mut ship_stl_reader).unwrap();
+
+  let mut shape: Vec<Vertex> = Vec::new();
+  for i in 0..ship_stl.header.num_triangles {
+    shape.push(Vertex {
+      position: ship_stl.triangles[i as usize].v1,
+      tex_coords: [0.0, 0.0],
+    });
+    shape.push(Vertex {
+      position: ship_stl.triangles[i as usize].v2,
+      tex_coords: [0.0, 0.0],
+    });
+    shape.push(Vertex {
+      position: ship_stl.triangles[i as usize].v3,
+      tex_coords: [0.0, 0.0],
+    });
+  }
 
   // The ship can rotate and move on its own.
   let mut position = [0.0f32, 0.0f32];
@@ -104,13 +117,13 @@ fn main() {
   let vertex_shader_src = r#"
     #version 120
 
-    attribute vec2 position;
+    attribute vec3 position;
 
     uniform mat4 matrix;
     uniform mat4 view;
 
     void main() {
-        gl_Position = view * matrix * vec4(position, 0.0, 1.0);
+        gl_Position = view * matrix * vec4(position, 1.0);
     }
 "#;
 
@@ -133,10 +146,10 @@ fn main() {
 
   // The quad to draw the texture on
   let quad_vertices = [
-    Vertex { position: [-1.0, -1.0], tex_coords: [0.0, 0.0] },
-    Vertex { position: [-1.0,  1.0], tex_coords: [0.0, 1.0] },
-    Vertex { position: [ 1.0,  1.0], tex_coords: [1.0, 1.0] },
-    Vertex { position: [ 1.0, -1.0], tex_coords: [1.0, 0.0] }
+    Vertex { position: [-1.0, -1.0, 0.0], tex_coords: [0.0, 0.0] },
+    Vertex { position: [-1.0,  1.0, 0.0], tex_coords: [0.0, 1.0] },
+    Vertex { position: [ 1.0,  1.0, 0.0], tex_coords: [1.0, 1.0] },
+    Vertex { position: [ 1.0, -1.0, 0.0], tex_coords: [1.0, 0.0] }
   ];
 
   let quad_vertex_buffer = VertexBuffer::immutable(&display, &quad_vertices).unwrap();
@@ -146,7 +159,7 @@ fn main() {
   let quad_vertex_shader_src = r#"
     #version 120
 
-    attribute vec2 position;
+    attribute vec3 position;
     attribute vec2 tex_coords;
     varying vec2 v_tex_coords;
 
@@ -154,7 +167,7 @@ fn main() {
 
     void main() {
         v_tex_coords = tex_coords;
-        gl_Position = perspective * vec4(position, 0.0, 1.0);
+        gl_Position = perspective * vec4(position, 1.0);
     }
 "#;
 
@@ -391,7 +404,7 @@ fn main() {
 
 #[derive(Copy, Clone)]
 struct Vertex {
-  position: [f32; 2],
+  position: [f32; 3],
   tex_coords: [f32; 2],
 }
 implement_vertex!(Vertex, position, tex_coords);
@@ -401,4 +414,107 @@ fn clamp(x: f32, min: f32, max: f32) -> f32 {
   // An alternative would be to use a number type that /cannot/ be NaN, since it
   // does not make sense in our context.
   f32::min(f32::max(x, min), max)
+}
+
+
+mod stl {
+  // Stolen from https://github.com/eholk/rust-stl just to make the vertices
+  // inside the Triangle struct public, otherwise you cannot use them!
+
+  extern crate byteorder;
+
+  use std::io::{Result, ErrorKind, Error};
+  use self::byteorder::{ReadBytesExt, LittleEndian};
+
+  pub struct Triangle {
+    normal: [f32; 3],
+    pub v1: [f32; 3],
+    pub v2: [f32; 3],
+    pub v3: [f32; 3],
+    attr_byte_count: u16
+  }
+
+  fn point_eq(lhs: [f32; 3], rhs: [f32; 3]) -> bool {
+    lhs[0] == rhs[0] && lhs[1] == rhs[1] && lhs[2] == rhs[2]
+  }
+
+  impl PartialEq for Triangle {
+    fn eq(&self, rhs: &Triangle) -> bool {
+      point_eq(self.normal, rhs.normal)
+        && point_eq(self.v1, rhs.v1)
+        && point_eq(self.v2, rhs.v2)
+        && point_eq(self.v3, rhs.v3)
+        && self.attr_byte_count == rhs.attr_byte_count
+    }
+  }
+
+  impl Eq for Triangle {}
+
+  pub struct BinaryStlHeader {
+    pub header: [u8; 80],
+    pub num_triangles: u32
+  }
+
+  pub struct BinaryStlFile {
+    pub header: BinaryStlHeader,
+    pub triangles: Vec<Triangle>
+  }
+
+  fn read_point<T: ReadBytesExt>(input: &mut T) -> Result<[f32; 3]> {
+    let x1 = try!(input.read_f32::<LittleEndian>());
+    let x2 = try!(input.read_f32::<LittleEndian>());
+    let x3 = try!(input.read_f32::<LittleEndian>());
+
+    Ok([x1, x2, x3])
+  }
+
+  fn read_triangle<T: ReadBytesExt>(input: &mut T) -> Result<Triangle> {
+    let normal = try!(read_point(input));
+    let v1 = try!(read_point(input));
+    let v2 = try!(read_point(input));
+    let v3 = try!(read_point(input));
+    let attr_count = try!(input.read_u16::<LittleEndian>());
+
+    Ok(Triangle { normal: normal,
+                  v1: v1, v2: v2, v3: v3,
+                  attr_byte_count: attr_count })
+  }
+
+  fn read_header<T: ReadBytesExt>(input: &mut T) -> Result<BinaryStlHeader> {
+    let mut header = [0u8; 80];
+
+    match input.read(&mut header) {
+      Ok(n) => if n == header.len() {
+        ()
+      }
+      else {
+        return Err(Error::new(ErrorKind::Other,
+                              "Couldn't read STL header"));
+      },
+      Err(e) => return Err(e)
+    };
+
+    let num_triangles = try!(input.read_u32::<LittleEndian>());
+
+    Ok(BinaryStlHeader{ header: header, num_triangles: num_triangles })
+  }
+
+  pub fn read_stl<T: ReadBytesExt>(input: &mut T) -> Result<BinaryStlFile> {
+
+    // read the header
+    let header = try!(read_header(input));
+
+    let mut triangles = Vec::new();
+    for _ in 0 .. header.num_triangles {
+      triangles.push(try!(read_triangle(input)));
+    }
+
+    Ok(BinaryStlFile {
+      header: header,
+      triangles: triangles
+    })
+  }
+
+
+
 }

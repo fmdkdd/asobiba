@@ -6,3 +6,4 @@ authors = ["fmdkdd <fmdkdd@gmail.com>"]
 [dependencies]
 glium = "0.15"
 imgui = { git = "https://github.com/Gekkio/imgui-rs" }
+byteorder = "0.5"

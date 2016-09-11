@@ -2,6 +2,7 @@
 name = "space-bang-bang"
 version = "0.1.0"
 dependencies = [
+ "byteorder 0.5.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "glium 0.15.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "imgui 0.1.0-pre (git+https://github.com/Gekkio/imgui-rs)",
 ]
