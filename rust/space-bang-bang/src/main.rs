@@ -344,12 +344,12 @@ fn main() {
     let size_pixels = window.get_inner_size_pixels().unwrap();
     let ui = imgui.frame(size_points, size_pixels, frame_period_s);
 
-    ui.window(im_str!("Vitals"))
-      .build(|| {
-        ui.text(format!("position: {:?}", position).into());
-        ui.text(format!("heading: {}", heading).into());
-        ui.text(format!("velocity: {:?}", velocity).into());
+    ui.text(format!("position: {:?}", position).into());
+    ui.text(format!("heading: {}", heading).into());
+    ui.text(format!("velocity: {:?}", velocity).into());
 
+    ui.window(im_str!("Framerate"))
+      .build(|| {
         frame_period_history[frame_period_history_idx % FRAME_PERIOD_HISTORY_SIZE] =
           frame_period_s * 1000.0;
         frame_period_history_idx += 1;
