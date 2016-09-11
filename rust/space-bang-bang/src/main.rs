@@ -65,7 +65,7 @@ fn main() {
   const FRAME_PERIOD_HISTORY_SIZE: usize = 128;
   let mut frame_period_history = [0f32; FRAME_PERIOD_HISTORY_SIZE];
   let mut frame_period_history_idx = 0;
-  let mut avg_frame_period;
+  let mut avg_frame_period = 0.0;
 
   // Init the ship
   let ship_stl_file = File::open("../assets/ship.stl").unwrap();
@@ -344,45 +344,51 @@ fn main() {
     let size_pixels = window.get_inner_size_pixels().unwrap();
     let ui = imgui.frame(size_points, size_pixels, frame_period_s);
 
-    ui.text(format!("position: {:?}", position).into());
-    ui.text(format!("heading: {}", heading).into());
-    ui.text(format!("velocity: {:?}", velocity).into());
+    ui.window(im_str!("Vitals"))
+      .build(|| {
+        ui.text(format!("position: {:?}", position).into());
+        ui.text(format!("heading: {}", heading).into());
+        ui.text(format!("velocity: {:?}", velocity).into());
 
-    frame_period_history[frame_period_history_idx % FRAME_PERIOD_HISTORY_SIZE] =
-      frame_period_s * 1000.0;
-    frame_period_history_idx += 1;
+        frame_period_history[frame_period_history_idx % FRAME_PERIOD_HISTORY_SIZE] =
+          frame_period_s * 1000.0;
+        frame_period_history_idx += 1;
 
-    avg_frame_period = frame_period_history.iter().fold(0f32, |a, &b| a + b)
-      / FRAME_PERIOD_HISTORY_SIZE as f32;
+        avg_frame_period = frame_period_history.iter().fold(0f32, |a, &b| a + b)
+          / FRAME_PERIOD_HISTORY_SIZE as f32;
 
-    ui.plot_histogram(
-      format!("frame period (ms)\navg: {:.3}ms",
-              avg_frame_period).into(), &frame_period_history)
-      .values_offset(frame_period_history_idx)
-      .graph_size(imgui::ImVec2::new(FRAME_PERIOD_HISTORY_SIZE as f32, 40.0))
-      .scale_min(0.0)
-      .scale_max(30.0)
-      .build();
+        ui.plot_histogram(
+          format!("frame period (ms)\navg: {:.3}ms",
+                  avg_frame_period).into(), &frame_period_history)
+          .values_offset(frame_period_history_idx)
+          .graph_size(imgui::ImVec2::new(FRAME_PERIOD_HISTORY_SIZE as f32, 40.0))
+          .scale_min(0.0)
+          .scale_max(30.0)
+          .build();
+      });
 
-    ui.slider_int(im_str!("Virtual width"),
-                  &mut virtual_resolution.0,
-                  1, 2000).build();
-    ui.slider_int(im_str!("Virtual height"),
-                  &mut virtual_resolution.1,
-                  1, 2000).build();
+    ui.window(im_str!("Gameplay tweaks"))
+      .build(|| {
+        ui.slider_int(im_str!("Virtual width"),
+                      &mut virtual_resolution.0,
+                      1, 2000).build();
+        ui.slider_int(im_str!("Virtual height"),
+                      &mut virtual_resolution.1,
+                      1, 2000).build();
 
-    ui.slider_int(im_str!("Turn speed"),
-                  &mut turn_speed,
-                  1, 64).build();
-    ui.slider_float(im_str!("Boost speed"),
-                    &mut boost_speed,
-                    0.0, 1.0).build();
-    ui.slider_float(im_str!("Brake factor"),
-                    &mut brake_factor,
-                    0.0, 1.0).build();
-    ui.slider_float(im_str!("Max velocity"),
-                    &mut max_velocity,
-                    0.0, 1.0).build();
+        ui.slider_int(im_str!("Turn speed"),
+                      &mut turn_speed,
+                      1, 64).build();
+        ui.slider_float(im_str!("Boost speed"),
+                        &mut boost_speed,
+                        0.0, 1.0).build();
+        ui.slider_float(im_str!("Brake factor"),
+                        &mut brake_factor,
+                        0.0, 1.0).build();
+        ui.slider_float(im_str!("Max velocity"),
+                        &mut max_velocity,
+                        0.0, 1.0).build();
+      });
 
     // Tell ImGUI to render on this frame
     imgui_renderer.render(&mut frame, ui).unwrap();
