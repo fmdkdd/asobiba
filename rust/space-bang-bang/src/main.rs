@@ -82,9 +82,9 @@ impl BulletDrawer {
     let vertex_buffer = VertexBuffer::new(display, &shape).unwrap();
 
     let vertex_shader_src = r#"
-    #version 140
+    #version 120
 
-    in vec3 position;
+    attribute vec3 position;
 
     uniform mat4 model;
     uniform mat4 view;
@@ -95,12 +95,10 @@ impl BulletDrawer {
 "#;
 
     let fragment_shader_src = r#"
-    #version 140
-
-    out vec4 color;
+    #version 120
 
     void main() {
-        color = vec4(1.0, 1.0, 1.0, 1.0);
+        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
     }
 "#;
 
