@@ -10,8 +10,9 @@ use std::time::Instant;
 use glium::glutin::{Event, ElementState, VirtualKeyCode, MouseButton,
                     MouseScrollDelta, TouchPhase};
 
+use glium::backend::Facade;
 use glium::index::PrimitiveType;
-use glium::{DisplayBuild, Surface, VertexBuffer, IndexBuffer};
+use glium::{DisplayBuild, Surface, VertexBuffer, IndexBuffer, Program};
 use glium::texture::{UncompressedFloatFormat, MipmapsOption};
 use glium::texture::texture2d::Texture2d;
 use glium::uniforms::{MagnifySamplerFilter, MinifySamplerFilter};
@@ -46,6 +47,7 @@ impl UiState {
   }
 }
 
+const HEADING_TO_RADS: f32 = std::f32::consts::PI / (128 as f32);
 
 struct Bullet {
   position: [f32; 2],
@@ -54,12 +56,75 @@ struct Bullet {
 }
 
 impl Bullet {
-  fn new() -> Self {
-    Bullet {
-      position: [0.0, 0.0],
-      velocity: [0.0, 0.0],
-      heading: 0,
+  fn update(&mut self) {
+    self.position[0] += self.velocity[0];
+    self.position[1] += self.velocity[1];
+  }
+}
+
+struct BulletDrawer {
+  vertex_buffer: VertexBuffer<Vertex>,
+  program: Program,
+}
+
+impl BulletDrawer {
+  fn new<F: Facade>(display: &F) -> Self {
+    let shape = vec![
+      Vertex { position: [ 1.0, 0.0, 0.0], tex_coords: [0.0, 0.0] },
+      Vertex { position: [ 0.0,-0.5, 0.0], tex_coords: [0.0, 0.0] },
+      Vertex { position: [ 0.0, 0.5, 0.0], tex_coords: [0.0, 0.0] },
+    ];
+
+    let vertex_buffer = VertexBuffer::new(display, &shape).unwrap();
+
+    let vertex_shader_src = r#"
+    #version 140
+
+    in vec3 position;
+
+    uniform mat4 model;
+
+    void main() {
+        gl_Position = model * vec4(position, 1.0);
     }
+"#;
+
+    let fragment_shader_src = r#"
+    #version 140
+
+    out vec4 color;
+
+    void main() {
+        color = vec4(1.0, 1.0, 1.0, 1.0);
+    }
+"#;
+
+    let program = glium::Program::from_source(display, vertex_shader_src, fragment_shader_src, None).unwrap();
+
+    BulletDrawer {
+      vertex_buffer: vertex_buffer,
+      program: program,
+    }
+  }
+
+  fn draw<S: Surface>(&self, framebuffer: &mut S, bullet: &Bullet) {
+    let h = bullet.heading as f32 * HEADING_TO_RADS;
+    let p = bullet.position;
+
+    let model = [
+      [ h.cos(), h.sin(), 0.0, 0.0],
+      [ -h.sin(), h.cos(), 0.0, 0.0],
+      [ 0.0, 0.0, 1.0, 0.0],
+      [ p[0], p[1], 0.0, 10.0],
+    ];
+
+    framebuffer.draw(&self.vertex_buffer,
+                     glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList),
+                     &self.program,
+                     &uniform! {
+                       model: model,
+                     },
+                     &Default::default()).unwrap();
   }
 }
 
@@ -100,7 +165,6 @@ fn main() {
   // The ship can rotate and move on its own.
   let mut position = [0.0f32, 0.0f32];
   let mut heading: u8 = 0u8;
-  const HEADING_TO_RADS: f32 = std::f32::consts::PI / (128 as f32);
   let mut velocity = [0.0f32, 0.0f32];
 
   let vertex_buffer = VertexBuffer::new(&display, &shape).unwrap();
@@ -148,6 +212,7 @@ fn main() {
 
   // Bullets!
   let mut bullets: Vec<Bullet> = Vec::new();
+  let bullet_drawer = BulletDrawer::new(&display);
 
   // We want to render to a low resolution framebuffer and use it as a texture
   // that we will draw to the screen afterwards
@@ -323,7 +388,11 @@ fn main() {
 
     // Spawn missiles when firing
     if firing {
-      bullets.push(Bullet::new());
+      bullets.push(Bullet {
+        position: position,
+        velocity: velocity,
+        heading: heading,
+      });
     }
 
     // Update the ship projection matrix
@@ -345,6 +414,12 @@ fn main() {
                        view: view,
                      },
                      &Default::default()).unwrap();
+
+    // Update and draw the bullets
+    for b in bullets.iter_mut() {
+      b.update();
+      bullet_drawer.draw(&mut framebuffer, &b);
+    }
 
     // Draw the framebuffer to the actual screen
 
