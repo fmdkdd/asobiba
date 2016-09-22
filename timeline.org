@@ -3777,3 +3777,16 @@ match instr.opcode() {
 #+END_SRC
 
 I'm sure this emulator has other Rust tricks as well.  Good source.
+
+* [2016-09-22 jeu.]
+** Trying to use the ~keyboard-layout~ layer of spacemacs
+As suggested by [[https://github.com/syl20bnr/spacemacs/issues/6631][issue 6631]].
+
+I tried to add a simple Colemak substitution, JKHL instead of HJKL.  It works
+for the normal evil mode and Helm, but for some reason not in magit.  Actually
+the code for magit does not look up to date, since there is no
+~evil-magit-map~.  Also, it's macros all the way down, and there are no
+docstrings :(
+
+** Finding the keymap where a key is bound
+~describe-key~ seems to take care of it.
