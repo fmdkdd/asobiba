@@ -3790,3 +3790,79 @@ docstrings :(
 
 ** Finding the keymap where a key is bound
 ~describe-key~ seems to take care of it.
+
+* [2016-09-23 ven.]
+** Diving into a smartparens bug for rust-mode
+Namely [[https://github.com/Fuco1/smartparens/issues/642][issue 642]].
+
+Maybe this line?
+
+: (sp--do-action-p (sp-get active-sexp :op) 'autoskip)
+
+Instrumenting the function with edebug, when I insert the closing bracket ">", I
+would expect this expression to be ~t~, but it's nil.
+
+Can I change the return value of something in Edebug?  Hmm looks like I can only
+inspect.
+
+Well, returning ~t~ here indeed fixes the issue.  So why doesn't
+~sp--do-action-p~ return ~t~ here?
+
+Okay it seems that the fault lies with the predicate that determines whether we
+should consider the character as a pair, ~sp-rust-could-be-parameterized~:
+
+#+BEGIN_SRC elisp
+(defun sp-rust-could-be-parameterized (&rest args)
+  "Return t if we could add a <T> in this position.
+If nil, the user is probably using < for something else."
+  (and (apply #'sp-in-code-p args)
+       (looking-back (rx (or letter (seq letter "<") (seq letter "::<"))))))
+#+END_SRC
+
+Hmm, ~rx~ is a macro to make readable regexps.  Yeah, another DSL!
+
+Okay so if I read that correctly,
+
+: (rx (or letter (seq letter "<") (seq letter "::<"))))))
+
+this corresponds to the following cases:
+
+: letter -> A|
+: seq letter "<" -> A<|
+: seq letter "::<" -> A::<|
+
+In all these cases, when the cursor at | inserts an opening bracket "<", this
+will insert a closing bracket ">".
+
+But!  The same predicate is also used for auto-skipping the closing bracket, and
+in that case the regexp fails.
+
+Hmm wait, actually the first case will match:
+
+: <T|>
+
+there's a letter, 'T'.
+
+So what's happening?
+
+Ah! That's because autoskip let the user input the closing bracket, then try to
+determine if it should remove it, thus auto-skipping transparently for the user.
+But when testing for removal, this is the current code:
+
+: <T>|>
+
+and there are no regexp cases that match.
+
+One way to fix that is to add a ">" case to the regexp.
+
+** Writing an ERT test for this smartparens bug
+Okay, now that it's fixed, it might be good idea to leave a test there to ensure
+this does not pop up again.
+
+Hmm running `make test` fails because of ruby tests... not my problem.  How do I
+run only rust tests?
+
+: cake exec ert-runner -p rust
+
+Great.  Now, reading the existing tests, this looks pretty straightforward.
+Done.
