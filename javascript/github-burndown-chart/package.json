@@ -1,0 +1,11 @@
+{
+  "name": "github-burndown-chart",
+  "version": "0.1.0",
+  "description": "Burndown chart for Github repositories",
+  "main": "index.js",
+  "author": "fmdkdd",
+  "license": "MIT",
+  "dependencies": {
+    "github": "^3.1.1"
+  }
+}

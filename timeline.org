@@ -3866,3 +3866,46 @@ run only rust tests?
 
 Great.  Now, reading the existing tests, this looks pretty straightforward.
 Done.
+
+* [2016-09-26 lun.]
+** A Github burndown chart
+Motivated by answering a simple question: how is a project catching up with its
+maintenance load?  Specifically, I always see that Spacemacs has >1000 open
+issues and that scares me a bit.
+
+Github has a [[https://github.com/syl20bnr/spacemacs/pulse][pulse page]] that shows how many pull requests were created/merged
+in the last day/week/month.  Same for number of closed issues versus new ones.
+
+That's one data point for the burndown chart.  But it's not the whole picture,
+since you only see as far as one month back.  Also, you can't see the four weeks
+of the month separately without to see the trends.
+
+So at the very least I would like to see: how many issues were created and
+closed in any given week from the birth of the project.  Same with PR.  I see
+that PR are issues in the Github API, so I don't even have to duplicate the work
+here!
+
+For that, I just need to get the list of issues, their creation date and closed
+date.
+
+Do I need authentication to the Github API?  Spacemacs has 7200 total issues/PR.
+We can get a max of 100 issues per call, so 72 calls to get everything, but the
+rate limit is 60 calls per hour.  So I think I need an access.
+
+Okay so I just need to get a personal authorization token from the settings
+page.  Then I can pass it as a header to the request like so:
+
+: curl -H "Authorization: token 1234..." -I https://api.github.com/users/fmdkdd
+
+: X-RateLimit-Limit: 5000
+: X-RateLimit-Remaining: 4999
+
+That should be enough.
+
+Also, I should include my username as user agent as [[https://developer.github.com/v3/#rate-limiting][per the docs]].
+
+So I need something to get these numbers from a given repository.  That involves
+going through each page of results and extracting the info I need.  And probably
+do some caching to avoid hammering the Github API.
+
+Then I need to do a visualization using these results.  Leaning towards D3.
