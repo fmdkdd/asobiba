@@ -3909,3 +3909,15 @@ going through each page of results and extracting the info I need.  And probably
 do some caching to avoid hammering the Github API.
 
 Then I need to do a visualization using these results.  Leaning towards D3.
+
+Okay as a proof of concept I got all the issues for Spacemacs as a JSON file.
+Now I can try a D3 visual.
+
+Hmm D3 has finally landed v4, does that change anything important?  Well OK,
+according to [[https://medium.com/@mbostock/what-makes-software-good-943557f8a488#.494ksjbbg][this post]], I only need to be aware of selection.merge.
+
+I think I need to massage the data a bit.  I want to draw two areas: one for the
+total number of open issues as a function of time, and another for the total
+number of closed issues through time as well.  So, I need to sort the array by
+creation date, go through each issue and emit a point for this date with the
+total number of open and closed issues at this date.
