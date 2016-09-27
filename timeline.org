@@ -3960,3 +3960,28 @@ better OCR recognition.
 However, I failed to filter out specific lines based on their text colors.  I
 think I would need more control over the image, maybe by using OpenCV or
 assorted tools.
+
+** Going back to the burndown chart
+Outputting an SVG circle for every (7192) issue is clearly not the right way to
+go about it.  I wanted to use SVG paths.  d3.area handles that nicely; I just
+had to find an example with the updated v4 syntax.
+
+Also, adding axes is a breeze.
+
+Now, I guess I could add a text input for the repo name it could be a website on
+its own.  But I would need to add caching for the results in the backend.
+
+Meaning, I need to host the backend somewhere.  But I don't want to pay for a
+server.  Are there any free hosting for apps anymore?
+
+The graphs are interesting to look at.  You can clearly see Spacemacs is doomed
+if the current trend is maintained.  A high number of open issues may just
+indicate activity, but if the number of open issues keeps growing, you might
+call that maintenance bankruptcy.
+
+I mean, I just ran the same viz on flycheck, and there you can see a trend of
+unclosed issues picking up early 2016, but reversing around july.  Also, the
+number of open issues never went above 60.
+
+Oh yes!  I also need to maybe separate issues and pull requests.  Same graphs,
+but different colors.
