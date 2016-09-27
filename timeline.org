@@ -3921,3 +3921,42 @@ total number of open issues as a function of time, and another for the total
 number of closed issues through time as well.  So, I need to sort the array by
 creation date, go through each issue and emit a point for this date with the
 total number of open and closed issues at this date.
+
+* [2016-09-27 mar.]
+** Trying to extract text from a bunch of game screenshots
+Apparently [[https://github.com/tesseract-ocr/tesseract][Tesseract]] is good.
+
+It automatically does image treatment, meaning I don't have to fiddle with gimp.
+I mostly need to crop, and since this is always the same area, this can be done
+with imagemagick in one fell swoop.
+
+One issue though is that the screenshots are quite low-res, especially on the
+text.  Tesseract seems more used to 300 dpi texts (paper scans).
+
+The output is okay, but there are characters like 'j' it has trouble with.
+Also, the text in the screenshot has a low line-height, so it occasionally
+misses diacritics or capitals.
+
+One thing to try is to train it on the specific font used.  Apparently, this
+game uses Arial Narrow.
+
+Okay, training was not very successful.  Maybe if I add a word list?  Hmm,
+extracting data from the fra set was only slightly better.  But using the fra
+set directly yields the best results.
+
+Page segmentation method 6 seems to yield the best results as well.  Now I will
+try to find how to best massage the original image.
+
+Cropping + scaling with cubic interpolation to 400% seems good enough.
+
+Using ImageMagick, the Catmull-Rom interpolation has better contrast.  Toying
+with image size now.  Interestingly, smaller images are not always faster to
+process by tesseract.  I'm assuming because Leptonica has a harder time finding
+a good threshold value.  However, larger images will not automatically result in
+better OCR recognition.
+
+400% and 600% are both quite accurate.
+
+However, I failed to filter out specific lines based on their text colors.  I
+think I would need more control over the image, maybe by using OpenCV or
+assorted tools.
