@@ -1,12 +1,19 @@
 document.addEventListener('DOMContentLoaded', init)
 
 function init() {
-  var width = 900
-  var height = 500
+  var margin = {top: 20, right: 40, bottom: 40, left: 20 }
+  // Width and height of the graph, not of the SVG
+  var width = 900 - margin.left - margin.right
+  var height = 400 - margin.top - margin.bottom
 
   var svg = d3.select("body").append("svg")
-      .attr("width", width)
-      .attr("height", height)
+      .attr("width", width + margin.left + margin.right)
+      .attr("height", height + margin.top + margin.bottom)
+      .append("g")
+      .attr("transform", `translate(${margin.left}, ${margin.top})`)
+
+  // Nice colors provided by d3
+  var c = d3.schemeCategory20
 
   d3.json("spacemacs-issues.json", function getData(err, data) {
     if (err) {
@@ -14,69 +21,90 @@ function init() {
       return
     }
 
-    var [points, total] = prepare_data(data)
+    var [points, total_issues, closed_issues] = prepare_data(data)
     var earliest = points[0].time
 
-    var scaleTime = d3.scaleTime()
+    // X and Y axes
+    var x = d3.scaleTime()
         .domain([earliest, Date.now()])
-      .range([2, width - 2])    // 2, -2 to prevent clipping for border points
+        .range([0, width])
 
-    var scaleY = d3.scaleLinear()
-      .domain([0, total])
-      .range([height - 2, 2])   // reversed because SVG origin is top-left
+    var y = d3.scaleLinear()
+        .domain([0, total_issues])
+        .range([height, 0])   // reversed because SVG origin is top-left
+
+    // Draw the axes
+    svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", `translate(0, ${height})`)
+      .call(d3.axisBottom(x))
+
+    svg.append("g")
+      .attr("class", "y axis")
+      .attr("transform", `translate(${width}, 0)`)
+      .call(d3.axisRight(y))
 
     // Draw the total (open+closed) area
-    var totalArea = svg.selectAll("circle.total")
-      .data(points)
+    var total_issues_area = d3.area()
+        .x(function(d) { return x(d.time) })
+        .y1(function(d) { return y(d.total) })
+        .y0(y(0))
 
-    totalArea.enter()
-      .append("circle")
-      .attr("class", "total")
-      .attr("cx", d => scaleTime(d.time))
-      .attr("cy", d => scaleY(d.total))
-      .attr("r", 1)
-      .attr("fill", "red")
+    svg.datum(points)
+      .append("path")
+      .attr("d", total_issues_area)
+      .attr("fill", c[7])
 
     // Draw the closed area
-    var closedArea = svg.selectAll("circle.closed")
-      .data(points)
+    var closed_issues_area = d3.area()
+        .x(function(d) { return x(d.time) })
+        .y1(function(d) { return y(d.closed) })
+        .y0(y(0))
 
-    closedArea.enter()
-      .append("circle")
-      .attr("class", "closed")
-      .attr("cx", d => scaleTime(d.time))
-      .attr("cy", d => scaleY(d.closed))
-      .attr("r", 1)
-      .attr("fill", "green")
-
+    svg.datum(points)
+      .append("path")
+      .attr("d", closed_issues_area)
+      .attr("fill", c[0])
 
     // Second SVG that only displays the running total of opened issues
     // (open+closed - closed)
-    var openSvg = d3.select("body").append("svg")
-        .attr("width", width)
-        .attr("height", height)
 
-    var openArea = openSvg.selectAll("circle.open")
-        .data(points)
+    // Adjust height
+    height = 200 - margin.top - margin.bottom
 
-    openSvg.append("line")
-      .attr("x1", 0)
-      .attr("y1", height - 2)
-      .attr("x2", width)
-      .attr("y2", height - 2)
-      .attr("stroke", "black")
-      .attr("stroke-width", 1)
+    // Create SVG
+    var open_issues_svg = d3.select("body").append("svg")
+        .attr("width", width + margin.left + margin.right)
+        .attr("height", height + margin.top + margin.bottom)
+        .append("g")
+        .attr("transform", `translate(${margin.left}, ${margin.top})`)
 
+    // Change Y axis
+    y = d3.scaleLinear()
+      .domain([0, total_issues - closed_issues])
+      .range([height, 0])   // reversed because SVG origin is top-left
 
-    openArea.enter()
-      .append("circle")
-      .attr("class", "open")
-      .attr("cx", d => scaleTime(d.time))
-      .attr("cy", d => scaleY(d.total - d.closed))
-      .attr("r", 1)
-      .attr("fill", "blue")
+    // Draw the axes
+    open_issues_svg.append("g")
+      .attr("class", "x axis")
+      .attr("transform", `translate(0, ${height})`)
+      .call(d3.axisBottom(x))
 
+    open_issues_svg.append("g")
+      .attr("class", "y axis")
+      .attr("transform", `translate(${width}, 0)`)
+      .call(d3.axisRight(y).ticks(4))
 
+    // Draw the area of number of open issues over time
+    var open_issues_area = d3.area()
+        .x(function(d) { return x(d.time) })
+        .y1(function(d) { return y(d.total - d.closed) })
+        .y0(y(0))
+
+    open_issues_svg.datum(points)
+      .append("path")
+      .attr("d", open_issues_area)
+      .attr("fill", c[7])
   })
 }
 
@@ -132,5 +160,5 @@ function prepare_data(issues) {
     }
   })
 
-  return [points, total]
+  return [points, total, closed]
 }
