@@ -48,6 +48,35 @@ function init() {
       .attr("cy", d => scaleY(d.closed))
       .attr("r", 1)
       .attr("fill", "green")
+
+
+    // Second SVG that only displays the running total of opened issues
+    // (open+closed - closed)
+    var openSvg = d3.select("body").append("svg")
+        .attr("width", width)
+        .attr("height", height)
+
+    var openArea = openSvg.selectAll("circle.open")
+        .data(points)
+
+    openSvg.append("line")
+      .attr("x1", 0)
+      .attr("y1", height - 2)
+      .attr("x2", width)
+      .attr("y2", height - 2)
+      .attr("stroke", "black")
+      .attr("stroke-width", 1)
+
+
+    openArea.enter()
+      .append("circle")
+      .attr("class", "open")
+      .attr("cx", d => scaleTime(d.time))
+      .attr("cy", d => scaleY(d.total - d.closed))
+      .attr("r", 1)
+      .attr("fill", "blue")
+
+
   })
 }
 
