@@ -12,84 +12,67 @@ usage: fetch-issues <user> <repository>
 var user = args['<user>']
 var repo = args['<repository>']
 
-// Create the API client
-var Github_api = require("github")
-var github = new Github_api({
-  protocol: "https",            // this might be the default, but hey
-
-  // the docs mention you should set this, even though I use a token for auth so
-  // they know who I am
-  headers: {
-    "user-agent": "fmdkdd/github-burndown-chart"
-  },
-})
-
-// Authenticate using a token that's not in version control.
-github.authenticate({
-  type: "token",
-  token: require("./auth.json")["token"],
-})
+var path = require('path')
+var db_filename = path.join('db', user, repo, 'issues.json')
 
 // First, find out the time we synced this user/repo pair.  If the file does not
 // exist, we must fetch all the issues anew.
-var fs = require('fs')
-var path = require('path')
 
-var db_filename = path.join('db', user, repo, 'issues.json')
+var P = require('bluebird')
+var fs = P.promisifyAll(require('fs'))
 
-fs.readFile(db_filename, 'utf8', function(err, data) {
-  if (err) {
-    // No issues saved, then fetch all the issues
-    if (err.code === 'ENOENT') {
+fs.readFileAsync(db_filename, 'utf8')
 
-      // Try to create the directories first, because if that fails, there's no
-      // point fetching the issues.
-      var mkdirp = require('mkdirp')
-      mkdirp(path.dirname(db_filename), function(err) {
-        if (err) { bailOrExit(err) }
-
-        fetchIssuesSince(user, repo, null, function writeToFile(err, issues) {
-          if (err) { bailOrExit(err) }
-
-          // Sort the issues by reverse update time, always
-          issues.sort(sortByReverseUpdateTime)
-
-          // and write
-          console.log(`Saving ${issues.length} issues to file ${db_filename}...`)
-          fs.writeFile(db_filename, JSON.stringify(issues), 'utf8', bailOrExit)
-        })
-      })
-    }
-
-    // Other error, abort
-    else {
-      bailOrExit(err)
-    }
-  }
-
-  // No error, then find the sync time and fetch only the newest issues
-  else {
+  // If the file exists, then parse it, find the sync time and fetch only the
+  // newest issues
+  .then(JSON.parse)
+  .then(old_issues => {
     console.log(`Found existing file ${db_filename}`)
-
-    var old_issues = JSON.parse(data)
 
     // Sort in reverse chronological order, so the latest updated issues is the
     // first one.
     old_issues.sort(sortByReverseUpdateTime)
     var last_update = old_issues[0].updated_at
 
-    fetchIssuesSince(user, repo, last_update, function(err, new_issues) {
-      if (err) { throw err }
+    return P.join(old_issues, fetchIssuesSinceAsync(user, repo, last_update))
+  })
 
-      // Merge old and new issues
-      var merged_issues = mergeIssues(old_issues, new_issues)
+  .then(([old_issues, new_issues]) => {
+    // Merge old and new issues
+    var issues = mergeIssues(old_issues, new_issues)
 
-      // and update the file
-      console.log(`Saving ${merged_issues.length} issues to file ${db_filename}...`)
-      fs.writeFile(db_filename, JSON.stringify(merged_issues), 'utf8', bailOrExit)
-    })
-  }
-})
+    // and update the file
+    console.log(`Saving ${issues.length} issues to file ${db_filename}...`)
+    return fs.writeFile(db_filename, JSON.stringify(issues), 'utf8')
+  })
+
+  .catch(SyntaxError, err => {
+    console.error(`JSON parse error on file ${db_filename}.  Remove this file and retry to fetch a new one.`)
+    process.exit(1)
+  })
+
+  // No issues saved, then fetch all the issues
+  .catch({code: 'ENOENT'}, err => {
+
+    // Create the directories first, because if that fails, there's no
+    // point fetching the issues.
+    var mkdirpAsync = P.promisify(require('mkdirp'))
+    return mkdirpAsync(path.dirname(db_filename))
+      .then(() => fetchIssuesSinceAsync(user, repo, null))
+      .then(issues => {
+        // Sort the issues by reverse update time, always
+        issues.sort(sortByReverseUpdateTime)
+
+        // and write
+        console.log(`Saving ${issues.length} issues to file ${db_filename}...`)
+        return fs.writeFileAsync(db_filename, JSON.stringify(issues), 'utf8')
+      })
+  })
+
+  .catch({code: 404}, err => {
+    console.error(`Unknown repository: ${user}/${repo}`)
+    process.exit(1)
+  })
 
 function sortByUpdateTime(a, b) {
   return new Date(a.updated_at) - new Date(b.updated_at)
@@ -99,17 +82,31 @@ function sortByReverseUpdateTime(a, b) {
   return -sortByUpdateTime(a, b)
 }
 
-function bailOrExit(err) {
-  if (err) {
-    throw err
-    process.exit(1)
-  }
-  process.exit(0)
-}
+var fetchIssuesSinceAsync = P.promisify(fetchIssuesSince)
 
 function fetchIssuesSince(user, repo, since, cb) {
   // Collect the extracted issues in this object
   var issues = []
+
+  // Create the API client
+  var Github_api = require("github")
+  var github = new Github_api({
+    protocol: "https",            // this might be the default, but hey
+
+    // the docs mention you should set this, even though I use a token for auth so
+    // they know who I am
+    headers: {
+      "user-agent": "fmdkdd/github-burndown-chart"
+    },
+
+    Promise: P,
+  })
+
+  // Authenticate using a token that's not in version control.
+  github.authenticate({
+    type: "token",
+    token: require("./auth.json")["token"],
+  })
 
   var options = {
     user: user,
@@ -130,12 +127,9 @@ function fetchIssuesSince(user, repo, since, cb) {
   }
 
   // Start the request for the first page for results
-  github.issues.getForRepo(options, getIssues)
+  return github.issues.getForRepo(options).then(getIssues, cb)
 
-  function getIssues(err, res) {
-    // Pass any error to the callback
-    if (err) { cb(err) }
-
+  function getIssues(res) {
     // Write a dot for each page of results; it may take some time so this
     // provides feedback to the user
     process.stdout.write('.')
@@ -156,12 +150,12 @@ function fetchIssuesSince(user, repo, since, cb) {
 
     // Fetch the next page if it exists
     if (github.hasNextPage(res)) {
-      github.getNextPage(res, getIssues)
+      return github.getNextPage(res).then(getIssues, cb)
     }
     // Otherwise we are done, signal the callback
     else {
       process.stdout.write(`fetched ${issues.length} issues\n`)
-      cb(undefined, issues)
+      return cb(undefined, issues)
     }
   }
 }

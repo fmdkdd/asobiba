@@ -4004,3 +4004,28 @@ Then this DB can be queried directly by the D3 page to generate the graphs.
 Ultimately, the page will be the one to initiate the sync.
 
 Also, why use a DB, when I can use perfectly reasonable JSON files?
+
+** Caching version done
+I've now got a nice little tool that fetches issues from Github and saves them
+to a file.  When the file already exists, it only gets the newest issues.
+
+I found a good argument for a DB: for dealing with lock and concurrent accesses
+to a file.  Clearly, I've thought of the program as a command-line tool, not as
+a web server.
+
+Well, I prefer the CLI approach anyway.  I guess that means I don't need all
+these callbacks.  Sync all the things!
+
+Well, actually, since I need to deal with the errors anyway, I prefer handling
+them as callbacks than exceptions.  This way the code stays asynchronous if need
+be.  Although I will try to see if promises would make it nicer.
+
+** Using promises
+Okaaaay.  Using promises was not straightforward.  I clearly don't grasp the
+idioms yet.  I might need to implement the Promises/A+ or look at an
+implementation to understand what's going on.
+
+But I managed to make it work.  Is the resulting code clearer?  It got rid of
+~if (err) bail~ calls, and now all errors are caught in one place, which is a
+plus.  It does make the control flow a bit awkward, with ~P.join~ in one place.
+But maybe there's a better way to write it.

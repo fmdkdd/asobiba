@@ -6,6 +6,7 @@
   "author": "fmdkdd",
   "license": "MIT",
   "dependencies": {
+    "bluebird": "^3.4.6",
     "github": "^3.1.1",
     "mkdirp": "^0.5.1",
     "neodoc": "^0.10.1"
