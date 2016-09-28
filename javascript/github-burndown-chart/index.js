@@ -49,7 +49,7 @@ fs.readFile(db_filename, 'utf8', function(err, data) {
           issues.sort(sortByReverseUpdateTime)
 
           // and write
-          console.log(`Saving issues to file ${db_filename}...`)
+          console.log(`Saving ${issues.length} issues to file ${db_filename}...`)
           fs.writeFile(db_filename, JSON.stringify(issues), 'utf8', bailOrExit)
         })
       })
@@ -67,28 +67,30 @@ fs.readFile(db_filename, 'utf8', function(err, data) {
 
     var old_issues = JSON.parse(data)
 
-    // first issue is the latest updated, so its update time is the update time of
-    // the whole file
+    // Sort in reverse chronological order, so the latest updated issues is the
+    // first one.
+    old_issues.sort(sortByReverseUpdateTime)
     var last_update = old_issues[0].updated_at
 
     fetchIssuesSince(user, repo, last_update, function(err, new_issues) {
       if (err) { throw err }
 
+      // Merge old and new issues
       var merged_issues = mergeIssues(old_issues, new_issues)
 
-      // Sort in reverse chronological order, so the latest updated issues is the
-      // first one.
-      merged_issues.sort(sortByReverseUpdateTime)
-
-      // Now merge the issues together and update the file
-      console.log(`Saving issues to file ${db_filename}...`)
+      // and update the file
+      console.log(`Saving ${merged_issues.length} issues to file ${db_filename}...`)
       fs.writeFile(db_filename, JSON.stringify(merged_issues), 'utf8', bailOrExit)
     })
   }
 })
 
+function sortByUpdateTime(a, b) {
+  return new Date(a.updated_at) - new Date(b.updated_at)
+}
+
 function sortByReverseUpdateTime(a, b) {
-  return new Date(b.updated_at) - new Date(a.updated_at)
+  return -sortByUpdateTime(a, b)
 }
 
 function bailOrExit(err) {
@@ -158,11 +160,16 @@ function fetchIssuesSince(user, repo, since, cb) {
   }
 }
 
-// Merge fresh issues in the existing array of existing issues
+// Merge fresh issues in the existing array of existing issues, while preserving
+// the sorting order.
 function mergeIssues(old, fresh) {
+
+  // We want to take fresh issues from oldest to newest, as we will unshift them
+  // in the old array, thus preserving the reverse chronological order.
+  fresh.sort(sortByUpdateTime)
+
   // All issues have an id, and if any issue from fresh already exists in old,
   // then delete it in old.
-
   fresh.forEach(function(issue) {
     var i = -1
 
@@ -178,12 +185,10 @@ function mergeIssues(old, fresh) {
       // Remove this issue because we have the fresh one
       old.splice(i, 1)
     }
-  })
 
-  // Afterwards, append all fresh issues to the old array, and return it.  We
-  // don't care about order here, because we'll sort the array before writing
-  // anyway.
-  Array.prototype.push.apply(old, fresh)
+    // In all cases, add the fresh one at the front
+    old.unshift(issue)
+  })
 
   return old
 }
