@@ -1,7 +1,9 @@
-var Github_api = require("github")
-var auth_token = require("./auth.json")["token"]
+// Fetch all the issue data from a given user/repo pair, and saves it into
+// db/user/repo/issues.json.  If the issue file already exists, fetch only the
+// issues updated since the last sync, and merge into the file.
 
-// Create the client
+// Create the API client
+var Github_api = require("github")
 var github = new Github_api({
   protocol: "https",            // this might be the default, but hey
 
@@ -15,56 +17,173 @@ var github = new Github_api({
 // Authenticate using a token that's not in version control.
 github.authenticate({
   type: "token",
-  token: auth_token,
+  token: require("./auth.json")["token"],
 })
 
-// These should be command-line parameters
-var user = "syl20bnr"
-var repo = "spacemacs"
+// TODO: These should be command-line parameters
+var user = "flycheck"
+var repo = "flycheck"
 
-// Start the request for the first page for results
-var req = github.issues.getForRepo({
-  user: user,
-  repo: repo,
-  state: "all",
-  per_page: 100,                // we want /all/ the issues here, so might as
-                                // well get the max per API call
-}, getIssues)
+// First, find out the time we synced this user/repo pair.  If the file does not
+// exist, we must fetch all the issues anew.
+var fs = require('fs')
+var path = require('path')
 
+var db_filename = path.join('db', user, repo, 'issues.json')
 
-// Collect the extracted issues in this object
-var issues = []
-
-function getIssues(err, res) {
-  // Abort now if error
+fs.readFile(db_filename, 'utf8', function(err, data) {
   if (err) {
-    return false
+    // No issues saved, then fetch all the issues
+    if (err.code === 'ENOENT') {
+
+      // Try to create the directories first, because if that fails, there's no
+      // point fetching the issues.
+      var mkdirp = require('mkdirp')
+      mkdirp(path.dirname(db_filename), function(err) {
+        if (err) { bailOrExit(err) }
+
+        fetchIssuesSince(user, repo, null, function writeToFile(err, issues) {
+          if (err) { bailOrExit(err) }
+
+          // Sort the issues by reverse update time, always
+          issues.sort(sortByReverseUpdateTime)
+
+          // and write
+          console.log(`Saving issues to file ${db_filename}...`)
+          fs.writeFile(db_filename, JSON.stringify(issues), 'utf8', bailOrExit)
+        })
+      })
+    }
+
+    // Other error, abort
+    else {
+      bailOrExit(err)
+    }
   }
 
-  // Discard most issue information.  We just want the dates, ids, and to know
-  // if it's a pull request or not.
-  res.forEach(issue => {
-    issues.push({
-      id: issue.id,
-      number: issue.number,
-      state: issue.state,
-      pull_request: "pull_request" in issue,
-      created_at: issue.created_at,
-      closed_at: issue.closed_at,
-    })
-  })
-
-  // Fetch the next page if it exists
-  if (github.hasNextPage(res)) {
-    github.getNextPage(res, getIssues)
-  }
-  // Otherwise write to output
+  // No error, then find the sync time and fetch only the newest issues
   else {
-    outputIssues()
+    console.log(`Found existing file ${db_filename}`)
+
+    var old_issues = JSON.parse(data)
+
+    // first issue is the latest updated, so its update time is the update time of
+    // the whole file
+    var last_update = old_issues[0].updated_at
+
+    fetchIssuesSince(user, repo, last_update, function(err, new_issues) {
+      if (err) { throw err }
+
+      var merged_issues = mergeIssues(old_issues, new_issues)
+
+      // Sort in reverse chronological order, so the latest updated issues is the
+      // first one.
+      merged_issues.sort(sortByReverseUpdateTime)
+
+      // Now merge the issues together and update the file
+      console.log(`Saving issues to file ${db_filename}...`)
+      fs.writeFile(db_filename, JSON.stringify(merged_issues), 'utf8', bailOrExit)
+    })
+  }
+})
+
+function sortByReverseUpdateTime(a, b) {
+  return new Date(b.updated_at) - new Date(a.updated_at)
+}
+
+function bailOrExit(err) {
+  if (err) {
+    throw err
+    process.exit(1)
+  }
+  process.exit(0)
+}
+
+function fetchIssuesSince(user, repo, since, cb) {
+  // Collect the extracted issues in this object
+  var issues = []
+
+  var options = {
+    user: user,
+    repo: repo,
+    state: "all",
+    per_page: 100,    // we want /all/ the issues here, so might as
+                      // well get the max per API call
+  }
+
+  // If 'since' was specified, only fetch the issues from that date
+  if (since) {
+    options.since = since
+    process.stdout.write(`Fetching Github issues for ${user}/${repo} since ${since}...`)
+  }
+
+  else {
+    process.stdout.write(`Fetching all Github issues for ${user}/${repo}...`)
+  }
+
+  // Start the request for the first page for results
+  github.issues.getForRepo(options, getIssues)
+
+  function getIssues(err, res) {
+    // Pass any error to the callback
+    if (err) { cb(err) }
+
+    // Write a dot for each page of results; it may take some time so this
+    // provides feedback to the user
+    process.stdout.write('.')
+
+    // Discard most issue information.  We just want the dates, ids, and to know
+    // if it's a pull request or not.
+    res.forEach(issue => {
+      issues.push({
+        id: issue.id,
+        number: issue.number,
+        state: issue.state,
+        pull_request: "pull_request" in issue,
+        created_at: issue.created_at,
+        closed_at: issue.closed_at,
+        updated_at: issue.updated_at,
+      })
+    })
+
+    // Fetch the next page if it exists
+    if (github.hasNextPage(res)) {
+      github.getNextPage(res, getIssues)
+    }
+    // Otherwise we are done, signal the callback
+    else {
+      process.stdout.write(`fetched ${issues.length} issues\n`)
+      cb(undefined, issues)
+    }
   }
 }
 
-function outputIssues() {
-  // Write all collected info to output as JSON
-  console.log(JSON.stringify(issues))
+// Merge fresh issues in the existing array of existing issues
+function mergeIssues(old, fresh) {
+  // All issues have an id, and if any issue from fresh already exists in old,
+  // then delete it in old.
+
+  fresh.forEach(function(issue) {
+    var i = -1
+
+    // Use `some` to short-circuit the search on the `id` key.  It's like
+    // indexOf, but keyed.
+    old.some(function(old_issue, index) {
+      i = index
+      return old_issue.id === issue.id
+    })
+
+    // If we found a match
+    if (i > -1) {
+      // Remove this issue because we have the fresh one
+      old.splice(i, 1)
+    }
+  })
+
+  // Afterwards, append all fresh issues to the old array, and return it.  We
+  // don't care about order here, because we'll sort the array before writing
+  // anyway.
+  Array.prototype.push.apply(old, fresh)
+
+  return old
 }

@@ -3985,3 +3985,22 @@ number of open issues never went above 60.
 
 Oh yes!  I also need to maybe separate issues and pull requests.  Same graphs,
 but different colors.
+
+* [2016-09-28 mer.]
+** Finding a host provider for burndown chart
+Hmm, seems Heroku is not as gracious as it once was.  Can't seem to find a
+decent free service for small applications that are not also utterly useless.
+
+I can't splurge for a 4€/month commitment, especially for small demo.
+Otherwise, hetzner.de looks good.  Or OVH has a very nice VPS at 3.6€/month.
+
+But first things first, adding local caching.  I suppose the nodeJS part could
+act as a simple fetcher of issue data for a given repo.  Given the user and repo
+names, it would fetch all issue data since the latest sync, and merge that into
+a DB.
+
+Then this DB can be queried directly by the D3 page to generate the graphs.
+
+Ultimately, the page will be the one to initiate the sync.
+
+Also, why use a DB, when I can use perfectly reasonable JSON files?
