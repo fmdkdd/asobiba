@@ -2,6 +2,16 @@
 // db/user/repo/issues.json.  If the issue file already exists, fetch only the
 // issues updated since the last sync, and merge into the file.
 
+// Parse args
+var neodoc = require('neodoc')
+
+var args = neodoc.run(`
+usage: fetch-issues <user> <repository>
+`)
+
+var user = args['<user>']
+var repo = args['<repository>']
+
 // Create the API client
 var Github_api = require("github")
 var github = new Github_api({
@@ -19,10 +29,6 @@ github.authenticate({
   type: "token",
   token: require("./auth.json")["token"],
 })
-
-// TODO: These should be command-line parameters
-var user = "flycheck"
-var repo = "flycheck"
 
 // First, find out the time we synced this user/repo pair.  If the file does not
 // exist, we must fetch all the issues anew.
