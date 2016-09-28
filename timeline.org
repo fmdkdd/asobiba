@@ -4029,3 +4029,7 @@ But I managed to make it work.  Is the resulting code clearer?  It got rid of
 ~if (err) bail~ calls, and now all errors are caught in one place, which is a
 plus.  It does make the control flow a bit awkward, with ~P.join~ in one place.
 But maybe there's a better way to write it.
+
+** Making an app
+So now the good thing would be to add a text input to the web page, and fetch
+the corresponding issues.  Or a file selector, and drag and drop.
