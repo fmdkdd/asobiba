@@ -4033,3 +4033,129 @@ But maybe there's a better way to write it.
 ** Making an app
 So now the good thing would be to add a text input to the web page, and fetch
 the corresponding issues.  Or a file selector, and drag and drop.
+
+* [2016-10-03 lun.]
+** Fixing a bug with macro errors in the JSON parser for flycheck errors
+Seems macro errors are not captured by the JSON parser actually.
+
+See flycheck/flycheck-rust/issues/36.
+
+With macro errors, like forgetting an argument to println:
+
+: println!("{}")
+
+the JSON output is pretty big, and contains multiple nested expansion errors,
+like so:
+
+#+BEGIN_EXAMPLE
+{
+  "message": "invalid reference to argument `0` (no arguments given)",
+  "code": null,
+  "level": "error",
+  "spans": [
+    {
+      "file_name": "<std macros>",
+      "is_primary": true,
+      "text": [{
+          "text": "( $ fmt : expr ) => ( print ! ( concat ! ( $ fmt , \"\\n\" ) ) ) ; (",
+        }],
+      "expansion": {
+        "span": {
+          "file_name": "<std macros>",
+          "text": [{
+              "text": "( $ fmt : expr ) => ( print ! ( concat ! ( $ fmt , \"\\n\" ) ) ) ; (",
+            }],
+          "expansion": {
+            "span": {
+              "file_name": "<std macros>",
+              "text": [{
+                  "text": "$ crate :: io :: _print ( format_args ! ( $ ( $ arg ) * ) ) ) ;",
+                }],
+              "expansion": {
+                "span": {
+                  "file_name": "<std macros>",
+                  "text": [{
+                      "text": "( $ fmt : expr ) => ( print ! ( concat ! ( $ fmt , \"\\n\" ) ) ) ; (",
+                    }],
+                  "expansion": {
+                    "span": {
+                      "file_name": "lib.rs",
+                      "text": [{
+                          "text": "    println!(\"{}\");",
+                        }],
+                      "expansion": null
+                    },
+                    "macro_decl_name": "println!",
+                    "def_site_span": {
+                      "file_name": "<std macros>",
+                      "text": [{
+                          "text": "( $ fmt : expr ) => ( print ! ( concat ! ( $ fmt , \"\\n\" ) ) ) ; (",
+                        }, {
+                          "text": "$ fmt : expr , $ ( $ arg : tt ) * ) => (",
+                        }, {
+                          "text": "print ! ( concat ! ( $ fmt , \"\\n\" ) , $ ( $ arg ) * ) ) ;",
+                        }],
+                      "expansion": null
+                    }
+                  }
+                },
+                "macro_decl_name": "print!",
+                "def_site_span": {
+                  "file_name": "<std macros>",
+                  "text": [{
+                      "text": "( $ ( $ arg : tt ) * ) => (",
+                    }, {
+                      "text": "$ crate :: io :: _print ( format_args ! ( $ ( $ arg ) * ) ) ) ;",
+                    }
+                  ],
+                  "expansion": null
+                }
+              }
+            },
+            "macro_decl_name": "format_args!",
+            "def_site_span": null
+          }
+        },
+        "macro_decl_name": "concat!",
+        "def_site_span": null
+#+END_EXAMPLE
+
+But most of it is tossed away in the pretty compiler output:
+
+#+BEGIN_EXAMPLE
+error: invalid reference to argument `0` (no arguments given)
+ --> <std macros>:1:33
+  |
+1 | ( $ fmt : expr ) => ( print ! ( concat ! ( $ fmt , "\n" ) ) ) ; (
+  |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^
+<std macros>:1:33: 1:58 note: in this expansion of concat!
+<std macros>:2:27: 2:58 note: in this expansion of format_args!
+<std macros>:1:23: 1:60 note: in this expansion of print! (defined in <std macros>)
+lib.rs:6:5: 6:20 note: in this expansion of println! (defined in <std macros>)
+#+END_EXAMPLE
+
+So hmm, two things:
+
+- ~file_name~ is not always a file name... it can be "<std macros>"; we should
+  probably avoid creating flycheck-error objects for these
+
+- a span can have an ~expansion~ field which can contain a span, which can
+  contain an expansion...
+
+So we should get all these spans, discard the ones originating in "<std macros>"
+files, and produce flycheck-errors for the others.
+
+Argh.  So I got a workaround up.  But macro errors basically use the JSON error
+output differently.  They do not use "label" (a string) but "text" (an array of
+objects, of which "text", which is a string).  The spans in expansions are not
+primary but they actually contain the expansion failures in a form of stack
+trace.
+
+So when walking the JSON error recursively, we need to know if we are in an
+"expansion span" or not, to know what to extract in each case.  Might be
+worthwhile to write different parsing functions for these cases.
+
+* [2016-10-04 mar.]
+** Fixing the parsing bug for macro errors in flycheck (cont.)
+To simplify the logic, it might be best to collect the "causes" (filename,
+line/column info) first, then build the flycheck error objects afterwards.
