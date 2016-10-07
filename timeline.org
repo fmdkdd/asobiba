@@ -4159,3 +4159,151 @@ worthwhile to write different parsing functions for these cases.
 ** Fixing the parsing bug for macro errors in flycheck (cont.)
 To simplify the logic, it might be best to collect the "causes" (filename,
 line/column info) first, then build the flycheck error objects afterwards.
+
+* [2016-10-06 jeu.]
+** Revamping flycheck-rust
+The goal of flycheck-rust is to set the flycheck variables used by the rust and
+rust-cargo checkers automatically.
+
+That is, the flycheck checkers' job is to run a command (rustc, or cargo), to
+generate errors, parse them, and then let flycheck handle presenting them to the
+user.  Importantly, flycheck checks /files/, not /projects/.  Flycheck has no
+knowledge of a project hierarchy.  When visiting a file, it determines which
+checkers it should enable, and when they should run.  For rust, variables can be
+used to tell flycheck whether ~rust~ or ~rust-cargo~ should be enabled, and
+pieces of the command to run.
+
+The job of flycheck-rust is to set these variables automatically, based on the
+currently visited file.  And for that, we need, for each rust file, to determine
+which variables to set, what values they should have, in order to communicate
+with the checker.
+
+There are two checkers, ~rust~ and ~rust-cargo~.  These are their predicates:
+
+For rust:
+
+#+BEGIN_SRC elisp
+  :predicate (lambda ()
+               (and (not flycheck-rust-crate-root) (flycheck-buffer-saved-p))))
+#+END_SRC
+
+it kicks in when the current buffer has no crate root set.  Implicitly, it means
+that whenever we find a cargo file, we assume the rust-cargo checker is a better
+fit.
+
+The rust-cargo predicate is:
+
+#+BEGIN_SRC elisp
+  :predicate (lambda ()
+               (and (flycheck-buffer-saved-p)
+                    (locate-dominating-file (buffer-file-name) "Cargo.toml"))))
+#+END_SRC
+
+Curiously, they do not use the same variable.  So, amusingly, if you set
+~flycheck-rust-crate-root~ to nil, you can actually enable both checkers at the
+same time.
+
+But with ~flycheck-rust~ enabled, the variable should be non-nil when the
+Cargo.toml file is present, so they amount to the same.  Still, weird that we
+lookup the file manually.
+
+One complication in flycheck-rust is that there may be many different files, not
+just source files but tests, examples, benchmarks...
+
+See http://doc.crates.io/guide.html#project-layout and
+http://doc.crates.io/manifest.html#the-project-layout
+
+But I think ~cargo read-manifest~ should now cover all these cases.  Building a
+test crate now.  Yeah, it seems read-manifest has us covered when it comes to
+finding actual build targets.
+
+There are some added subtleties when it comes to additional source files.  The
+convention is that every files in ~src/~ will contribute to the library target
+(that is, be included by ~src/lib.rs~ directly or recursively), and the binary
+targets (either ~src/main.rs~ or files in ~src/bin~) will import the library.
+Clearly, the binary files could also import support files that are not part of
+the library, but then as these files are imported by a build target, they should
+report build errors.
+
+The same goes for support files used by examples, benches, or test targets.
+However, we can imagine dropping a rust file that is not imported by any
+target.  This is unconventional, but flycheck's job is to check it.  We could
+fallback on the rust checker here and it should work.  The problem is how do we
+/know/ the target the file is associated with?
+
+Cargo doesn't tell us.  In fact, there could be multiple targets associated to a
+file.  For instance, ~src/lib.rs~ is needed by the ~lib~ target, but also by the
+~bin~ target.  How do we know which target to build then?  To get errors, any
+target would do, but the correct answer is to get the smallest target that
+contains our file.
+
+So that seems out of scope for flycheck.  I think we can safely guess
+"conventional" targets:
+
+- ~src/main.rs~ is for the main binary target
+- ~src/bin/x.rs~ for the the 'x' binary target
+- any other file under ~src/~ is for the library target (if it exists),
+  otherwise the main binary target
+
+- ~tests/x.rs~ is for the ~x~ test target
+- ~benches/x.rs~ is for the ~x~ bench target
+- ~examples/x.rs~ is for the ~x~ example target
+
+Now, any files in subdirectories of tests, benches and examples are not picked
+up as targets, but can be used by them.  Problem: if there's a file
+~tests/common/a.rs~, and multiple test targets, which target do we choose?
+
+Hmm, seems we still want an answer to that question from cargo.
+
+Okay, can we still get meaningful errors from the file even if we don't know the
+target it will be used for?  After all, the target is required when /building/,
+but to get compilation errors maybe just starting from the file is okay?
+
+It seems we /can/ use plain ~rustc~ on files to get compilation errors, but
+troubles arise when there are dependencies on external crates.  Rustc alone
+won't fetch the dependencies, because that's cargo's job.
+
+So I'm in favor of embracing the way cargo works, rather than working around it.
+That means: either cargo gives us a way to get compilation errors for a specific
+file, managing dependencies, or we use cargo to build targets rather than files,
+and deal with it.
+
+In the second option, we could use flycheck variables to set the target in some
+edge cases if none can be found.
+
+I'll try the second option first.
+
+** Using cargo to build targets
+There is one canonical way to build things with cargo: ~cargo build~.
+
+We can determine the current target automatically for some files, using
+heuristics for others, and using buffer-local variables for the rest.
+
+Once we have the target, it's a matter of passing it to ~cargo build~ and we
+will get errors.
+
+BUT, to get errors in the JSON format with ~cargo build~ we need to pass the
+option to ~rustc~ via the environment variable ~RUSTFLAGS~.  The problem is,
+changing ~RUSTFLAGS~ will re-trigger a full recompilation, even if it's
+unnecessary in this case since ~--error-format~ does not change the code.
+
+That's not an issue in successive calls by flycheck, but if it's intermingled
+with calls by the user to ~cargo run~ or ~cargo test~, then it will trigger a
+full rebuild of the crate.
+
+Another option is to wait for [[https://github.com/rust-lang/cargo/pull/3000][cargo#3000]] to land, where we can safely ask for
+the JSON format without re-triggering compilation.  But we cannot use
+~no-trans~, which speeds up the recompilation to get error feedback.
+
+Yet another option, that we currently use, is to use ~cargo rustc~ directly.
+There we can safely pass the ~--error-format~ option without triggering
+recompilation, and we can specify targets in the same way as ~cargo build~.
+
+One advantage of using ~cargo rustc~ is that the ~no-trans~ options seems to be
+applied only to the target itself, whereas with RUSTFLAGS it seems to apply to
+all invocations of ~rustc~ made by cargo, and it fails miserably to build a full
+crate.
+
+So the new plan is: use ~cargo rustc~ for now, try to match files files to build
+targets exactly first, then using heuristics based on the conventional cargo
+layout, then let the user use the buffer-local variables to specify the target.
