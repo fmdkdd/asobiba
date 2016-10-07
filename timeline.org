@@ -4307,3 +4307,29 @@ crate.
 So the new plan is: use ~cargo rustc~ for now, try to match files files to build
 targets exactly first, then using heuristics based on the conventional cargo
 layout, then let the user use the buffer-local variables to specify the target.
+
+* [2016-10-07 ven.]
+** Adding tests to flycheck-rust
+Since we have many different crate types and targets, it makes sense to add
+tests to catch them all and avoid regressions.
+
+Should I use ERT or buttercup?  Let's try buttercup first, as it is presumably
+easier to setup and use.
+
+Yep, wasn't hard.
+
+** Fallback strategy for non-exact file/target matches
+In the conventional cargo layout, it seems we can try to match the file by
+stripping off directories:
+
+'test/support/a.rs' won't match any target exactly, so try to match targets
+beginning with 'test/support' (no match), then 'test/' (multiple matches);
+assume the first one.  Stop at the project root.
+
+** Cannot pass error-format to ~cargo rustc~
+AAARGH.  Passing options to ~cargo rustc~ will only apply to the given target,
+not to dependencies.  So if main depends on lib, and we build main, but lib has
+an error, we will get errors as plain text, not in JSON...
+
+Ok ok.  RUSTFLAGS it is then until ~--message-format~ stabilizes.  But RUSTFLAGS
+will trigger recompilation.  Hmmm.
