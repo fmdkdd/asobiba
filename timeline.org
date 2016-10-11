@@ -4333,3 +4333,11 @@ an error, we will get errors as plain text, not in JSON...
 
 Ok ok.  RUSTFLAGS it is then until ~--message-format~ stabilizes.  But RUSTFLAGS
 will trigger recompilation.  Hmmm.
+
+* [2016-10-12 mer.]
+** Updating Spacemacs to 0.200
+Especially dreadful, updating colemak-hjkl.
+
+Seems the issues I was encountering with keyboard-layout are also present
+there.  Hmm, maybe it would be worth it to complete the colemak support for
+keyboard-layout rather than duplicating the work?
