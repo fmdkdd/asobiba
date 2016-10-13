@@ -4371,3 +4371,27 @@ messy fast though.
 
 Hmm okay, managed to ~pcase~ it.
 
+* [2016-10-13 jeu.]
+** The simple fix that was surprisingly tricky
+Trying to fix [[https://github.com/flycheck/flycheck-rust/issues/40][issue 40]] by adding a `user-error` call when cargo cannot be found.
+It works, but a bit too much.  Most command interaction after that will trigger
+the error, rendering Emacs unusable.
+
+Actually, this will also happen if ~cargo~ cannot be found, without the
+~user-error~.  The error is credited to ~global-flycheck-mode-check-buffers~:
+
+: Error in post-command-hook (global-flycheck-mode-check-buffers)
+
+This ~check-buffers~ function is created by ~define-globalized-minor-mode~ and
+is run in ~post-command-hook~, and in turn will call
+~flycheck-mode-enable-in-buffers~, which will turn flycheck-mode in the buffer
+after the ~post-command-hook~.  And turning flycheck-mode will, in turn, call
+the flycheck-rust hook.
+
+I'm not sure there's a point to call ~flycheck-rust-setup~ in the flycheck-hook
+anyway.  It should only be loaded when the rust and rust-cargo checkers
+predicates are true?
+
+In any case, silently doing nothing if the executable cannot be found is not
+really better.  You get a suspicious checker error, but at least it lets you use
+Emacs.
