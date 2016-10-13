@@ -4341,3 +4341,33 @@ Especially dreadful, updating colemak-hjkl.
 Seems the issues I was encountering with keyboard-layout are also present
 there.  Hmm, maybe it would be worth it to complete the colemak support for
 keyboard-layout rather than duplicating the work?
+
+* [2016-10-12 mer.]
+** Updating colemak-hjkl for Spacemacs 0.200
+Argh, the new transient maps with hydra are less easily redefined than the
+micro-states.
+
+Redefining the transient state with the ~spacemacs|define-transient-state~ macro
+does not work.
+
+Redefining the keys directly inside the keymap should work, but I need to find
+the way to run the redefinition code after the keymap is defined.  Alas, the
+hydra is defined in a ~spacemacs/defer-until-after-user-config~.  Which means
+that spacemacs runs code after user config, although the docstring to
+user-config implies otherwise.
+
+Adding the redefinition code to the same ~defer~ hook does not work, because it
+adds the hook at the front rather than at the end.  Does using the extra
+argument to ~add-hook~ works?  Ok, it works.
+
+One extra difficulty with the way this is setup is that the bindings also appear
+in the docstring to Hydra, so we must also change the docstring.  Thankfully,
+the docstring that is used by hydra and displayed to the user is put inside a
+~defvar~, so we can alter it at any point afterwards.
+
+But at this point, since we know that the ~defhydra~ call is happening in the
+~post-user-config~ hook, might as well redefine the call there.  That could get
+messy fast though.
+
+Hmm okay, managed to ~pcase~ it.
+
