@@ -4516,3 +4516,16 @@ Hmm, it's probably reading /etc/passwd to determine my $HOME folder.  This is
 most probably in cargo/util/config.rs::walk_tree, which in turn relies on
 std::env::home_dir.  Which calls sys::os::home_dir, which reads passwd.
 
+** Avoiding errors in flycheck-rust
+As expected, the absence of cargo is not the only potential source of errors.  I
+should really catch all errors to avoid breaking emacs.
+
+Here, opening ~env.rs~ in the stdlib triggered an error.
+
+After RTFM, I found ~with-demoted-errors~ to catch any error and report them as
+messages, which is exactly what we want here.  That way, I can still have custom
+messages for specific errors (like a missing cargo executable, which ought to be
+signaled to the user).
+
+The "proper" way would be to create custom errors with ~define-error~ and signal
+them for each case.  But that's a bit heavy-handed for so little code here.
