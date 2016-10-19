@@ -4395,3 +4395,79 @@ predicates are true?
 In any case, silently doing nothing if the executable cannot be found is not
 really better.  You get a suspicious checker error, but at least it lets you use
 Emacs.
+
+* [2016-10-19 mer.]
+** Rust Language Server first alpha is here
+[[https://internals.rust-lang.org/t/introducing-rust-language-server-source-release/4209][Announcement]]
+
+It seems it does much more than just checking errors, but advertises "errors as
+you type".
+
+So, there might be an overlap with flycheck, especially as I expect there to be
+a dedicated Emacs package to communicate with the RLS, if it's not included in
+rust-mode outright.
+
+Hmm, can't build without the nightly compiler.  I still have rustup, don't I?
+
+I do, just updated and run:
+
+: env PATH=/home/fmdkdd/.cargo/bin:/usr/bin cargo build
+
+to run the rustc and cargo executables from rustup for this command only,
+without changing my PATH globally.
+
+After which I can `cargo run`, and ... hmm.  Do what exactly?
+It's supposed to be a server, but `lsof` reports no open ports.
+
+The doc says to set the SYS_ROOT env var.  Let's do it.  Still no ports.  Ah ok,
+the doc mentions that the language server protocol uses JSON over stdin/stdout.
+The HTTP server is actually a separate option `--http`.
+
+That's interesting.  How do I write to stdin interactively?  Writing anything
+stops the program without any message.
+
+Okay, let's try the HTTP protocol.  It listens on port 9000 and is responsive to
+curl.  But I can't find a way to get compilation errors.
+
+Not ~/on_build~.  Maybe ~/on_save~?.  What does it take?  This:
+
+#+BEGIN_EXAMPLE
+pub struct SaveInput {
+    pub project_path: String,
+    pub saved_file: String,
+}
+#+END_EXAMPLE
+
+but as JSON.  What should the JSON look like?
+
+#+BEGIN_EXAMPLE
+{
+  "project_path": "sample_project_2",
+  "saved_file": "sample_project_2/src/main.rs"
+}
+#+END_EXAMPLE
+
+Yes, but for some reason if the outer braces are eaten in the process, and serde
+cannot parse it as JSON, hence we should double them:
+
+: curl -v -H "Content-Type: application/json" -d '{{"project_path": "sample_project_2", "saved_file": "sample_project_2/src/main.rs"}}' 127.0.0.1:9000/on_save
+
+Success!  It returns some JSON with errors.
+
+#+BEGIN_EXAMPLE
+{
+  "Success": [
+    "{\"message\":\"field is never used: `x`, #[warn(dead_code)] on by default\",\"code\":null,\"level\":\"warning\",\"spans\":[{\"file_name\":\"src/main.rs\",\"byte_start\":137,\"byte_end\":143,\"line_start\":10,\"line_end\":10,\"column_start\":5,\"column_end\":11,\"is_primary\":true,\"text\":[{\"text\":\"    x: u32,\",\"highlight_start\":5,\"highlight_end\":11}],\"label\":null,\"suggested_replacement\":null,\"expansion\":null}],\"children\":[],\"rendered\":null}",
+#+END_EXAMPLE
+
+It's curiously returned as a list of strings, rather than a list of objects, but
+it seems to match the JSON error format of rustc alright.
+
+So, it seems we could add a checker to flycheck that interacts with the RLS by
+sending "on_change" or "on_save" messages, and parse the result, *without*
+caring about build targets.  Here we just say "this file in this project
+changed, give me compilation errors".
+
+Now, let's see if we can get the build target information for a file from cargo
+directly.
+
