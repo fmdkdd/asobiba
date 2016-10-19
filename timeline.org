@@ -4471,3 +4471,48 @@ changed, give me compilation errors".
 Now, let's see if we can get the build target information for a file from cargo
 directly.
 
+** Can cargo gives us a list of build targets for a given file?
+The read-manifest command seems to return a ~Package~.  Does it build a
+dependency graph to find targets, or does it only reads the ~cargo.toml~?
+
+The real work seems to happen [[file:~/proj/flycheck-rust-tests/cargo/src/cargo/util/toml.rs::fn%20to_real_manifest(][in cargo/util/toml.rs::to_real_manifest]], but as
+far as I can tell, it only reads the manifest without actually checking any
+files.
+
+Let's check that with strace:
+
+: strace -e trace=file cargo read-manifest
+
+#+BEGIN_EXAMPLE
+stat("/home/fmdkdd/proj/flycheck-rust/tests/test-crate/Cargo.toml", {st_mode=S_IFREG|0644, st_size=48, ...}) = 0
+open("/home/fmdkdd/proj/flycheck-rust/tests/test-crate/Cargo.toml", O_RDONLY|O_CLOEXEC) = 3
+stat("/home/fmdkdd/proj/flycheck-rust/tests/test-crate/src/lib.rs", {st_mode=S_IFREG|0644, st_size=7, ...}) = 0
+stat("/home/fmdkdd/proj/flycheck-rust/tests/test-crate/src/main.rs", {st_mode=S_IFREG|0644, st_size=40, ...}) = 0
+open("/home/fmdkdd/proj/flycheck-rust/tests/test-crate/src/bin", O_RDONLY|O_NONBLOCK|O_DIRECTORY|O_CLOEXEC) = 3
+open("/home/fmdkdd/proj/flycheck-rust/tests/test-crate/examples", O_RDONLY|O_NONBLOCK|O_DIRECTORY|O_CLOEXEC) = 3
+open("/home/fmdkdd/proj/flycheck-rust/tests/test-crate/tests", O_RDONLY|O_NONBLOCK|O_DIRECTORY|O_CLOEXEC) = 3
+open("/home/fmdkdd/proj/flycheck-rust/tests/test-crate/benches", O_RDONLY|O_NONBLOCK|O_DIRECTORY|O_CLOEXEC) = 3
+#+END_EXAMPLE
+
+It looks for some conventional files and folders, but that seems to happen when
+creating the layout in [[file:~/proj/flycheck-rust-tests/cargo/src/cargo/util/toml.rs::pub%20fn%20from_project_path(root_path:%20&Path)%20->%20Layout%20{][cargo/util/toml.rs::Layout::from_project_path]].  They are
+only checked for existence, not read.
+
+So I guess the compiler is the one that reads the files and resolves the
+dependencies.  Hence, to add the command I want we would need to interact with
+rustc directly.
+
+*** Reading /etc/passwd
+On an unrelated note, there's a read to /etc/passwd.  What's up with that?  The
+context:
+
+#+BEGIN_EXAMPLE
+stat("/.cargo/config", 0x7ffdb20a8690)  = -1 ENOENT (No such file or directory)
+open("/etc/passwd", O_RDONLY|O_CLOEXEC) = 3
+stat("/home/fmdkdd/.cargo/config", 0x7ffdb20a8690) = -1 ENOENT (No such file or directory)
+#+END_EXAMPLE
+
+Hmm, it's probably reading /etc/passwd to determine my $HOME folder.  This is
+most probably in cargo/util/config.rs::walk_tree, which in turn relies on
+std::env::home_dir.  Which calls sys::os::home_dir, which reads passwd.
+
