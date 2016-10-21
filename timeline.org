@@ -4529,3 +4529,39 @@ signaled to the user).
 
 The "proper" way would be to create custom errors with ~define-error~ and signal
 them for each case.  But that's a bit heavy-handed for so little code here.
+
+* [2016-10-21 ven.]
+** Source diving into a solitaire bot
+A [[https://gist.github.com/CyberShadow/218d1ac4033b5d67d99ba5ec4e433b46%20][couple]] of [[https://gist.github.com/BlaXpirit/7a032c0675b56a78d3d0518ac8e4997e][someones]] wrote bots for the solitaire game in Shenzhen I/O.  It
+stumped me as something I didn't know how to build.  The Crisp (yet another
+language!) solution is less than 500 lines of code.
+
+The problems I didn't know how to solve: extracting the info from the game
+screen, sending input back, and then of course solving.
+
+Well, the Crisp solution uses ~import~ to get a single screenshot of the
+starting point.  Then it recognizes the cards, computes the list of moves to the
+solution, and play them with ~xdotool~.
+
+The D solution uses ~scrot~ to get the screen and talks to ~X11~ directly to
+move the mouse.
+
+To recognize the cards, since the cards position is fixed, you could just look
+at the corner of each card with hard-coded coordinates, and find pixels that
+determine its value.
+
+But what they do is a bit more resilient.  They take a sample screenshot of the
+opening game screen, and write down in a text file the value of each card:
+
+: r1 g9 b8 f  g4 r3 g7 b
+: ...
+
+Then they look at the corner area of each card, get the pixels there and
+associate them with the correct value in a hashmap.
+
+Then, they take the actual game screenshot, look at the corners again, get the
+pixels, and lookup the hashmap to get the card values back.
+
+Now they know exactly how the cards are laid out, and just need to solve it.
+The solving is not that simple, but the gist of it is a bread search in the
+solution space, where the goal is to have no cards left in the lower area.
