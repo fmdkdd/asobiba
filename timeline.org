@@ -4807,3 +4807,61 @@ Awk to give me the first different line.  First error on line 24601, after an
 
 Tomorrow, I can start fixing.  Then it would be interesting to add a third
 emulator (Boyo?) to the mix.
+
+* [2016-11-23 mer.]
+** Fixing my GBS emulator, one step at a time
+Now that I've got the trace set up, let's see where the errors are.
+
+First error on ~rl c~ with:
+
+: 0 11001110
+: | |
+: | c
+: carry
+
+Higan gives:
+
+: 1 10011100
+
+and GBS gives:
+
+: 1 10011101
+
+Well, obviously, the LSB of C should be 0.
+
+The bug is here:
+
+: let mut v = x.rotate_left(1);
+: let c = v & 0x01 > 0;
+: if self.f(CY) { v |= 1 }
+
+We rotate x, now the LSB is the new carry value (c), and we erase the LSB with
+the current carry value (CY).  But we only set the LSB if carry is set, and we
+do not clear it when carry is clear.
+
+The fix:
+
+: if self.f(CY) { v |= 1 } else { v &= !1 }
+
+I expect the same bug to happen with ~rr~.
+
+Next bug... ~ld a,($ff44)~.  Ah, yes of course.  FF44 is LY, the current
+vertical line being written to the LCD screen.  I don't emulate that, so no
+wonder.
+
+Strange things though, is that I can't seem to get the output of writing to the
+link port anymore.  I guess there's something tricky with the boot rom that I
+failed to understand.  How does it work in Higan?
+
+There is definitely a flag ~bootromEnable~, which will give data from the boot
+ROM when true, and data from the cartridge mapper otherwise.  Thing is, it is
+disabled by writing to FF50 which does not appear to be documented anywhere.
+
+Do I get a write to FF50? ... nope.  I guess what happens is that the boot rom
+expect LY to work in order to time the Nintendo logo coming down and the chime.
+Crap.
+
+Skipping the boot ROm altogether does not make me closer to passing the tests.
+At all.
+
+So I guess I'll have to emulate at least part of the LCD.
