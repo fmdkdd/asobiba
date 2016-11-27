@@ -4865,3 +4865,13 @@ Skipping the boot ROm altogether does not make me closer to passing the tests.
 At all.
 
 So I guess I'll have to emulate at least part of the LCD.
+
+* [2016-11-27 dim.]
+** There's a language server protocol package for Emacs
+[[https://github.com/sourcegraph/emacs-lsp][In development]].  Does it work with the RLS?
+
+At the moment, it seems this mode only supports TCP.  It appears to work for the
+Go language server, which has a ~--tcp~ option.  Last time I checked, the RLS
+worked over stdio or HTTP, but I don't remember seeing an option for TCP.
+
+The RLS looks like it supports only stdio now.  Shoot.
