@@ -4875,3 +4875,428 @@ Go language server, which has a ~--tcp~ option.  Last time I checked, the RLS
 worked over stdio or HTTP, but I don't remember seeing an option for TCP.
 
 The RLS looks like it supports only stdio now.  Shoot.
+
+* [2016-12-06 mar.]
+** This week's goal: improving Rust support for Emacs
+Plan A: interface the RLS and Flycheck to get diagnostics support through the
+language protocol.
+
+Supposedly, the RLS works with VS Code.  There is already an implementation of
+the LSP for Emacs, but it doesn't work over stdio yet.
+
+So I need:
+- to make the LSP Emacs plugin work over stdio, and
+- to make a Flycheck plugin for the LSP
+
+If that does not work, or if the RLS is still flaky, then I can fall back on
+finishing my PR for flycheck-rust.
+
+** Communicating with the RLS over stdio
+Last time I checked, I got nothing.  Only the HTTP server worked, but now it has
+been removed.
+
+First things first, update the repo, rebuild.
+
+: rustup update
+: env PATH=~/.cargo/bin cargo build
+
+Oh, there's a cargo bug preventing me to update.  Hold on.
+
+[[https://github.com/rust-lang/cargo/issues/3340][That's the one]].  Fix is another environment variable.
+
+: env PATH=... SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt cargo build
+
+Great.
+
+Running it, now I see that they added errors on stdout when you try to type in
+junk.
+
+#+BEGIN_EXAMPLE
+> env [...] cargo run
+test
+Content-Length: 83
+
+{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}
+#+END_EXAMPLE
+
+That's useful.  Also, [[https://github.com/jonathandturner/rls/issues/111][someone mentioned]] the RUST_LOG=debug env variable to get
+more output.  In this case, we get an additional bit of info:
+
+#+BEGIN_EXAMPLE
+> env [...] RUST_LOG=debug cargo run
+DEBUG:rls::server: Language Server Starting up
+test
+INFO:rls::server: Header is malformed
+DEBUG:rls::server: response: "Content-Length: 83\r\n\r\n{\"jsonrpc\": \"2.0\", \"error\": {\"code\": -32700, \"message\": \"Parse error\"}, \"id\": null}"
+Content-Length: 83
+
+{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}DEBUG:rls::server: Server shutting down
+#+END_EXAMPLE
+
+"Header is malformed".  Well, yes of course.
+
+Now, let's see if I can get the Emacs plugin to talk to you.
+
+If Emacs runs the RLS, it can certainly interact with it as a subprocess.
+That's not the intended use case though.  We should rather connect to an
+existing RLS.  Can I attach to the stdin/stdout of a running process?
+
+Ok, after tinkering around with pipes, it seems there is no easy way to attach
+to a the stdin/stdout of a running process from Emacs.  I /can/ write to a
+running process ([[https://serverfault.com/a/297095][thanks]]).  But elisp facilities assume talking to a child
+process.
+
+Also, there's an [[https://github.com/sourcegraph/emacs-lsp/issues/8][issue for emacs-lsp]] discussing this.  And it advocates running
+an instance of the RLS for each project.
+
+Okay, that should be easier.  Instead of opening a network connection, you use
+~start-process~.  Let's see.
+
+: Error: (ls-connection nil)
+
+when trying to run ~lsp-mode-init-conn~.
+
+Hmm'kay.  Turns out this fails there:
+
+: (gethash ws-cache lsp-ws-connection-map)
+
+lsp-mode maintains a hashmap of workspaces to lsp processes.  A workspace is
+what is returned by ~projectile-project-root~.  To avoid calling this function
+every time a message is sent, it saves the result in ~ws-cache~.  But, as far as
+I can see, ~ws-cache~ is never set, only when the mode is ~require~'d.  So when
+you activate ~lsp-mode~ the first time, the it saves the workspace of the
+current buffer.
+
+I added
+
+: (setq ws-cache ws)
+
+in ~lsp-mode-init-conn~ as a temporary workaround.
+
+Now it runs the process!  I had to create a dumb sh file to run the RLS:
+
+#+BEGIN_EXAMPLE
+#!/bin/sh
+
+cd ~/proj/rustls
+env PATH=~/.cargo/bin:/usr/bin SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt RUST_LOG=debug cargo run
+#+END_EXAMPLE
+
+Because I cannot point cargo to the RLS directory.  I could run the what's under
+/target directly but... then I have to add dynamic libraries.
+
+Okay then, now it dies when initializing:
+
+#+BEGIN_EXAMPLE
+DEBUG:rls::server: Language Server Starting up
+thread '<unnamed>' panicked at 'called `Result::unwrap()` on an `Err` value: Syntax(ExpectedSomeValue, 1, 1)', ../src/libcore/result.rs:837
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
+#+END_EXAMPLE
+
+Let's see what is sent:
+
+#+BEGIN_EXAMPLE
+Content-Length: 163
+Content-Type: application/vscode-jsonrpc; charset=utf-8
+
+{"id":30541757336744412,"method":"initialize","params":{"capabilities":null,"processId":null,"rootPath":"/home/fmdkdd/proj/chipers/","initializationOptions":null}}
+Content-Length: 136
+Content-Type: application/vscode-jsonrpc; charset=utf-8
+
+{"id":89837330512483255,"method":"textDocument/didOpen","params":{"textDocument":{"uri":"file:///home/fmdkdd/proj/chipers/src/cpu.rs"}}}
+#+END_EXAMPLE
+
+Okay, two messages are sent.  Which one is causing the error though?
+
+From what I can tell, messages from the RLS are caught by the process filter
+~lsp-filter~.  It looks like it waits for the "Content-Length" string, gets the
+length, parses the message as JSON, and gives either passes it to an existing
+callback or puts it in a hashmap (to be consumed later?).
+
+It doesn't handle Rust error messages like the one above though.
+
+Let's try to send only the first message.
+
+No error so far, but no answer from the server either.  Which, [[https://github.com/Microsoft/language-server-protocol/blob/master/versions/protocol-1-x.md][according to the
+protocol]], is unexpected.  Unless, I'm not /seeing/ the answer because
+~lsp-filter~ eats it.
+
+It seems it's the second message, didOpen, that triggers the parse error on the
+RLS.  Good to know.
+
+But I'm still not getting anything back from the first, the "initialize".
+
+Is this getting through?  Trying to copy and paste the message in the terminal
+when running the RLS there gives me:
+
+#+BEGIN_EXAMPLE
+Content-Length: 83
+
+{"jsonrpc": "2.0", "error": {"code": -32700, "message": "Parse error"}, "id": null}thread '<unnamed>' panicked at 'called `Result::unwrap()` on an `Err` value: Syntax(ExpectedSomeValue, 1, 1)', ../src/libcore/result.rs:837
+#+END_EXAMPLE
+
+But, my message appears as:
+
+#+BEGIN_EXAMPLE
+Content-Length: 164
+
+Content-Type: application/vscode-jsonrpc; charset=utf-8
+
+
+
+{"id":376714719500194922,"method":"initialize","params":{"capabilities":null,"processId":null,"rootPath":"/home/fmdkdd/proj/chipers/","initializationOptions":null}}
+#+END_EXAMPLE
+
+No carriage returns (CR, \r).  Bloody typical.
+
+Ok, let's try to send the message by opening the process in Python.  How many
+yaks will I shave today.
+
+Here's what I got:
+
+#+BEGIN_SRC python
+import subprocess as sp
+
+initialize = b"""Content-Length: 133\r
+Content-Type: application/vscode-jsonrpc; charset=utf8\r
+{"jsonrpc":"2.0","id":12345,"method":"initialize","params":{"capabilities":{},"processId":1,"rootPath":"/home/fmdkdd/proj/chipers/"}}"""
+
+print(initialize)
+
+with sp.Popen(["/home/fmdkdd/proj/rustls/run-rls.sh"], stdin=sp.PIPE, stdout=sp.PIPE) as proc:
+    out, err = proc.communicate(initialize)
+    print(out)
+#+END_SRC
+
+Gosh.  What does it take to send a valid message here?  Okay, turns out the LSP
+mode for Emacs seems to follow the 2.0 revision of the protocol.  I'm not sure
+which version the RLS speaks, as I haven't got a non-error answer back.
+
+Still trying to trace where the parsing fails over in the RLS...
+
+So far, it seems to decode the header, get the content as a string, and
+then... offloads the parsing to a thread.  But before that can happen, the main
+process continues to read messages on stdin, and since there is nothing more to
+read, it aborts prematurely.
+
+Wait, I thought I had a pipe.  Does communicate closes the pipe?  Argh, it looks
+like it waits for the process to terminate, so yes.  Hmm, can I just write to
+stdin then?
+
+Yes, is seems that is better:
+
+#+BEGIN_SRC python
+    proc.stdin.write(initialize)
+    proc.stdin.flush()
+    print(proc.stdout.read())
+#+END_SRC
+
+And here are the first answers from RLS:
+
+#+BEGIN_EXAMPLE
+DEBUG:rls::server: response: "Content-Length: 487\r\n\r\n{\"jsonrpc\":\"2.0\",\"id\":12345,\"result\":{\"capabilities\":{\"textDocumentSync\":2,\"hoverProvider\":true,\"completionProvider\":{\"resolveProvider\":true,\"triggerCharacters\":[\".\"]},\"signatureHelpProvider\":{\"triggerCharacters\":[]},\"definitionProvider\":true,\"referencesProvider\":true,\"documentHighlightProvider\":true,\"documentSymbolProvider\":true,\"workspaceSymbolProvider\":true,\"codeActionProvider\":false,\"documentFormattingProvider\":true,\"documentRangeFormattingProvider\":true,\"renameProvider\":true}}}"
+DEBUG:rls::server: response: "Content-Length: 72\r\n\r\n{\"jsonrpc\":\"2.0\",\"method\":\"rustDocument/diagnosticsBegin\",\"params\":null}"
+#+END_EXAMPLE
+
+Strangely, without RUST_LOG=debug, these are not written to stdout.  What's the
+point then?
+
+Oh, it /should/ output:
+
+#+BEGIN_SRC rust
+        debug!("response: {:?}", o);
+
+        print!("{}", o);
+        io::stdout().flush().unwrap();
+#+END_SRC
+
+But it doesn't.  I get it through ~debug~, but the regular ~print~ does
+nothing.  Maybe... maybe ~flush~ isn't flushing?  Maybe it's buffered somewhere
+because it's too small?
+
+Maybe if I print a bunch?
+
+#+BEGIN_EXAMPLE
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+      print!("{}", o);
+#+END_EXAMPLE
+
+Ah.  The compiler crashed.
+
+#+BEGIN_EXAMPLE
+note: the compiler unexpectedly panicked. this is a bug.
+
+note: we would appreciate a bug report: https://github.com/rust-lang/rust/blob/master/CONTRIBUTING.md#bug-reports
+
+thread 'rustc' panicked at 'Box<Any>', ../src/librustc_errors/lib.rs:382
+note: Run with `RUST_BACKTRACE=1` for a backtrace.
+#+END_EXAMPLE
+
+Weird.  Cannot reproduce.
+
+Still not flushing the response.  Let's try... exiting.  Nope.
+
+At this point, I'm turning to the Python wrapper script.  Maybe there's
+something fishy in there again.
+
+I'm not sure reading my proc.stdout.read() is right.  Let's just pipe that the
+output to the stdout of the process:
+
+#+BEGIN_SRC python:
+with sp.Popen(["/home/fmdkdd/proj/rustls/run-rls.sh"], stdin=sp.PIPE, stdout=sys.stdout, stderr=sys.stderr) as proc:
+    proc.stdin.write(initialize)
+    proc.stdin.flush()
+    while True:
+        time.sleep(1)
+#+END_SRC
+
+And keep the pipe open by sleeping.
+
+Ahhhh.  Much better:
+
+#+BEGIN_EXAMPLE
+Content-Length: 487
+
+{"jsonrpc":"2.0","id":12345,"result":{"capabilities":{"textDocumentSync":2,"hoverProvider":true,"completionProvider":{"resolveProvider":true,"triggerCharacters":["."]},"signatureHelpProvider":{"triggerCharacters":[]},"definitionProvider":true,"referencesProvider":true,"documentHighlightProvider":true,"documentSymbolProvider":true,"workspaceSymbolProvider":true,"codeActionProvider":false,"documentFormattingProvider":true,"documentRangeFormattingProvider":true,"renameProvider":true}}}Content-Length: 72
+
+{"jsonrpc":"2.0","method":"rustDocument/diagnosticsBegin","params":null}Content-Length: 70
+
+{"jsonrpc":"2.0","method":"rustDocument/diagnosticsEnd","params":null}
+#+END_EXAMPLE
+
+I'm tempted to introduce an error to see if the diagnostics work.
+
+Hm, does not seem to give me any diagnostics after the initialize, even though
+it clearly says "diagnosticsBegon" and "diagnosticEnd".  Maybe I should trigger
+the analysis?
+
+Argh, it seems complicated for now.
+
+Okay, I just wanted to know why I didn't get any response from the server when
+communicating through LSP mode.  Now I know it will respond to the initialize
+command, given an adequately formatted message:
+
+#+BEGIN_EXAMPLE
+Content-Length: 133\r
+Content-Type: application/vscode-jsonrpc; charset=utf8\r
+{"jsonrpc":"2.0","id":12345,"method":"initialize","params":{"capabilities":{},"processId":1,"rootPath":"/home/fmdkdd/proj/chipers/"}}
+#+END_EXAMPLE
+
+But the message sent by the LSP was:
+
+#+BEGIN_EXAMPLE
+Content-Length: 163\r
+Content-Type: application/vscode-jsonrpc; charset=utf-8\r
+\r
+{"id":30541757336744412,"method":"initialize","params":{"capabilities":null,"processId":null,"rootPath":"/home/fmdkdd/proj/chipers/","initializationOptions":null}}
+#+END_EXAMPLE
+
+and this fails.  And the culprit is the empty line before the content.  There
+/is/ code in the RLS to skip this line:
+
+#+BEGIN_SRC rust
+        // Skip the new lines
+        let mut tmp = String::new();
+        handle_err!(io::stdin().read_line(&mut tmp), "Could not read from stdin");
+#+END_SRC
+
+But for some reason it does not work.  Removing the empty line in the message
+works.  Alternatively, adding the two bytes for the extra \r\n to Content-Length
+also does the trick.
+
+So, if I remove the empty line in LSP...
+
+Not picking up any response.  But at least, the RLS process is not exiting.
+That's progress.
+
+Hmm hmm.  Seems RLS hangs there:
+
+#+BEGIN_EXAMPLE
+TRACE:rls::server: ["Content-Length:", "165\n"]
+TRACE:rls::server: reading: 165 bytes
+#+END_EXAMPLE
+
+Probably not enough bytes to read on stdin?
+
+In the Python test, I get:
+
+#+BEGIN_EXAMPLE
+TRACE:rls::server: ["Content-Length:", "165\r\n"]
+TRACE:rls::server: reading: 165 bytes
+TRACE:rls::server: content: "\r\n{\"id\":30541757336744412,\"method\":\"initialize\",\"params\":{\"capabilities\":null,\"processId\":null,\"rootPath\":\"/home/fmdkdd/proj/chipers/\",\"initializationOptions\":null}}"
+#+END_EXAMPLE
+
+notice the additional *\r*.  The \r\n is definitely present in the LSP code, but
+it seems to be eaten before it arrives to RLS.  I had a bad feeling about CRLF
+from the start.
+
+If I run "cat" instead of the RLS, here is what is actually sent:
+
+#+BEGIN_EXAMPLE
+Content-Length: 164
+
+Content-Type: application/vscode-jsonrpc; charset=utf-8
+
+#+END_EXAMPLE
+
+No body, even though the argument to ~process-send-string~ contains it.  Also no
+\r.
+
+Trying to mess the with the process coding system... no luck.  Is there any way
+to send raw bytes to a process instead?  Doesn't seem so.
+
+But even disregarding the missing carriage returns, ~cat~ doesn't even get the
+body!  That's mystifying to me.
+
+Even trying to hardcode it fails:
+
+: (process-send-string net-proc "{\"id\":30541757336744412}")
+
+nothing is seen by the child process ~cat~!  Madness.
+
+Okay.  Adding \n at the end fixes it.  It's simply not flushing stdin without
+it.  And I see no way of forcing flush.  So let's add this final \n.
+
+Now I see that it's going through.  And I get a parse error, probably because of
+the missing \r.  I guess if I cannot make Emacs behave, I can always use a
+wrapper to insert carriage returns.
+
+Again, trying to toy with coding-systems, to no avail.
+
+Tomorrow I will try a wrapper around the RLS to insert carriage returns.
+
+Unanswered question: which version of the LS protocol does RLS use?
