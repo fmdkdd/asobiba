@@ -5300,3 +5300,54 @@ Again, trying to toy with coding-systems, to no avail.
 Tomorrow I will try a wrapper around the RLS to insert carriage returns.
 
 Unanswered question: which version of the LS protocol does RLS use?
+
+* [2016-12-07 mer.]
+** Making the LSP mode and the RLS talk to each other
+Written a wrapper python script to add the damned carriage returns:
+
+#+BEGIN_SRC python
+#!/usr/bin/env python
+
+import subprocess as sp
+import sys
+import time
+
+def wrap(body):
+    return "Content-Length: {}\r\nContent-Type: application/vscode-jsonrpc; charset=utf8\r\n{}".format(len(body), body).encode()
+
+with sp.Popen(["/home/fmdkdd/proj/rustls/run-rls.sh"], stdin=sp.PIPE, stdout=sys.stdout, stderr=sp.DEVNULL) as proc:
+    while True:
+        # Read until \n
+        line = sys.stdin.buffer.readline()
+        # Turn the bytes into an UTF8 string
+        line = line.decode()
+        # Line should be a JSON object, we wrap it
+        msg = wrap(line)
+
+        # print(msg)
+
+        # Pass it to the subprocess
+        proc.stdin.write(msg)
+        proc.stdin.flush()
+#+END_SRC
+
+In fact, it adds the whole header, since there's no point passing through a
+botched header from LSP.
+
+Additionally, it silences stderr as the LSP mode cannot handle it.  A better way
+would be to open stderr on Emacs side in a separate buffer, and be ready to get
+errors there.  But, I think in case of parse errors the RLS will answer with a
+JSON message on stdout anyway, so we could still handle errors in LSP without
+watching stderr.
+
+And it works!  And it fails after the initialize, because RLS sends commands
+that are not part of the protocol:
+
+: error in process filter: apply: Invalid function: ((jsonrpc . "2.0") (method . "rustDocument/diagnosticsBegin") (params))
+: error in process filter: Invalid function: ((jsonrpc . "2.0") (method . "rustDocument/diagnosticsBegin") (params))
+
+Mysteriously, there are no diagnostics being printed out between these two
+commands.  I suppose diagnostics are not implemented yet in the RLS.
+
+So this approach works.  But it requires a wrapper, so that's not adequate for a
+plugin.  I now remember that I wanted to try comint.
