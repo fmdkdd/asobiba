@@ -5351,3 +5351,52 @@ commands.  I suppose diagnostics are not implemented yet in the RLS.
 
 So this approach works.  But it requires a wrapper, so that's not adequate for a
 plugin.  I now remember that I wanted to try comint.
+
+* [2016-12-08 jeu.]
+** Comint
+Hmm reading the documentation for comint, it seems more suited for interacting
+with REPLs.  I guess you can sort of see the RLS as a REPL, where you
+communicate with JSON, but there's no interactive part at all.  Not sure this is
+the right way.
+
+** Another emacs-lsp in the wild
+That's hilarious.  A few hours ago, [[https://lists.gnu.org/archive/html/emacs-devel/2016-12/msg00263.html][someone]] asked on emacs-devel why did
+"process-send-string" eat carriage returns, for the purpose of making an LSP
+package to communicate with Rust.  Turns out, [[https://github.com/vibhavp/emacs-lsp][their implementation]] seems more
+advanced than the one from @cmr.
+
+No definite answer on the carriage return problem.
+
+** Trying out the new emacs-lsp
+Seems more solid.  Works over stdout, I can see the messages going out to the
+server and coming back.
+
+They solved the carriage return issue.  The correct incantation was to use
+make-process in order to set ~connection-type~ to ~pipe~, as suggested by the
+answer in the emacs-devel thread:
+
+#+BEGIN_SRC elisp
+(make-process :name "lsp"
+              :buffer bufname
+              :command '("cat" "-A")
+              :connection-type 'pipe)
+#+END_SRC
+
+(using ~cat -A~ to check for carriage returns here)
+
+In addition, the mode sends the right messages when the document changes, or
+when the cursor stays a while on a symbol (using eldoc).
+
+But the answers from the RLS rarely provide any useful content.  On-hover only
+worked on one variable, whereas ~racer-doc~ works on variables, functions...
+
+And there seems to be code for sending out diagnostics, but it's never actually
+triggered.
+
+My conclusion at the moment if that the Emacs side of thing looks good.  We have
+two plugins in the works, with at least one that works out of the box.
+
+Now we just need the RLS to catch up.
+
+That means that, for the rest of the week, I should probably focus on improving
+the state of flycheck-rust using cargo and rustc directly.
