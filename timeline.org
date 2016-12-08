@@ -5400,3 +5400,38 @@ Now we just need the RLS to catch up.
 
 That means that, for the rest of the week, I should probably focus on improving
 the state of flycheck-rust using cargo and rustc directly.
+
+** Flycheck issues
+A few weeks ago, I was in the process of refactoring flycheck-rust, and adding
+tests.  I didn't care much for the plain rust checker, since it seemed hackish
+in the way it looked for dependencies.
+
+Then one of the original contributors for the rust checker showed up for a PR,
+and I looked up the history of this checker.  Initially, it had support for
+highlighting errors as you type.  Then, when rust-cargo came along, this had to
+be disabled because it came in conflict.
+
+I just tried to restore this functionality.  It's really snappy for standalone
+rust files.  It's better than working with the rust playground when testing
+small snippets.
+
+Now, this plain checker is also used for projects that do not make use of
+cargo.  The rub here is that if you have external dependencies, you are on your
+own to manage them and to tell flycheck where to find them.  That's currently
+done through the ~flycheck-rust-library-path~ variable.
+
+~flycheck-rust~ will try to fill this variable by looking around, but that's
+best effort without any guarantees.
+
+Something's bugging me though, since we already have ~flycheck-rust-args~ for
+passing arbitrary arguments to rustc, why the extra
+~flycheck-rust-library-path~?
+
+While we are at digging history, it seems lunaryorn favored passing buffer on
+standard input.  This can be done for rustc by passing "-" as the input
+filename.  But now errors are reported with "<anon>" as source, and you also
+need to change the error parser to not provide any filename in this case.
+Otherwise, errors are filtered and do not appear in the buffer.
+
+Also, there may be lingering flycheck issues over at Spacemacs that were never
+reported upstream.  Might be worth to take a look.
