@@ -5435,3 +5435,133 @@ Otherwise, errors are filtered and do not appear in the buffer.
 
 Also, there may be lingering flycheck issues over at Spacemacs that were never
 reported upstream.  Might be worth to take a look.
+
+* [2016-12-09 ven.]
+** Finding the right target for a rust file
+That's the sole goal of flycheck-rust, and I have seen that the RLS is not there
+yet.  I suspect IntelliJ also requires you to specify which target to run, since
+it gives you the results in a bottom window, and from there you can jump to the
+incriminated files.
+
+My heuristics method is sound, but does not cover all files adequately.  In [[https://github.com/rust-lang/cargo/issues/3211][my
+ticket to cargo]], it was suggested that I look into racer for to determine the
+DAG of dependencies between source files.
+
+From a cursory glance, I cannot find this information in the CLI tool.  But
+maybe this information can be given by the racer library.  But that means
+depending on a third-party tool that is yet to be written.  Hmmm.
+
+It was also suggested to use ~cargo rustc --emit dep-info~.  It can give us a
+file with a dependency graph, with a syntax reminiscent of Makefiles:
+
+#+BEGIN_EXAMPLE
+> rustc --crate-type lib --emit dep-info=t -Z no-analysis src/lib.rs
+> cat t
+srclib: src/lib.rs src/a.rs
+
+src/lib.rs:
+src/a.rs:
+#+END_EXAMPLE
+
+From there, we can determine that ~src/a.rs~ will be checked by the compiler
+when building the the requested target ~src/lib.rs~ for instance.  But that
+requires three steps:
+
+1. First find the list of targets by calling ~cargo metadata~
+2. Generate a dep-info for each target, to get the graph of dependencies
+3. Parse these files and hope to find a match with buffer-filename
+
+With the following limitations:
+
+1. Parse error will prevent the dependencies from being created
+2. The dependencies might change as a result of editing buffers (so you'd want
+   to rerun flycheck-setup)
+
+Also, I cannot get ~cargo rustc~ to emit dependencies.  The trick I found is to
+use:
+
+: env RUSTFLAGS='--emit dep-info -Z no-analysis' cargo build --lib
+
+But, I'm not sure calling cargo is necessary in order to get the dependency
+graph, since using cargo is useful to manage external dependencies, not internal
+ones.  So we should be able to get by with ~rustc~ directly.  But need to test
+on real crate.
+
+Ok so on the trust-dns crate, using ~rustc~ is not enough, since it chokes when
+looking for external crates, even though we are just asking for dep-info.
+
+With cargo?  Passing ~--emit dep-info~ in flags works ... for the first
+invocation of rustc, which happens to be on an external crate, semver.  I get
+dependencies for semver, and after that:
+
+: error: An unknown error occurred
+
+Hmm.  Using ~cargo rustc --lib -- --emit dep-info=bla~ now.  Doesn't write to
+bla.
+
+Okay then.  ~rustc --emit dep-info~ is not an option.  racer is third party
+dependencies.  Then we'll stick to hackish heuristics then.
+
+** On cargo metadata and workspaces
+It the same [[https://github.com/rust-lang/cargo/issues/3211][PR]] was suggested to use ~cargo metadata~ rather than ~cargo
+read-manifest~.  The reasons mentioned were that ~read-manifest~ was deprecated,
+and didn't support workspaces (had to read up on what they are).
+
+I think I used ~read-manifest~ because ~metadata~ will trigger a compilation,
+which seems unacceptable for this use case.  But, turns out that ~metadata
+--no-deps~ will output the JSON that we want without building.
+
+There's just an additional complication: since it's compatible with workspaces,
+we have to find our targets inside a list of packages now.  The question is, how
+do we deal with multiple packages?
+
+(A related question is: what's the difference between a crate and a package?  I
+asked on #rust-tools, and ... no answer yet.  But [[So probably ][watch this space]])
+
+So, workspaces solve the problem of having multiple crates in the same
+repository, when all these crates are really parts of the same project.  [[https://github.com/rust-lang/rfcs/blob/master/text/1525-cargo-workspace.md][The RFC]]
+does a good job of explaining why this is needed and how it works.
+
+The point is to have only one Cargo.lock file, and only one target/ build
+directory, to ensure that all dependencies are synchronized, and to save on
+compilation time.
+
+That's quite important for Flycheck.  At the moment, in a project with
+workspaces, we will look for the nearest Cargo.toml and be able to build targets
+alright.  But, we might not build in the right target folder, since we would
+miss the workspace entirely, and this would cause long compilation times.
+
+In any case, I think we are safe if we just aggregate all "targets" for all
+"packages" when looking for a best match.
+
+Testing against a project with workspaces... (looking for one on Github is
+rather easy, just code search for workspace in TOML files).  Ok, [[Or, we can drop the guessing feature
+https://github.com/bluejekyll/trust-dns ][found one]].
+
+cargo metadata --no-deps gives me two packages, and plenty of targets:
+
+: > cargo metadata --no-deps | jq .packages[].targets[]
+
+But you cannot build anything since it's the top-level Cargo.toml is a virtual
+manifest: it has no associated targets.
+
+: > cargo build
+: error: manifest path `/home/fmdkdd/proj/flycheck-rust-tests/trust-dns/Cargo.toml` is a virtual manifest, but this command requires running against an actual package in this workspace
+
+I would expect to be able to build the crate from the top level by passing
+--package, but no:
+
+: > cargo build --package client --lib
+: <exact same error as above>
+
+With or without --lib, it fails.
+
+So, if I go into client/ and build, will it build in a target/ at the top level
+or inside client/?
+
+Building... oh, it outputs in the top level folder.  Hmm good then, because it
+means we can invoke cargo on the first Cargo.toml we find, without messing
+things up.
+
+So: replace ~read-manifest~ by ~cargo metadata --no-deps~, gather all targets,
+and build in the current directory is fine.
