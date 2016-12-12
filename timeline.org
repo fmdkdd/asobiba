@@ -5565,3 +5565,150 @@ things up.
 
 So: replace ~read-manifest~ by ~cargo metadata --no-deps~, gather all targets,
 and build in the current directory is fine.
+
+* [2016-12-12 lun.]
+** Actually pushing PR
+The time for research is done.  Now is the time to actually code and push.
+
+First things first: enhance the rust-cargo checker in flycheck proper, since
+flycheck-rust is more tricky, but rust-cargo should work without flycheck-rust.
+
+The thing we need to fix is to make the targets variable wider, to accommodate
+test and benches targets.
+
+And use the new ~--message-format=json~ flag to cargo rather than use the
+RUSTFLAGS environment variable for two reasons: 1) currently compilation errors
+in dependencies will not follow the JSON format since passing
+~--error-format=json~ to rustc only applies to the final compilation, and 2)
+using RUSTFLAGS will trigger a recompilation if the user manually runs ~cargo
+build~ without the same RUSTFLAGS.  Using the new flag, cargo knows it does not
+affect compilation output and does not recompile anything superfluous.
+
+Remaining question: should ~-Z no-trans~ be passed in RUSTFLAGS?
+
+On the topic of terminology: we can keep using ~flycheck-rust-crate-type~ even
+for cargo targets, since according to [[https://github.com/rust-lang/cargo/issues/3380][this issue]], they are the same thing.
+
+Argh, bug with --message-format in combination with -Z no-trans.  If I build
+with:
+
+: cargo rustc --message-format=json --lib -- -Z no-trans
+
+I get:
+
+: error: Could not compile `test-crate`.
+
+but no errors, human or JSON on output.
+
+If I do:
+
+: cargo rustc --lib -- -Z no-trans --error-format=json
+
+I get the error.
+
+But!  If I remove the ~-Z no-trans~ and do:
+
+: cargo rustc --message-format=json --lib
+
+Then I get the error.
+
+Hmm, weird, when I try:
+
+: cargo rustc --message-format=json -- -Z no-trans
+
+on chipers (which contain no errors), I also get:
+
+: error: Could not compile `chipers`.
+
+but no errors.  Running with ~--verbose~, as suggested by the compiler, yields:
+
+: error: Could not compile `chipers`.
+: Caused by: failed to parse output: `rustc src/main.rs --error-format=json <snip>`
+: --stderr
+
+#+BEGIN_EXAMPLE
+error: Could not compile `chipers`.
+
+Caused by:
+  failed to parse process output: `rustc src/main.rs --error-format json <snip>`
+--- stderr
+warning: the option `Z` is unstable and should only be used on the nightly compiler, but it is currently accepted for backwards compatibility; this will soon change, see issue #31847 for more details
+
+Caused by:
+  compiler produced invalid json: `warning: the option `Z` is unstable and should only be used on the nightly compiler, but it is currently accepted for backwards compatibility; this will soon change, see issue #31847 for more details`
+#+END_EXAMPLE
+
+So it seems... cargo is parsing the JSON output of rustc (maybe to linearize the
+output of parallel compiler invocations).  But having a Z flag writes on stder,
+and if I interpret the last error correctly, it tries to parse the stderr output
+as JSON.
+
+Reading the source, it seems it expects the JSON output on stderr, and stdout to
+be empty.
+
+Running the ~rustc~ command manually given by --verbose, I see that the JSON
+errors indeed appear on stderr, as well as the "warning" for Z options.  So it
+seems cargo funnels the JSON messages to stdout, but rustc will write everything
+to stderr.
+
+I think I can patch it by skipping over lines from rustc which do not begin with
+'{', same as we do in Flycheck.  Don't know if that's a long-term solution
+though.  Let's try it.
+
+Added the line:
+
+: if line.starts_with("{") {
+
+and now it compiles.  So I guess I can file an issue that with a tentative fix.
+But that means it won't be fixed before ... a long time.  So I'll have to hold
+off my PR for Flycheck until then.  Shoot.
+
+Or we continue using --error-format on the latest target, with the current
+caveats.  Or we skip -Z no-trans, since after all we are using a nightly feature
+on stable rust, and since nightly does not raise the warning, the problem does
+not arise there.  Or we /require/ nightly for Flycheck, but that's a bit steep.
+Or we hold off for [[https://github.com/rust-lang/cargo/pull/3296][cargo check]] to land (but it's not merged yet).
+
+I'd rather find a workaround for the current version of cargo, but I cannot find
+any flag that would allow me to skip this.
+
+Also, using --error-format without RUSTFLAGS quickly fails on the test-crate
+when building a binary that requires the lib, since the lib is a dependency and
+contains an error.  So at the moment I'm stuck, because RUSTFLAGS has the
+downside of triggering recompilation.  As the status quo works, let's leave it
+at that.
+
+What I /can/ do though, is fast-track the clippy checker PR and integrate the
+changes on top of it.  Since it requires nightly anyway, I will be able to use
+--message-format without troubles.
+
+** Fast-tracking the rust-cargo-clippy checker
+Downloading the PR locally to test.
+
+Argh, cannot compile cargo-clippy with latest nightly.  Asking on IRC.  Oh, it's
+a [[https://github.com/Manishearth/rust-clippy/issues/1381][bug]].  Installing the adequate nightly...  Yeah now it works.
+
+Remember to ~rustup default nightly-2016-11-25~ to update the symlinks under
+~/.cargo/bin.
+
+Now I can run clippy with flycheck.  On the surface, it works.
+
+Now what's that talk about clippy checking all the available targets?  I can't
+seem to pass a ~--bin~ or ~--test~ flag, but if I have errors in a test binary
+and in the lib crate, it only prints the error for the lib (even though the test
+does not depend on the lib crate).
+
+Removing the error though, it does pick up errors in examples/.  So it seems it
+does run all targets, but one after the other, not concurrently.  So you cannot
+have error feedback when there's an error in another target that's checked
+before.
+
+Gosh this is annoying, since in the case of Flycheck, it will run for /every/
+target, even for a single buffer.
+
+Well, at least it's opt-in.  But it means there's not much I can do to on it to
+test nightly features.  Just ~--message-format~.
+
+Also, we are not using ~-Z no-trans~ there.  Don't know if we should... maybe
+~no-trans~ should be behind a flag for all rust checkers, that way we let users
+choose between correctness and speed.
