@@ -5712,3 +5712,35 @@ test nightly features.  Just ~--message-format~.
 Also, we are not using ~-Z no-trans~ there.  Don't know if we should... maybe
 ~no-trans~ should be behind a flag for all rust checkers, that way we let users
 choose between correctness and speed.
+
+* [2016-12-14 mer.]
+** Emulating the GameBoy screen
+Trying to separate concerns a bit.
+
+The background is 256*256 pixels, or 32*32 tiles, and tiles is 8*8 pixel.
+
+256*256 = 65536 pixels
+32*32 = 1024 tiles
+32*32 * 8*8 = 65536
+
+The tile map area is 0x1000 bytes long, and two bytes make 8 pixels.
+
+0x1000 * 4 = 16384
+
+0x1000 / 16 = 256
+
+There can be 256 different tiles in the pattern table.
+
+Tried to separate things... there's still a coupling between LCD and Screen.  I
+think it's because Screen is the implementation of an abstract drawing surface,
+and LCD tries to use it directly.  An alternative would be to declare a trait of
+some kind on which I can draw, LCD would use that type, and Screen would
+implement it.
+
+Also, what would be really neat would be to have a mapping between memory places
+and Rust structs for I/O registers and the like.  So you deal with mapping
+to/from bits only once, and after that you deal with structs and fields that
+mean something.  In C you can declare a large RAM, create a struct and map it to
+some place in the RAM and that's it.  All fields now point to the correct
+places.  Changing and accessing the RAM or the field is the same, no additional
+work needed.
