@@ -5744,3 +5744,102 @@ mean something.  In C you can declare a large RAM, create a struct and map it to
 some place in the RAM and that's it.  All fields now point to the correct
 places.  Changing and accessing the RAM or the field is the same, no additional
 work needed.
+
+* [2016-12-16 ven.]
+** Data-binding in Rust
+I did some tests yesterday.  What I can do in C, I can do in Rust using
+mem::transmute at the very least.  Create a large RAM array, create a struct for
+Tiles, and transmute a pointer to the RAM as a pointer to a Tile.
+
+Of course, that's unsafe, and might even be undefined behavior.   And the struct
+might not be densely packed in memory, so you could have holes that do not map
+directly to the RAM.
+
+Otherwise, the Tile struct can contain only /pointers/ to offsets in the RAM.  A
+Tile is a certain view of the RAM, with friendlier field names.  That works, but
+only when the pointers are non-mutable, otherwise you have a trouble of multiple
+mutable borrows.  So that's only a one-way binding.  But actually, I realized
+that's all I need realistically.  The ROM program will always access tile data
+by reading from and writing to the RAM, not through the Tile struct.  The Tile
+struct is useful as a more precise view of some RAM area, and as such can be
+immutable.
+
+In fact, if all the reads and writes go through the RAM first, then you can just
+implement the redirection in the memory module to write in the tiles data rather
+than in the RAM array.  That's what [[https://github.com/Gekkio/mooneye-gb][mooneye]] does.  One downside of this approach
+though is that your (internal) RAM array is not a faithful representation of the
+GB RAM, since parts are never read and written to.  So you cannot serialize it
+by dumping the RAM array.  But, if you stick to the read method of the memory
+module (its interface), then it is consistent.
+
+It might even mirror the way the GB hardware was wired up.  Read/write access to
+the tile pattern table probably was directly wired to VRAM that was held up by
+the PPU chip.
+
+So this approach is fine.
+
+** flycheck-rust errors when browsing cargo
+When fixing bug #3390 in cargo, I noticed flycheck-rust had trouble finding
+the right build targets in some files.  Should probably investigate.
+
+Ah ok, first error was just a fluke caused by Spacemacs STILL NOT PICKING UP THE
+FLYCHECK THAT'S IN MY LOAD PATH.  Jebus.  I have to find out how to do that.
+
+After losing a couple hours (and losing WIP in flycheck due to a hard link even
+though I had used ~ln -s~... sigh) and getting help on the Spacemacs Gitter,
+turns out the only reliable way is to ~load-file~ my local packages.  In another
+case of issue resonance, someone [[https://github.com/syl20bnr/spacemacs/issues/4979][faced the exact same problem]], and for flycheck
+even!
+
+And the other error was caused by a relative path as a target file name given by
+~cargo read-manifest~.  I could workaround it in flycheck-rust, but it seemed
+more appropriate that ~cargo read-manifest~ (and ~cargo metadata~) gave
+canonical file names throughout, so I reported an issue.  Might even send a PR.
+
+** Looking at how mooneye is structured
+Because Rust definitely favors a single-owner for structs, since having multiple
+mutable references to things is a nightmare.
+
+In mooneye, the GPU and PPU (called GPU) are all in a Hardware struct that
+handles read and writes to them.  Then the CPU contains the Hardware, through
+the declared type is a Bus trait:
+
+#+BEGIN_SRC rust
+pub trait Bus {
+  fn write(&mut self, u16, u8);
+  fn read(&self, u16) -> u8;
+  fn emulate(&mut self);
+  fn ack_interrupt(&mut self) -> Option<Interrupt>;
+  fn has_interrupt(&self) -> bool;
+  fn trigger_emu_events(&mut self, EmuEvents);
+}
+#+END_SRC
+
+So the CPU "owns" the hardware in the end, but at least it goes through an
+interface.
+
+The two are assembled in a Machine struct:
+
+#+BEGIN_SRC rust
+pub struct Machine {
+  cpu: Cpu<Hardware>
+}
+
+impl Machine {
+  pub fn new(config: HardwareConfig) -> Machine {
+    Machine {
+      cpu: Cpu::new(Hardware::new(config))
+    }
+}
+#+END_SRC
+
+Disappointing.
+
+rustendo64 is sparse.  It does not appear to have anything other than the CPU at
+the moment.
+
+sprocketnes goes for CPU owning the memory as well.
+
+Weeell.  Turns out, I may be overthinking this.  If the modules interact with
+each other through a Trait, that should be good enough for reuse.  Just have to
+make sure that when you assemble them, you put them in the proper order.
