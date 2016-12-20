@@ -5843,3 +5843,9 @@ sprocketnes goes for CPU owning the memory as well.
 Weeell.  Turns out, I may be overthinking this.  If the modules interact with
 each other through a Trait, that should be good enough for reuse.  Just have to
 make sure that when you assemble them, you put them in the proper order.
+
+* [2016-12-20 mar.]
+** Investigating template parameters for traits
+I saw the solution, but not why it was necessary.  After starting from the bits
+I understand and expanding, I think I'm getting more familiar with how the
+pieces work together.
