@@ -5849,3 +5849,118 @@ make sure that when you assemble them, you put them in the proper order.
 I saw the solution, but not why it was necessary.  After starting from the bits
 I understand and expanding, I think I'm getting more familiar with how the
 pieces work together.
+
+* [2016-12-23 ven.]
+** Installing ArchLinux on a VAIO z13
+Because I'm tired of Ubuntu.
+
+Installing ArchLinux on my desktop was mostly a breeze.  Configuring took time,
+but no hardware hitches.
+
+There are a few additional gotchas for laptops, as usual.
+
+*** Hybrid graphics
+First of all, the z13 is a hybrid graphics machine: one integrated (i915) GPU
+and one discrete nvidia card.  That was a nightmare to get working every time I
+installed Linux on it, but for a while now I have flashed the BIOS to open up
+hidden options, and disabled the nvidia GPU at boot.
+
+*** Raid0
+Second, there are two 64Gb SSDs striped in raid0.  To partition the drives the
+first time (years ago), the only thing that worked out of the box was a Gentoo
+live USB.  Now the ArchLinux live USB flawlessly picked up the raid0
+configuration, but not after the installation.
+
+After GRUB selection, I got "unable to find root UUID".  This was caused by not
+loading the raid modules in the kernel, so the partitions could not be found.
+Adding:
+
+: MODULES="md_mod raid0"
+
+and adding the ~mdadm_udev~ hook:
+
+: HOOKS="base udev autodetect modconf mdadm_udev block filesystems keyboard fsck"
+
+to /etc/mkinitcpio.conf, and running:
+
+: # mdadm --examine --scan > /etc/mdadm.conf
+
+(after installing mdadm), did the trick.
+
+At first I thought it was a fstab issue with the UUIDs, but no.  Also, I tried
+to add the ~mdadm~ hook and it did not work.  Neither did adding the ~block~
+module before ~autodetect~ as suggested by a SO answer.  From a cursory reading
+of ArchWiki, it seems not a good idea to do that either, since autodetect will
+help in lazy loading modules, so it should come early in the hooks list.
+
+*** Backlight
+Since I'm using i3 directly on top of Xorg and xinit, my brightness keys are not
+directly recognized.  Well, they are by ~xev~, but they do not alter the
+backlight.
+
+Though there is a /sys/class/backlight/intel_video/brightness that can be
+altered by writing to it.  And after installing xf86-video-intel, xbacklight
+picks it up and I can bind ~xbacklight -inc 5~ to the brightness keys in my i3
+config.
+
+On a related note, it seems the z13 uses PWM (around 200Hz at the moment), but I
+haven't noticed any flickering in years of use.
+
+*** Optical disk
+That one is probably my fault.  After opening the z13 a couple of times to clean
+it up and re-apply thermal paste, the optical disk tray opens up by itself,
+probably because some sensor was misplaced when putting it back together.
+
+Disabling the sr_mod and cdrom kernel modules did not fix it.  Some forum thread
+suggested disabling in the BIOS.  I don't know if I can.  BRB.
+
+Nope, no option for that.  Probably will have to fix the hardware fault, or
+disconnect it.
+
+*** CapsLock as ctrl + escape
+Can't live without it.
+
+That's built-in in my desktop keyboards.  At least the Ctrl part.  Here I have
+to tell Xorg to do it with:
+
+: localectl --no-convert set-x11-keymap us colemak colemak ctrl:nocaps
+
+the last part.
+
+I could setxkbmap that in my xinitrc, but I'd rather have it as a system
+default.  Even though it means not having it in a dotfile somewhere.  But that's
+system specific anyway.
+
+~xcape~ takes care of turning taps into escape.  Just have to install it, as
+it's in AUR.
+
+Installing cower, missing a PGP key.  Solution is [[https://bbs.archlinux.org/viewtopic.php?id=152337][here]]:
+
+: gpg --list-keys
+: echo 'keyring /etc/pacman.d/gnupg/pubring.gpg' >> ~/.gnupg/gpg.conf
+
+Or, run makepkg with --skippgpcheck.
+
+xcape doesn't work when run from .xinitrc.  Hmm.
+
+Ah no, it does work, but only after hitting the Ctrl key once.  After that, it
+treats CapsLock as a Ctrl as well.  If I never hit the Ctrl_L key, it won't pick
+up the CapsLock as Ctrl.  Annoying.  Maybe if I remap CapsLock through xmodmap
+it will pick it up.  Might come back later to it, but for now the workaround is
+good enough.
+
+*** Touchpad
+At first, the touchpad had the surprising behavior of resetting the pointer
+position to the middle of the screen every time I put my finger on it.  Simply
+installing libinput fixed it.
+
+But, that's not all.  I want taps to register as clicks.  man libinput, and add
+the adequate options to /etc/X11/xorg.conf.d.
+
+There are a couple of lingering warnings in dmesg.  From a quick search, they
+seem harmless.
+
+*** Xorg tips
+I used to set the keyboard delay and rate through startx directly because xset
+settings could be reset.  But I can also put it in
+/etc/X11/xorg.conf.d/00-keyboard.conf to avoid repeating it.
