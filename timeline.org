@@ -5964,3 +5964,64 @@ seem harmless.
 I used to set the keyboard delay and rate through startx directly because xset
 settings could be reset.  But I can also put it in
 /etc/X11/xorg.conf.d/00-keyboard.conf to avoid repeating it.
+
+Wait no, it doesn't work.  WTH.  Oh, that option was actually removed.  Well,
+sticking to aliases it is then.
+
+*** Fonts
+Fira Sans is nice, but it hints pretty badly on small sizes (8px).  And without
+hinting, antialiased fonts are blurry.  Noto scales well.
+
+* [2016-12-25 dim.]
+** ArchLinux with z13 cont.
+*** systemd-backlight service
+This is supposed to save and restore the brightness on sleep/reboot.  I never
+had this working before, and always had the screen brightness set to
+burn-my-retina level.  No more!
+
+The service is enabled by default.  But without the proper kernel setting, it
+saved the wrong backlight under /sys/class/backlight (there were two of those,
+one that was ineffectual).  So, toying with the acpi_backlight kernel option,
+one managed to leave only one folder under /sys/class/backlight, and then it
+worked.
+
+In /etc/default/grub:
+
+: GRUB_CMDLINE_LINUX_DEFAULT="acpi_backlight=native"
+
+that's the ticket.
+
+*** Xmodmap
+The ctrl:nocaps option of X11 is not enough in combination with xcape, since
+apparently xcape does not pick up caps lock as an additional control after I hit
+the original Ctrl_L key.
+
+Maybe by remapping the key in xmodmap directly?
+
+And while I'm at it, I should move my volume/brightness keys bindings to Xmodmap
+rather than i3.
+
+Hmm remapping in xmodmap is picked up by xcape, but not as a modifier.  Maybe I
+should leave the ctrl:nocaps option after all.
+
+Ah!  It works.  Great.
+
+For the other keys, well it appears I have to use xbindkeys to make the config
+i3 agnostic.  But since I'm using i3 for the moment, might as well leave them
+there.
+
+*** Fontconfig nightmare
+Well, I can get Noto as a default sans and serif font, but installing Fira Mono
+*will* fuck up the italic for Dina in Emacs.  That's weird.
+
+Well okay, I don't really care about Fira Mono in Firefox.  So... installing
+ttf-dejavu gives me a mono font in Firefox, but *does not* fuck up Dina.  Sold.
+
+*** Auto-connect to known wifi networks
+That's [[https://wiki.archlinux.org/index.php/Netctl#Automatic_switching_of_profiles][documented]].  Just enable the netctl-auto service and good to go.  I think
+there's a slight delay before I get an IP adress, but maybe there's a way to get
+feedback on that in i3status.
+
+One issue though is that disabling and re-enabling the wifi can fail if the wlan
+interface was already up.  The workaround is to add the Force-Connect=yes option
+to the netctl profile, though that's not the preferred course of action.
