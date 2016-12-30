@@ -6025,3 +6025,11 @@ feedback on that in i3status.
 One issue though is that disabling and re-enabling the wifi can fail if the wlan
 interface was already up.  The workaround is to add the Force-Connect=yes option
 to the netctl profile, though that's not the preferred course of action.
+
+* [2016-12-30 ven.]
+** (Puzzle) game ideas
+Untangling a graph.  Generate a random planar graph and shuffle the node
+positions.  Player can move nodes around.  Goal is to have no edges overlapping
+each other.
+
+Variant: instead of total freedom, nodes can only go in predefined positions.
