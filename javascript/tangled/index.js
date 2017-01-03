@@ -68,7 +68,8 @@ function loop() {
   checkOverlaps()
 
   // Draw
-  ctxt.clearRect(0, 0, canvas.width, canvas.height)
+  ctxt.fillStyle = '#fff'
+  ctxt.fillRect(0, 0, canvas.width, canvas.height)
 
   edges.forEach(e => e.draw(ctxt))
   nodes.forEach(n => n.draw(ctxt))
