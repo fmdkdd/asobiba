@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', start)
 
 let canvas
 let ctxt
-let mouse = {x: 0, y: 0}
 
 function start() {
   canvas = document.getElementById("canvas")
@@ -16,31 +15,71 @@ function start() {
   }
   resizeCanvas()
 
-  document.addEventListener('mousemove', updateMouse)
+  document.addEventListener('click', function onMouseClick(ev) {
+    if (ev.button === 0) {
+      let target = pick({x: ev.clientX, y: ev.clientY}, nodes)
+      if (target) {
+        selectNode(target)
+      }
+    }
+  })
 
-  function updateMouse(ev) {
-    mouse.x = ev.clientX
-    mouse.y = ev.clientY
-  }
-
-  draw()
+  loop()
 }
 
-function draw() {
-  ctxt.clearRect(0, 0, canvas.width, canvas.height)
-
-  edges[0].poly[0].x = mouse.x
-  edges[0].poly[0].y = mouse.y + 5
-  edges[0].poly[1].x = mouse.x
-  edges[0].poly[1].y = mouse.y
-
+function loop() {
+  // Update
   edges.forEach(e => e.color = 'blue')
   checkOverlaps()
 
-  // nodes.forEach(n => n.draw(ctxt))
-  edges.forEach(e => e.draw(ctxt))
+  // Draw
+  ctxt.clearRect(0, 0, canvas.width, canvas.height)
 
-  requestAnimationFrame(draw)
+  edges.forEach(e => e.draw(ctxt))
+  nodes.forEach(n => n.draw(ctxt))
+
+  requestAnimationFrame(loop)
+}
+
+let action = {selectedNode: null}
+
+function selectNode(node) {
+  // No previously selected node
+  if (action.selectedNode == null) {
+    action.selectedNode = node
+    node.selected = true
+  }
+
+  // Otherwise, did we select the same node?
+  else if (action.selectedNode === node) {
+    // If so, toggle it off
+    action.selectedNode = null
+    node.selected = false
+  }
+
+  // If it's another node, swap them and reset selection
+  else {
+    swapNodes(action.selectedNode, node)
+    action.selectedNode.selected = false
+    action.selectedNode = false
+    action.selectedNode = null
+  }
+}
+
+function pick(xy, array) {
+  return first(array, el => el.contains(xy))
+}
+
+function swapNodes(n1, n2) {
+  let x1 = n1.x
+  let y1 = n1.y
+  n1.x = n2.x
+  n1.y = n2.y
+  n2.x = x1
+  n2.y = y1
+
+  // FIXME: should update only affected edges
+  edges.forEach(e => e.updateBounds())
 }
 
 
@@ -52,41 +91,57 @@ let node = {
     return {
       __proto__: node,
       x, y,
-      color: 'blue',
+      color: '#888',
+      selected: false,
     }
   },
 
   draw(ctxt) {
-    ctxt.fillStyle = this.color
+    ctxt.fillStyle = this.selected ? 'yellow' : this.color
     ctxt.beginPath()
     ctxt.arc(this.x, this.y, 25, 0, Math.PI*2)
     ctxt.fill()
+  },
+
+  contains(xy) {
+    let dx = xy.x - this.x
+    let dy = xy.y - this.y
+    let d = Math.sqrt(dx * dx + dy * dy)
+    return d < 25
   },
 }
 
 let edge = {
   new(n1, n2) {
-    return {
+    let o = {
       __proto__: edge,
       n1, n2,
-      poly: [{x: n1.x - 5, y: n1.y},
-             {x: n1.x + 5, y: n1.y - 5},
-             {x: n2.x + 5, y: n2.y},
-             {x: n2.x - 5, y: n2.y + 5}],
-      color: 'blue',
+      nudge: 20,
+      poly: [{x: n1.x, y: n1.y},
+             {x: n2.x, y: n2.y}],
+      color: '#888',
     }
+
+    o.updateBounds()
+
+    return o
+  },
+
+  updateBounds() {
+    let angle = Math.atan2(this.n2.y - this.n1.y, this.n2.x - this.n1.x)
+    this.poly[0].x = this.n1.x + this.nudge * Math.cos(angle)
+    this.poly[0].y = this.n1.y + this.nudge * Math.sin(angle)
+    this.poly[1].x = this.n2.x - this.nudge * Math.cos(angle)
+    this.poly[1].y = this.n2.y - this.nudge * Math.sin(angle)
   },
 
   draw(ctxt) {
-    ctxt.fillStyle = this.color
-    ctxt.lineWidth = 1
+    ctxt.strokeStyle = this.color
+    ctxt.lineWidth = 3
     ctxt.beginPath()
-    ctxt.moveTo(this.poly[0].x, this.poly[1].y)
-    for (var i=1, l=this.poly.length; i < l; ++i) {
-      ctxt.lineTo(this.poly[i].x, this.poly[i].y)
-    }
-    ctxt.closePath()
-    ctxt.fill()
+    ctxt.moveTo(this.poly[0].x, this.poly[0].y)
+    ctxt.lineTo(this.poly[1].x, this.poly[1].y)
+    ctxt.stroke()
   },
 }
 
@@ -111,4 +166,15 @@ function checkOverlaps() {
       }
     }
   }
+}
+
+
+// Utils
+
+function first(array, pred) {
+  for (let i=0, l=array.length; i < l; ++i) {
+    if (pred(array[i]))
+      return array[i]
+  }
+  return null
 }
