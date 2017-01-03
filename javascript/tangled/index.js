@@ -1,5 +1,3 @@
-document.addEventListener('DOMContentLoaded', start)
-
 let width = 800
 let height = 600
 let renderer
@@ -359,4 +357,13 @@ function first(array, pred) {
       return array[i]
   }
   return null
+}
+
+
+// Main
+
+if (document.readyState !== 'loading') {
+  start()
+} else {
+  document.addEventListener('DOMContentLoaded', start)
 }
