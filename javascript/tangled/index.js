@@ -29,7 +29,10 @@ function start() {
 
 function loop() {
   // Update
-  edges.forEach(e => e.color = 'blue')
+  transitions.forEach(t => t.update(1000 / 60))
+  transitions = transitions.filter(t => !t.done)
+
+  edges.forEach(e => {e.updateBounds(); e.color = 'blue'})
   checkOverlaps()
 
   // Draw
@@ -71,15 +74,40 @@ function pick(xy, array) {
 }
 
 function swapNodes(n1, n2) {
-  let x1 = n1.x
-  let y1 = n1.y
-  n1.x = n2.x
-  n1.y = n2.y
-  n2.x = x1
-  n2.y = y1
+  transitionTo(n1, n2, 300)
+  transitionTo(n2, n1, 300)
+}
 
-  // FIXME: should update only affected edges
-  edges.forEach(e => e.updateBounds())
+let transitions = []
+
+let transition = {
+  new(obj, target, time) {
+    return {
+      __proto__: transition,
+      obj, time,
+      target: {x: target.x, y: target.y},
+      step: {x: (target.x - obj.x) / time,
+             y: (target.y - obj.y) / time},
+      elapsed: 0,
+      done: false,
+    }
+  },
+
+  update(dt) {
+    this.obj.x += this.step.x * dt
+    this.obj.y += this.step.y * dt
+    this.elapsed += dt
+
+    if (this.elapsed >= this.time) {
+      this.obj.x = this.target.x
+      this.obj.y = this.target.y
+      this.done = true
+    }
+  },
+}
+
+function transitionTo(p1, p2, time) {
+  transitions.push(transition.new(p1, p2, time))
 }
 
 
