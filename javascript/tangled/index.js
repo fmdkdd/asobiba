@@ -1,20 +1,25 @@
 document.addEventListener('DOMContentLoaded', start)
 
-let canvas
-let ctxt
-let fullscreen = false
+let width = 800
+let height = 600
+let renderer
+let stage
+let fullscreen = true
+let usePIXI = false
 
 function start() {
-  canvas = document.getElementById("canvas")
-  ctxt = canvas.getContext('2d')
+  let cb = setup
 
-  // Use the full window please
-  window.addEventListener('resize', resizeCanvas)
-  function resizeCanvas() {
-    canvas.width = window.innerWidth
-    canvas.height = window.innerHeight
+  if (usePIXI) {
+    PIXIRenderer.new(width, height, cb)
+  } else {
+    CanvasRenderer.new(width, height, cb)
   }
-  resizeCanvas()
+}
+
+function setup(r) {
+  renderer = r
+  document.body.appendChild(renderer.view)
 
   document.addEventListener('click', function onMouseClick(ev) {
     // Fullscreen can only be called inside an event handler
@@ -51,11 +56,13 @@ function start() {
   })
 
   loop()
+  createGraph()
+
 }
 
 function tryFullscreen() {
   // FIXME: prefix
-  canvas.mozRequestFullScreen()
+  renderer.view.mozRequestFullScreen()
   fullscreen = true
 }
 
@@ -64,15 +71,16 @@ function loop() {
   transitions.forEach(t => t.update(1000 / 60))
   transitions = transitions.filter(t => !t.done)
 
-  edges.forEach(e => {e.updateBounds(); e.color = 'blue'})
+  edges.forEach(e => { e.updateBounds(); e.color = 0x0000FF })
   checkOverlaps()
 
   // Draw
-  ctxt.fillStyle = '#fff'
-  ctxt.fillRect(0, 0, canvas.width, canvas.height)
+  renderer.clear(0xFFFFFF)
 
-  edges.forEach(e => e.draw(ctxt))
-  nodes.forEach(n => n.draw(ctxt))
+  edges.forEach(e => e.draw(renderer))
+  nodes.forEach(n => n.draw(renderer))
+
+  renderer.render()
 
   requestAnimationFrame(loop)
 }
@@ -152,16 +160,12 @@ let node = {
     return {
       __proto__: node,
       x, y,
-      color: '#888',
       selected: false,
     }
   },
 
-  draw(ctxt) {
-    ctxt.fillStyle = this.selected ? 'yellow' : this.color
-    ctxt.beginPath()
-    ctxt.arc(this.x, this.y, 25, 0, Math.PI*2)
-    ctxt.fill()
+  draw(g) {
+    g.fillCircle(this.selected ? 0xAAFF00 : 0x888888, this.x, this.y, 25)
   },
 
   contains(xy) {
@@ -180,7 +184,7 @@ let edge = {
       nudge: 20,
       poly: [{x: n1.x, y: n1.y},
              {x: n2.x, y: n2.y}],
-      color: '#888',
+      color: 0x888888,
     }
 
     o.updateBounds()
@@ -196,37 +200,149 @@ let edge = {
     this.poly[1].y = this.n2.y - this.nudge * Math.sin(angle)
   },
 
-  draw(ctxt) {
-    ctxt.strokeStyle = this.color
-    ctxt.lineWidth = 3
-    ctxt.beginPath()
-    ctxt.moveTo(this.poly[0].x, this.poly[0].y)
-    ctxt.lineTo(this.poly[1].x, this.poly[1].y)
-    ctxt.stroke()
+  draw(g) {
+    g.fillLine(this.color, 4,
+               this.poly[0].x, this.poly[0].y,
+               this.poly[1].x, this.poly[1].y)
   },
 }
-
-let nodes = []
-let edges = []
-
-nodes.push(node.new(100, 100),
-           node.new(100, 300),
-           node.new(300, 100),
-           node.new(300, 300))
-
-edges.push(edge.new(nodes[0], nodes[1]),
-           edge.new(nodes[0], nodes[2]),
-           edge.new(nodes[0], nodes[3]),
-           edge.new(nodes[1], nodes[2]))
 
 function checkOverlaps() {
   for (var i=0, l=edges.length; i < l; ++i ) {
     for (var j=i+1; j < l; ++j) {
       if (do_polygons_collide(edges[i].poly, edges[j].poly)) {
-        edges[i].color = edges[j].color = 'red'
+        edges[i].color = edges[j].color = 0xFF0000
       }
     }
   }
+}
+
+let nodes = []
+let edges = []
+
+function createGraph() {
+  nodes.push(node.new(100, 100),
+             node.new(100, 300),
+             node.new(300, 100),
+             node.new(300, 300))
+
+  edges.push(edge.new(nodes[0], nodes[1]),
+             edge.new(nodes[0], nodes[2]),
+             edge.new(nodes[0], nodes[3]),
+             edge.new(nodes[1], nodes[2]))
+}
+
+
+// Renderers
+
+let PIXIRenderer = {
+  new(width, height, callback, options) {
+    options = options || {}
+
+    let script = document.createElement('script')
+    script.src = "pixi.js"
+    script.onload = function PIXILoaded() {
+      let r = new PIXI.autoDetectRenderer(width, height, {antialias: true})
+
+      // TODO:
+      if (options.fillWindow) {
+        console.warn('PIXIRenderer fillWindow not implemented')
+      }
+
+      callback({
+        __proto__: PIXIRenderer,
+        _renderer: r,
+        _stage: new PIXI.Container(),
+      })
+    }
+
+    document.body.appendChild(script)
+  },
+
+  get view() { return this._renderer.view },
+
+  clear(color) {
+    this._stage.removeChildren()
+    this._renderer.backgroundColor = color
+  },
+
+  render() {
+    this._renderer.render(this._stage)
+  },
+
+  fillCircle(color, x, y, radius) {
+    let g = new PIXI.Graphics()
+    g.beginFill(color)
+    g.drawCircle(x, y, radius)
+    g.endFill()
+    this._stage.addChild(g)
+  },
+
+  fillLine(color, width, x1, y1, x2, y2) {
+    let g = new PIXI.Graphics()
+    g.lineStyle(width, color, 1)
+    g.moveTo(x1, y1)
+    g.lineTo(x2, y2)
+    this._stage.addChild(g)
+  },
+}
+
+let CanvasRenderer = {
+  new(width, height, callback, options) {
+    options = options || {}
+
+    let canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    let ctxt = canvas.getContext('2d')
+
+    // Use the full available window
+    if (options.fillWindow) {
+      window.addEventListener('resize', resizeCanvas)
+      resizeCanvas()
+    }
+
+    function resizeCanvas() {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+    }
+
+    callback({
+      __proto__: CanvasRenderer,
+      _canvas: canvas,
+      _ctxt: ctxt,
+    })
+  },
+
+  get view() { return this._canvas },
+
+  clear(color) {
+    this._ctxt.fillStyle = hexToCSS(color)
+    this._ctxt.fillRect(0, 0, this._canvas.width, this._canvas.height)
+  },
+
+  render() {
+  },
+
+  fillCircle(color, x, y, radius) {
+    this._ctxt.fillStyle = hexToCSS(color)
+    this._ctxt.beginPath()
+    this._ctxt.arc(x, y, radius, 0, Math.PI*2)
+    this._ctxt.fill()
+  },
+
+  fillLine(color, width, x1, y1, x2, y2) {
+    this._ctxt.strokeStyle = hexToCSS(color)
+    this._ctxt.lineWidth = width
+    this._ctxt.beginPath()
+    this._ctxt.moveTo(x1, y1)
+    this._ctxt.lineTo(x2, y2)
+    this._ctxt.stroke()
+  },
+}
+
+function hexToCSS(color) {
+  return `#${color.toString(16).padStart(6, 0)}`
 }
 
 
