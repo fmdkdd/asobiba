@@ -2,6 +2,7 @@ document.addEventListener('DOMContentLoaded', start)
 
 let canvas
 let ctxt
+let fullscreen = false
 
 function start() {
   canvas = document.getElementById("canvas")
@@ -16,6 +17,12 @@ function start() {
   resizeCanvas()
 
   document.addEventListener('click', function onMouseClick(ev) {
+    // Fullscreen can only be called inside an event handler
+    if (!fullscreen) {
+      tryFullscreen()
+      return
+    }
+
     if (ev.button === 0) {
       let target = pick({x: ev.clientX, y: ev.clientY}, nodes)
       if (target) {
@@ -25,6 +32,12 @@ function start() {
   })
 
   document.addEventListener('touchstart', function onTouchStart(ev) {
+    // Fullscreen can only be called inside an event handler
+    if (!fullscreen) {
+      tryFullscreen()
+      return
+    }
+
     // One-finger tap
     if (ev.touches.length === 1) {
       let target = pick({x: ev.touches[0].clientX, y: ev.touches[0].clientY}, nodes)
@@ -38,6 +51,12 @@ function start() {
   })
 
   loop()
+}
+
+function tryFullscreen() {
+  // FIXME: prefix
+  canvas.mozRequestFullScreen()
+  fullscreen = true
 }
 
 function loop() {
