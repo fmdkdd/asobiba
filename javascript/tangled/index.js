@@ -55,9 +55,9 @@ function setup(r) {
     ev.preventDefault()
   })
 
-  loop()
   createGraph()
 
+  requestAnimationFrame(loop)
 }
 
 function tryFullscreen() {
@@ -66,9 +66,14 @@ function tryFullscreen() {
   fullscreen = true
 }
 
-function loop() {
+let lastFrame = 0
+
+function loop(now) {
+  let dt = now - lastFrame
+  lastFrame = now
+
   // Update
-  transitions.forEach(t => t.update(1000 / 60))
+  transitions.forEach(t => t.update(dt))
   transitions = transitions.filter(t => !t.done)
 
   edges.forEach(e => { e.updateBounds(); e.color = 0x0000FF })
