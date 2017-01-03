@@ -24,6 +24,19 @@ function start() {
     }
   })
 
+  document.addEventListener('touchstart', function onTouchStart(ev) {
+    // One-finger tap
+    if (ev.touches.length === 1) {
+      let target = pick({x: ev.touches[0].clientX, y: ev.touches[0].clientY}, nodes)
+      if (target) {
+        selectNode(target)
+      }
+    }
+
+    // Don't raise click events
+    ev.preventDefault()
+  })
+
   loop()
 }
 
@@ -135,7 +148,7 @@ let node = {
     let dx = xy.x - this.x
     let dy = xy.y - this.y
     let d = Math.sqrt(dx * dx + dy * dy)
-    return d < 25
+    return d < 50
   },
 }
 
