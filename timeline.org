@@ -6055,3 +6055,16 @@ https://www.jasondavies.com/planarity/planarity.js
 https://github.com/JoyJing1/Planarity
 
 Though they all perform poorly on mobile.
+
+** Fixed failing tests in flycheck ERT suite
+Making a note here: ERT failures are not very readable.  A simple diff would be
+better.
+
+** Writing an Emacs module in Rust
+Should be possible with Emacs 25.
+
+There is a [[https://github.com/janestreet/ecaml][library for OCaml]], and a [[http://diobla.info/blog-archive/modules-tut.html][tutorial for C]].
+
+Problem is, native modules are disabled in the default Emacs build, so most
+users would not benefit from them without going through the trouble of building
+their own Emacs.
