@@ -6033,3 +6033,25 @@ positions.  Player can move nodes around.  Goal is to have no edges overlapping
 each other.
 
 Variant: instead of total freedom, nodes can only go in predefined positions.
+
+* [2017-01-04 mer.]
+** Prototype puzzle game
+I built a prototype.  It works on tablet, but not as fast as I would like it
+to.  50fps on tablet and lower on the phone.  On top of that, there are hiccups
+caused by GC pauses.  For just displaying four nodes... sigh.
+
+I tried to use pixijs, since it is supposedly fast, and will autodetect which
+renderer to use (WebGL or Canvas).  Well, it's slower than using the canvas
+directly.  On the phone, it picks up WebGL and gets 10fps.  Also, it even with
+the antialias option to true, circles are not as nice as using canvas.
+
+I might get more mileage out of not redrawing everything every frame.
+
+** Related game
+Looking around, there seems to be plenty of similar games:
+
+http://johntantalo.com/wiki/Planarity/
+https://www.jasondavies.com/planarity/planarity.js
+https://github.com/JoyJing1/Planarity
+
+Though they all perform poorly on mobile.
