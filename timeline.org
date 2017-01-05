@@ -6068,3 +6068,89 @@ There is a [[https://github.com/janestreet/ecaml][library for OCaml]], and a [[h
 Problem is, native modules are disabled in the default Emacs build, so most
 users would not benefit from them without going through the trouble of building
 their own Emacs.
+
+* [2017-01-05 jeu.]
+** TODO Merge the flycheck/refactor-rust-cargo branch
+Or find out why it was blocked.
+
+Even if the flycheck-rust branch is not ready to automatically fill the
+variables, the checkers should work with benches and tests targets.
+
+** Finding a way to test Flycheck with multiple versions of external tools
+I've updated the tests to pass with the latest GHC (8.0) for instance, but what
+about support for versions < 8.0?
+
+If we don't test those regularly, we will break them.
+
+Historically, flycheck makes no guarantees to keep supporting tool versions (you
+can always not update flycheck).  But while that is convenient for maintaining
+flycheck (keeps from accumulating cruft), it might not be convenient for users.
+
+If there's a way to keep maintaining multiple versions of major languages, we
+should try.  We would need a clear story on deprecating language versions
+though.
+
+Investigate how to test multiple versions: Docker image?  CI?
+
+As a first step, I opened an issue to know if best-effort backward-compatibility
+was something we wanted.
+
+** Finding out why help window does not behave the same as in stock Emacs
+Help windows are always tiny and on the bottom in Spacemacs.  This is annoying
+since I usually want to read all of more than a few lines if I'm calling the
+help.  It does the same thing for explain error buffers for flycheck-rust as
+well.
+
+The always-helpful Emacs manual has many things to tell me.
+
+Apparently, help buffers activate the ~temp-buffer-resize-mode~, which /should/
+resize itself to match the output, but that does not appear to have any effect.
+
+Haha!  Looking through the Spacemacs source, it seems that the ~popwin~ package
+is the culprit.  It's a package to manage pop-up windows, like the Help buffer.
+Disabling this package in Spacemacs gives me larger help windows.
+
+But, it's still not the stock Emacs behavior.  In Emacs, if I call
+explain-error, it will split the window horizontally since I have a wide screen.
+If there frame is too small, it will split vertically.  In Spacemacs, it
+always splits vertically.
+
+Hmm, seems ~(split-window-sensibly)~ is the cause.  It can be tweaked using
+variables as stated in its help.
+
+Ahh okay, even though the threshold values are the same from stock, I'm not
+using the same font, so I have more lines on the screen.  In stock, calling
+~split-window-sensibly~ repeatedly never split vertically, since I never had 80
+lines available.  With the bitmap font, I have 89 lines, and it splits
+vertically first, then horizontally.
+
+But wait, popwin in Spacemacs was configured only for ~*Help*~ buffers, not
+error explanations...  Ahh, loading the flycheck layer actually adds the
+incriminating line:
+
+: ("^\\*Flycheck.+\\*$" :regexp t :dedicated t :position bottom :stick t :noselect t)
+
+so any buffer matching the regexp will be managed by popwin.  If I remove only
+that line, it behaves as expected.
+
+Also, turning on ~temp-buffer-resize-mode~ will fit the window to the buffer
+content, which is especially helpful for error explanations.
+
+Except, curiously, for the error list.  Calling manually
+~resize-temp-buffer-window~ inside works, but it pops up taking half the
+screen.
+
+Ah, that stems from that fact the error list is not temporary.  It is created
+using ~pop-to-buffer~.  I think I can customize ~display-buffer-alist~ to
+autofit it.
+
+Nope, it seems the list is not populated in one go.  Ah, but there's a hook
+after it has finished refreshing.
+
+The hook does not run /inside/ the error list window, but I can select it in the
+hook.
+
+Ahah!  Victory!
+
+Time to call it quits.  I should timestamp my paragraph as well.  These
+inquiries take /hours/.
