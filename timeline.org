@@ -6154,3 +6154,56 @@ Ahah!  Victory!
 
 Time to call it quits.  I should timestamp my paragraph as well.  These
 inquiries take /hours/.
+
+* [2017-01-06 ven.]
+** Displaying errors from other files in Flycheck
+Mentoring someone who volunteered to pick up the work from the previous PR.
+
+After reading the discussion in that PR, it seems there were potential lingering
+issues, especially concerning the :buffer and :filename fields of the
+flycheck-error struct.  @lunaryorn was concerned that the changes would
+highlight all errors in the current buffer, regardless of the file they come
+from.  @chrisdone claimed it worked for Haskell mode.
+
+Testing with Rust... ok, I get a new column in the error list with the filename
+for the error.  But trying to go to the errors in the other file will jump in
+the current buffer, and syntax highlight errors that are not there (since they
+are in the other file).  That's indeed what @lunaryorn reported.
+
+Let's test this in stock Emacs to make sure Spacemacs is not interfering
+somehow.  Same thing.
+
+Now let's see the code.
+
+Okay.  I don't know how the Haskell checker creates its errors, but the Rust
+checker will associate errors to the buffer that invoked it.  That means, errors
+from the whole project will be associated with the current buffer.  Though they
+will have the different filenames.
+
+Now, in ~flycheck-jump-to-error~, we will jump to the buffer associated with the
+error if it exists.  That's why we end up jumping in the same buffer, instead of
+opening up the file associated with the error.
+
+Hmm, the haskell checker uses the :error-patterns to build its flycheck-errors.
+What is the buffer value in this case?  Apparently, the error is created in
+~flycheck-try-parse-error-with-pattern~, and it doesn't give any value for
+:buffer.  But it uses the constructor ~flycheck-error-new-at~, which uses
+~(current-buffer)~ as the default value.  So it should work the same as for
+Rust... weird.
+
+Anyway, the :buffer property of a flycheck error is the buffer that ran the
+checker, not necessarily the buffer associated with the file where the error
+resides.  It seems wrong to reuse this value to find the location of the error.
+
+The filename is the more sensible choice.  But recall that an Emacs buffer is
+not necessarily associated with a filename, and the same file could have
+multiple buffers open.  Regardless, if we have one buffer associated with the
+file, switch to it.  If not, open the file in a new buffer and switch to it.
+
+When this works, there is the question of maybe not calling cargo for every
+buffer if we already have errors ... but it may be an optimization for another
+PR.
+
+That's an interesting feature, but it may not sit well with the way Flycheck
+works.  I'm especially worried about the interaction with flycheck instances in
+other buffers.
