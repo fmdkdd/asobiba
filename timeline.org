@@ -1,6 +1,7 @@
 #+OPTIONS: ^:{}
 
 * [2015-09-30 mer.]
+** which-func for org-mode                                            :emacs:
 :PROPERTIES:
 :header-args: :results none
 :END:
@@ -59,6 +60,7 @@ Another, longer (but more proper?) way of removing them is the following:
 #+END_SRC
 
 * [2015-10-01 jeu.]
+** Collaborative editing in Emacs                                     :emacs:
 I would like to be able to use Emacs for collaborative editing.  I have light
 requirements:
 
@@ -79,13 +81,13 @@ Host has an Emacs session and buffer on file A.  Client wants to drop in Host
 and take control of Emacs from his machine, and edit the same buffer.  He can
 also split windows, switch buffers, etc.
 
-** Using tramp and ssh
+*** Using tramp and ssh
 Client needs ssh access to Host.  Client can browse to file A from his Emacs.
 
 However, Host will not see the changes until Client saves.  This is
 insufficient.
 
-** Using ~make-frame-on-display~
+*** Using ~make-frame-on-display~
 Emacs can spawn a frame on another X display.
 
 The requirements:
@@ -126,7 +128,7 @@ pairing, because tcplisten seems like a fun backdoor to leave open.
 Alas, Client is stuck with the Emacs configuration from Host.  This cannot be
 avoided, since there is only one Emacs process.
 
-** Using tmux
+*** Using tmux
 As suggested [[http://www.emacswiki.org/emacs/tmux_for_collaborative_editing][there]].  However, I could not make the socket sharing work.
 
 Rather, sharing the same tmux session is simple:
@@ -150,7 +152,7 @@ solution should work well over the network (if you can ssh to Host).
 There is even a wrapper around tmux called [[https://github.com/zolrath/wemux/][wemux]] which simplifies the setup and
 provides relevant options for multiple peers.
 
-** Using floobits
+*** Using floobits
 A proprietary web service.  Use a Github account, create a workspace (?) and
 share files.  Other users you have authorized can then access the workspace, and
 you can see the changes in realtime in your editor if you are viewing the same
@@ -170,7 +172,7 @@ server software was at least available as open source, I could run a local
 instance and that would be a pretty good solution.  Alas, that does not appear
 to be the case.
 
-** Using rudel
+*** Using rudel
 [[http://rudel.sourceforge.net/][Rudel]] is an Emacs package which share functionality with Floobits.
 
 One Emacs must host a rudel session.  Others can join.  The host does not take
@@ -215,7 +217,7 @@ get this information.
 Instead, if a value contains its history, the explanation is always available.
 See [[file:javascript/explanation.js][explanation.js]] for a minimal proof of concept.
 
-** Interactive value inspector in s3c
+** Interactive value inspector in s3c                                   :s3c:
 Trying to add interactive value inspectors into s3c.
 
 *** Rationale
@@ -280,7 +282,7 @@ On a related note, even setting up a Free monad can be seen as boilerplate.
 [[http://okmij.org/ftp/Computation/free-monad.html][Okmij shows]] how to eliminate the noise.
 
 * [2015-12-09 mer.]
-** GameBoy Sound player
+** GameBoy Sound player                                                 :gbs:
 The sound component of Boyo is a mess.  It sort-of works, but there are weird
 artifacts coming out after a while.  And it’s eating at least 20% CPU.  And it
 doesn’t even pass blargg’s tests!
@@ -305,14 +307,14 @@ instructions only.  To get an output similar to what MOD file looks like for
 trackers.  GBS to MOD converter.
 
 * [2015-12-11 ven.]
-** GameBoy Sound player
+** GameBoy Sound player                                            :gbs:rust:
 Will try to go with rust-lang.  Why not make it harder on myself?  At least if I
 don’t complete the project, I’ll have learned the basics of a new language.
 
 Someone already did a library for [[https://github.com/emu-rs/spc][reading spc]] in Rust!  This will help.
 
 * [2015-12-12 sam.]
-** Learning Rust
+** Learning Rust                                                       :rust:
 The proof of concept code I wrote yesterday worked, but some pieces went over my
 head.  Today I went over the [[https://doc.rust-lang.org/stable/book/][Rust book]] to RTFM.
 
@@ -321,7 +323,7 @@ much.  And also how to put my utility functions in a module for better
 organization in the long term.
 
 * [2015-12-19 sam.]
-** Filling instruction is boooring
+** Filling instruction is boooring                                      :gbs:
 Revamped the instructions macros a bit.  Leaner, and now matching the order of
 [[https://code.google.com/p/game-music-emu/source/browse/trunk/gme/Gb_Cpu.cpp?r=40&spec=svn40][Blargg’s emulator]].  Though I don’t really know if there is a performance payoff
 for that, since it could be optimized by the compiler as a jump table anyway.
@@ -330,14 +332,14 @@ Not sure what I want to do with flags tests after operations.  Seems like lot of
 duplicate code.  Unless I use a ~test_flags~ macro...
 
 * [2015-12-20 dim.]
-** Overflow are safe in Rust
+** Overflow are safe in Rust                                       :gbs:rust:
 Which means ... that 0xFF + 1 triggers a panic!  But only in debug builds, since
 these checks are removed on release builds.  However, the right way to go about
 that is to use ~wrapping_add~ instead to /explicitly/ signal overflow is
 intended.
 
 * [2015-12-23 mer.]
-** Improving s3c
+** Improving s3c                                                        :s3c:
 Was looking to improve the error feedback of s3c.  But I realized that I could
 fix the O(n^2) complexity of code evaluation.
 
@@ -395,7 +397,7 @@ Maybe using a forEach on each /block/ rather than line would be faster than the
 current way.  Another time.
 
 * [2016-01-06 mer.]
-** Decoding opcodes in GBS
+** Decoding opcodes in GBS                                              :gbs:
 The decoding opcode part of GBS is a bit redundant:
 
 #+BEGIN_SRC
@@ -441,19 +443,19 @@ And unfortunately, the pattern breaks down for other opcodes:
 At least the tedious way to spell it out is homogeneous.
 
 * [2016-01-07 jeu.]
-** Dragging boxes around
+** Dragging boxes around                                           :visualjs:
 For a prototype visualizer of the JS heap.  I need to move boxes, representing
 objects, around, and link them with arcs.
 
 Started with a simple div box absolutely positioned and a homebrew drag’n’drop.
 Works.
 
-** Cloning SVG in a template tag
+** Cloning SVG in a template tag                                   :visualjs:
 But for arcs, I need to switch to SVG.  First suprise: using HTML templates to
 clone SVG elements needs namespacing.  So I wrap the elements (like ~rect~) in a
 ~svg~ tag with explicit namespacing.  Works!
 
-** Slow drag in Firefox
+** Slow drag in Firefox                                            :visualjs:
 Chrome is perfectly happy using the CSS transform property for dragging the
 SVG boxes around.  Firefox is choppy.
 
@@ -467,7 +469,7 @@ Hmm, closing the DevTools /is/ a definite improvement however.  Good thing to
 keep in mind.
 
 * [2016-01-08 ven.]
-** Switching to d3
+** Switching to d3                                                 :visualjs:
 Managing SVG and interactivity is tedious.  D3 seems a good fit for what I want
 to do.  I get browser compatibility, selectors, the join model of handling data,
 and even animations.
@@ -477,20 +479,20 @@ Drag and drop is built-in, and I might need things like force layouts.
 Also, it’s one of the most-used JS library, which means it probably won’t
 disappear for at least a few years.
 
-** Heisendrag
+** Heisendrag                                                      :visualjs:
 I was curious as to why the drag and drop example of D3 in Firefox was fluid,
 while mine was choppy.  Turns out, dragging the browser tab in the other window
 fixed the slowness ಠ_ಠ
 
 * [2016-01-12 mar.]
-** Mastering D3 and event propagation
+** Mastering D3 and event propagation                              :visualjs:
 In order to better understand how event propagation works in the DOM, and to
 experiment with D3 animations, I made a simple visualization based on [[http://www.quirksmode.org/js/events_order.html][this
 helpful page]], and using [[http://bl.ocks.org/mbostock/3943967][this block]] as a model for chaining transitions, and [[http://bl.ocks.org/mbostock/9631744][this
 block]] for the visual language.
 
 * [2016-01-15 ven.]
-** Mouseenter event fired only when going to the right in FF
+** Mouseenter event fired only when going to the right in FF       :visualjs:
 At least I thought that, maybe it was a bug in Firefox.  The behavior puzzled me
 and then I noticed that the SVG rect I was hovering my mouse onto was /not/ the
 only element around: the temporary line I drew on top of everything was there
@@ -506,7 +508,7 @@ SVG registered the click while the node did not.  In Firefox, for some reason,
 the cursor always clicked the node below the line.  Maybe the calculations were
 off a pixel...
 
-** The self-perpetuating task of explaining code with code
+** The self-perpetuating task of explaining code with code         :visualjs:
 I want to visualize JS code to better understand it, and be able to explain it.
 For that, I build a program.  I write more code, /different/ code, code that the
 visualization might not suffice to explain.  The visualization if for heap
@@ -520,7 +522,7 @@ in the air and leave some code unexplained, or self-evident.
 
 Will only know if I try.
 
-** Declarative automaton for linking nodes interactively
+** Declarative automaton for linking nodes interactively           :visualjs:
 The linking nodes code is /clearly/ an automaton, and /clearly/ is spaghetti
 code at the moment.  Dealing with listeners that should only exist on one state
 is especially nasty, since we have to register them, then toggle them off, and
@@ -606,7 +608,7 @@ composable (can add states and transitions in multiple steps, not just one
 monolithic call).
 
 * [2016-01-19 mar.]
-** Declarative automaton API choices
+** Declarative automaton API choices                               :visualjs:
 Nearly done.  The code is much clearer using the automaton.  For now I’m just
 declaring state objects and adding callbacks to their transition/enter/leave
 events, and not using a fluent interface at all.
@@ -651,7 +653,7 @@ new state).  Maybe the ‘middle’ (after leaving the old state, but before
 entering the new one) can also be useful.
 
 * [2016-01-22 ven.]
-** More design decisions
+** More design decisions                                           :visualjs:
 I’ve pondered whether using the automaton as a pure event emitter.  When
 entering a state, when a transition is made (3 stages), just emit custom events
 and define the behavior only in the listeners to these custom events.
@@ -662,7 +664,7 @@ precisely what happens and in which order.  Animation is part of the
 interaction, and the code should not be declared separately.
 
 * [2016-01-29 ven.]
-** Event binding troubles
+** Event binding troubles                                          :visualjs:
 So, I was on the fence about binding listeners to elements themselves, rather
 than on the containing SVG, fearing performance issues.  Since boxes can be
 added/removed, and we add several listeners to different element of each box,
@@ -696,7 +698,7 @@ Since I know the user is in the ready state.  Even though it’s not correct, I
 might find a better way to organize this stuff later down the road if need be.
 
 * [2016-03-22 mar.]
-** Comparing approaches to deal with state
+** Comparing approaches to deal with state                         :visualjs:
 Ronan has been using RxJS for an application that presents a GUI in the
 browser.  I was wondering how the reactive programming approach would handle my
 situation, for which I found that a state automaton was the best approximation.
@@ -752,19 +754,19 @@ On point 1, there are certainly a number of hits for “GUI state machine”, an
 the pattern seems recognized.
 
 * [2016-03-28 Mon]
-** Trying out a Sparkets rust server
+** Trying out a Sparkets rust server                          :sparkets:rust:
 Since server is in need of a rewrite, to be faster, cleaner and more robust.
 
 Since we already compiled Coffeescript, that does not change the compilation
 time much.
 
-** Choosing a library
+** Choosing a library                                         :sparkets:rust:
 I’ve got a fast and simple [[https://github.com/housleyjk/ws-rs][websocket library]].
 
 Now, I know I will want to benchmark binary messages vs. text messages.  So I
 should design around this choice by presenting a common interface.
 
-** Testing input latency
+** Testing input latency                                      :sparkets:rust:
 I want to test how the game feels with a moderately high latency (~50 to 100ms
 roundtrip).  I thought Chromium was able to do that, but it seems the throttling
 option of the network panel only works for initiating the connection, and is not
@@ -783,7 +785,7 @@ To reset:
 
 It seems you need to reset before applying a different delay.
 
-** Multi-threaded server or asynchronous?
+** Multi-threaded server or asynchronous?                     :sparkets:rust:
 Building up a small prototype.  Not familiar at all with how to build a game
 server in Rust.  And I have to deal with memory management explicitly.
 
@@ -806,7 +808,7 @@ Been reading:
 
   Well, it’s not clear from that article.
 
-** What’s the ideal solution to input latency anyway?
+** What’s the ideal solution to input latency anyway?         :sparkets:rust:
 I’ve always wondered if the treat input/update logic/render loop was optimal.
 I’ve been doing that for ages.  I remember it bit me because updates were tied
 to graphical frames, and lagging on frames made the game slow.
@@ -959,7 +961,7 @@ polling interval is less than the time a key can be held down.  Should check on
 target hardware how low the resolution can be (browser + keyboard is certainly
 not the optimal setup).
 
-** Carmack on movement prediction
+** Carmack on movement prediction                             :sparkets:rust:
 To alleviate server latency in QuakeWorld, Carmack tried to use prediction.  The
 player movement is duplicated on the client, starting from the last known good
 state received from the server.
@@ -974,7 +976,7 @@ movements.  Because server updates may not always arrive on time, we can keep
 the framerate constant on the client with prediction.
 
 * [2016-04-02 Sat]
-** Setting the MTU on Archlinux
+** Setting the MTU on Archlinux                                        :arch:
 I had issues connecting to wiki.archlinux.org, but other websites were fine.
 
 Apparently, that was caused by a misconfigured MTU.  Under Windows, the MTU was
@@ -1006,7 +1008,7 @@ out there is an MTUBytes option for systemd-networkd.service.  In
 
 Voilà.
 
-** Mounting a WDTV Live Hub
+** Mounting a WDTV Live Hub                                            :arch:
 Did not want to install/configure Samba.
 
 But luckily, only ~cifs-utils~ is required:
@@ -1022,7 +1024,7 @@ To find the IP of the server:
 : $ nmblookup SERVER_NAME
 
 * [2016-04-03 Sun]
-** Making progress
+** Making progress                                            :sparkets:rust:
 Spent a few hours trying to find a way to emulate a setInterval on the server.
 Well, good old thread::sleep is still the state of the art, apparently.  It was
 used by a [[https://github.com/mvdnes/rboy/blob/master/src/main.rs][gameboy emulator]], and measurements show it as accurate enough.
@@ -1054,7 +1056,7 @@ But on the Rust side, it’s rather bleak:
 
 - https://github.com/phsym/sctp-sys
 
-** SCTP experiments
+** SCTP experiments                                           :sparkets:rust:
 Tried to use the rust-sctp library.  For some reason it always returns an error
 when I try to accept a connection.
 
@@ -1064,7 +1066,7 @@ So, I guess if I can chat with a JS web page over RTCDataChannel, it might be
 worth to try to see how to integrate the C code into Rust?
 
 * [2016-04-09 Sat]
-** Understanding WebRTC
+** Understanding WebRTC                                       :sparkets:rust:
 Found a pretty [[http://chimera.labs.oreilly.com/books/1230000000545/index.html][comprehensive book]] on WebRTC and browser networking.
 
 Managed to build a minimal example of a client page using WebRTC to setup an
@@ -1087,7 +1089,7 @@ On the other hand, I /could/ use simple-peer and wrtc in Sparkets directly, and
 have an UDP protocol for messages.  Less work, more benefits.
 
 * [2016-04-19 Tue]
-** One fat listener
+** One fat listener                                                :visualjs:
 I like simple approaches.  Watching [[http://mollyrocket.com/861][Immediate-mode GUIs]], I want to try writing
 a catch-all listener that will handle all the logic in one place.
 
@@ -1256,7 +1258,7 @@ Measure first, understand how the runtime works, formulate a strategy, implement
 and measure again.
 
 * [2016-05-06 ven.]
-** Testing the GB CPU emulator
+** Testing the GB CPU emulator                                          :gbs:
 The [[http://blargg.8bitalley.com/parodius/gb-tests/][Blargg test suite]] is a good start.  But there is a slight bootstrapping
 issue, as it needs a mostly-working CPU to actually start running the tests.
 
@@ -1292,7 +1294,7 @@ all flags for instructions yet).
 
 Maybe a basic test harness in Rust is a better idea.
 
-** Testing single instructions
+** Testing single instructions                                          :gbs:
 Created a ~step~ function that goes through one instruction and returns the
 number of cycles.  More useful for unit testing than ~run~.
 
@@ -1343,7 +1345,7 @@ blocks... Maybe I should split those into functions?
 Ok, changed the tests to generate one function for each test case.  Only
 slightly more verbose, but greatly increases my number of tests!
 
-** Wait, was that a compiler bug?
+** Wait, was that a compiler bug?                                  :gbs:rust:
 The SIGSEGV with too many macros... no unsafe code, but still an invalid memory
 reference?  How come?
 
@@ -1368,7 +1370,7 @@ overflow that.  But there should be a stack overflow message that's skipped for
 some reasons, and the devs are aware of it.
 
 * [2016-05-07 sam.]
-** Fixing flycheck-rust
+** Fixing flycheck-rust                                            :flycheck:
 flycheck-rust is confused when you have both a lib.rs and a main.rs in the same
 folder.  Because cargo needs to know what target to build: the lib, or the
 binary?
@@ -1408,7 +1410,7 @@ according target.  Otherwise, chose 'lib' by default.
 
 That seems to work locally.  Now, onto the PR!
 
-** Making the pull request
+** Making the pull request                                         :flycheck:
 Forked flycheck.
 
 Made the changes.  Tried to run the tests... fail!  Ah.
@@ -1440,7 +1442,7 @@ is a crate named "flycheck".  Put that, all tests pass.
 
 Done.  Now, flycheck-rust!
 
-** Finding the right build target
+** Finding the right build target                                  :flycheck:
 Had to change the approach a little, because we cannot default to "lib" crate
 type in a crate that contains only a 'main.rs'.  So instead of guessing, I just
 look the targets up in ~cargo read-manifest~.  First one is the default, and if
@@ -1475,7 +1477,7 @@ Reviewed the code and added a docstring.  No test suite this time (though it
 would not be a bad idea to ensure we don't break any convoluted setups).
 
 * [2016-05-10 mar.]
-** Checking the state of Rust tool support
+** Checking the state of Rust tool support                         :flycheck:
 Error output seems to have changed in nightly: [[https://github.com/rust-lang/rust/pull/32756][PR#32756]].
 
 That means Flycheck will soon break in parsing them.  Luckily, there is also a
@@ -1495,7 +1497,7 @@ A good place to check for news on all of this is the [[https://internals.rust-la
 forum.
 
 * [2016-05-11 mer.]
-** Checking that flycheck-rust works right for everyone's use case
+** Checking that flycheck-rust works right for everyone's use case :flycheck:
 I've tested the basic layouts of src/lib, src/main and src/bin/.  But cargo
 allows for some fancy overrides, and I don't even have dependencies in my
 projects for now.
@@ -1570,7 +1572,7 @@ But there's no target corresponding to read-manifest, so how do we know that's
 part of the ~cargo~ binary target?
 
 * [2016-05-20 ven.]
-** Toying with JITs
+** Toying with JITs                                                 :chipers:
 Always wondered how you build one.  Another pretext to use more Rust.
 
 Found a [[http://www.hydrocodedesign.com/2014/01/17/jit-just-in-time-compiler-rust/][couple]] [[http://www.jonathanturner.org/2015/12/building-a-simple-jit-in-rust.html][tutos]].  They showed how to create a memory region, mark it as
@@ -1658,7 +1660,7 @@ above, and systematically coalesce them into one.  These optimizations would be
 useful for any piece of code, not just this snippet.
 
 * [2016-06-07 mar.]
-** The fastest Chip8 emulator
+** The fastest Chip8 emulator                                       :chipers:
 So, I ported my Chip8 emu to Rust.  To have a smaller code base to test a JIT
 with.
 
@@ -1674,7 +1676,7 @@ Otherwise, I can watch the code for hot loops, and try to compile those.  So I
 need to visualize hot paths, in order to understand what patterns I need to
 match.  Which brings me to the second point.
 
-** GUIs in Rust
+** GUIs in Rust                                                     :chipers:
 Been looking for a nice and minimalist way to view the rom disassembly that
 updates in real time as the interpreter goes through each opcode.
 
@@ -1722,7 +1724,7 @@ In any case, that means doing the right thing: sticking to OpenGL for drawing
 the emu AND ImGui.
 
 * [2016-06-20 lun.]
-** Switching chipers to OpenGL
+** Switching chipers to OpenGL                                      :chipers:
 Went full glium/glutin.  Glium is the library for high-level OpenGL bindings.
 As I understand, it takes care of allocating GL objects and disposing them for
 you.  It also help avoid the unsafeness of the GL API.
@@ -1734,7 +1736,7 @@ not tied to Glutin, but both are from the same author, so...
 Anyway, using Glium/Glutin is not the hard part.  The hard part is understanding
 how to draw things in OpenGL, especially with shaders.
 
-** Drawing colored squares with triangles
+** Drawing colored squares with triangles                           :chipers:
 With SDL I was just drawing a "point" for each pixel of the Chip8 screen (cixel
 henceforth).  And since I only knew how to draw triangles in OpenGL, I thought:
 "Hey, let's draw a quad for each cixel!"
@@ -1749,7 +1751,7 @@ After a copious amount of ddging ([[https://tomaka.github.io/glium/book/tuto-01-
 notwithstanding), I managed to get a Chip8 screen back.  Albeit clipping when
 resizing.  And ... with horrible FPS performance after a few seconds.  What?
 
-** Switching to drawing on a texture
+** Switching to drawing on a texture                                :chipers:
 I figured that, since I didn't know what I was doing in OpenGL, I must have done
 something wrong there.
 
@@ -1784,7 +1786,7 @@ issue that drawing quads had.
 
 But, the horrible performance drop after a few seconds was still present.
 
-** Did I enable VSync?
+** Did I enable VSync?                                              :chipers:
 Lots of fumbling around, trying things with timing and what not.
 
 In the end, I /though/ I'd found the issue.  My Nvidia driver had "force VSync"
@@ -1801,7 +1803,7 @@ time...
 
 Probably should fix the main loop next.
 
-** Anyway, ImGui is great
+** Anyway, ImGui is great                                           :chipers:
 Once rendering to Glium was done, integrating ImGui was a breeze.
 
 Could had a FPS counter, a memory view, and register info.
@@ -1816,7 +1818,7 @@ there are mutability issues: you cannot borrow ~self~ mutably more than once for
 instance.  I might find a way around it, or I might implement the memory view
 using imgui-sys, the low-level binding.
 
-** And GLSL can be great, too!
+** And GLSL can be great, too!                                      :chipers:
 After battling with GLSL just to get a single color on the screen, I at least
 put them to good use.
 
@@ -2179,7 +2181,7 @@ Anyway, if we sample at a high enough rate, hopefully the user won't notice the
 discrepancy between their input and the input synthesized at the screen.
 
 * [2016-07-30 sam.]
-** Revamping S3C for evaluation inside blocks
+** Revamping S3C for evaluation inside blocks                           :s3c:
 See [[https://github.com/fmdkdd/s3c/issues/4][issue 4]].
 
 Managed to make it work using esprima + estraverse + escodegen.
@@ -2270,7 +2272,7 @@ polluting the rest of the results.  I added an alternative syntax for this
 behavior though, as it can be unexpected inside a try/catch.
 
 * [2016-07-31 dim.]
-** Updating ESLint
+** Updating ESLint                                                      :s3c:
 So I want to update ESLint because the parser is out of date.  And the
 browserified file is disgustingly huge (671K).  I get the latest version, well
 they are still using browserify.  The output is now 2.7M.
@@ -2296,7 +2298,7 @@ aaand updated CodeMirror to latest version.
 Done & uploaded.
 
 * [2016-08-01 lun.]
-** Performance issues
+** Performance issues                                                   :s3c:
 It didn't feel like the new version of s3c was any slower than the previous
 one.  On my home machine.  On my work machine there is perceptible delay.
 Around 500ms I would say, but can't say exactly since profiling does not even
@@ -2349,7 +2351,7 @@ code.  And from hitting Ctrl+Enter to seeing the eval results, it's around
 350ms, mostly of waiting around for debouncing.
 
 * [2016-08-02 mar.]
-** Links on incremental parsing
+** Links on incremental parsing                                         :s3c:
 Not sure it would be worth it for the scale of the code that s3c deals with, but
 here are some resources on incremental parsing would I want to pursue it (or
 just out of curiosity):
@@ -2376,7 +2378,7 @@ Anyway, all of that might not even matter for speeding up s3c, since parsing
 might not even be the biggest bottleneck.
 
 * [2016-08-13 sam.]
-** Using the JSON error format of rust for flycheck
+** Using the JSON error format of rust for flycheck                :flycheck:
 *** Restoring functionality
 Previous message parser was rather straightforward: error appeared as errors,
 warnings as warnings, and note or help lines appeared as info squiggles.
@@ -2410,7 +2412,7 @@ temporary help buffer with the explanation.  Without flycheck, it asks for an
 error code interactively.
 
 * [2016-08-15 lun.]
-** Using column end points for rustc in flycheck
+** Using column end points for rustc in flycheck                   :flycheck:
 I started by using cons cell for columns instead of a number.  Then flycheck
 complained the checker returned an error.  But since it caught the error, I
 could not use the debugger to trace it.
@@ -2571,7 +2573,7 @@ Github license file.
 #+END_QUOTE
 
 * [2016-08-17 mer.]
-** Chasing a failing build under emacs snapshot
+** Chasing a failing build under emacs snapshot                    :flycheck:
 Trying to reproduce the Travis errors on my machine.
 
 ~./autogen.sh~ suggest I run ~./autogen.sh git~ after it.  This is not done in
@@ -2644,7 +2646,7 @@ issue.
 
 So, two bugs for nesting.  Thanks, ~let-alist~!
 
-** Checking out the competition
+** Checking out the competition                                    :flycheck:
 Saw a thread on users.rust about how IntelliJ-rust had great support for rust.
 Struck by a sudden fear of missing out, I investigate.
 
@@ -2762,7 +2764,7 @@ Er... it works.  Sometimes.  And it's slow.  Maybe something can be done to
 improve the functionality there.  But really, I think racer covers it and more.
 
 * [2016-08-18 jeu.]
-** Workarounds for let-alist
+** Workarounds for let-alist                                       :flycheck:
 The nesting bug has been bugging me.
 
 Looking at the [[https://lists.gnu.org/archive/html/emacs-devel/2014-12/msg00231.html][original discussion]] for introducing ~let-alist~ to Emacs, there
@@ -2955,7 +2957,7 @@ But crucially, it means that even though the .NET runtime was open sourced, it
 still relies on Mono, the free implementation.  And Mono is lagging behind on
 versions.  What's the point?
 * [2016-08-26 ven.]
-** More tries at let-alist
+** More tries at let-alist                                         :flycheck:
 Ronan gave me a couple of tips that may help.
 
 - https://www.reddit.com/r/emacs/comments/2u5uzq/i_wrote_a_somewhat_useful_elisp_macro/
@@ -3594,7 +3596,7 @@ the warnings?  ~with-no-warnings~ silence warnings in its body.  The problem is
 it disables /all/ warnings, and not just the unused variables.
 
 * [2016-08-28 dim.]
-** Compiling chipers on Windows
+** Compiling chipers on Windows                                     :chipers:
 Following the instructions on rust-lang, `cargo update` to update the
 dependencies, and it failed to build in my code.
 
@@ -3641,7 +3643,7 @@ we can actually have multiple draw calls, with potentially different programs
 calls compose however?
 
 * [2016-09-03 sam.]
-** Experimenting with multiple draw calls
+** Experimenting with multiple draw calls                     :spacebangbang:
 So if I understand the pipeline correctly, a single Frame.draw call takes a
 vertex buffer and a shader program.  I get that a vertex shader will only work
 with the vertices from the vertex buffer.  Presumably, if the vertex buffer has
@@ -3669,7 +3671,7 @@ but only the search works correctly from inside Emacs, the viewing should happen
 in the browser (using eww does not work for XML file apparently).  Zeal is a
 dedicated GUI for local docs, and it's fast.  Good enough.
 
-** A potential rotation bug
+** A potential rotation bug                                   :spacebangbang:
 By keeping the current heading in a float, we can potentially grow to very large
 value by holding one direction, and then hitting float inaccuracies.
 
@@ -3679,7 +3681,7 @@ rather long time to get there, but hey.  Still incorrect.
 Using a small integer that wraps around you are guaranteed to avoid rounding
 errors.
 
-** Vsync on my machine
+** Vsync on my machine                                        :spacebangbang:
 Ah!  I did not enable vsync in the application, but I still obviously got
 60fps.  Adding the frame period histogram confirmed it.
 
@@ -3693,7 +3695,7 @@ launch the application once.
 Still, better enable vsync for this application until I make the logic
 independent of frame rate.
 
-** Low-resolution render on framebuffer
+** Low-resolution render on framebuffer                       :spacebangbang:
 So that's what I had in mind [[*Low-resolution rendering in OpenGL][the other day]].  A low-resolution effect.  Now that
 I understand how this ties together a bit better, I can explain how it works.
 
@@ -3730,12 +3732,12 @@ component, which is red.  I used a single u8 for chipers because the texture
 there as a boolean: either the pixel is on, or it is off.  Switching to an
 U8U8U8U8 fixes the redness.
 
-** TODO make simulation independent of frame rate
-** DONE import ship model from Blender
+** TODO make simulation independent of frame rate             :spacebangbang:
+** DONE import ship model from Blender                        :spacebangbang:
 CLOSED: [2016-09-11 dim. 15:10]
 
 * [2016-09-04 dim.]
-*** DONE Maintain aspect ratio
+*** DONE Maintain aspect ratio                                :spacebangbang:
 CLOSED: [2016-09-04 dim. 15:33]
 I always have trouble will all these matrix multiplications that pile onto each
 other.  Anyway, the strategy here has two part:
@@ -3749,11 +3751,11 @@ is still stretched out to fill the window.  So there also we have to stretch the
 quad so that it fills the window, while maintaining its aspect ratio.  And
 that's another matrix multiplication.
 
-*** DONE Add tweakable gameplay values to GUI
+*** DONE Add tweakable gameplay values to GUI                 :spacebangbang:
 CLOSED: [2016-09-04 dim. 16:43]
 
 * [2016-09-05 lun.]
-** Making a note of a nice way to deal with opcodes in Rust
+** Making a note of a nice way to deal with opcodes in Rust             :gbs:
 As done in [[https://github.com/yupferris/rustendo64/blob/master/src/n64/cpu/opcode.rs][Rustendo]], a Nintendo 64 emulator in Rust.  Opcodes are transformed
 into an enum:
 
@@ -3779,7 +3781,7 @@ match instr.opcode() {
 I'm sure this emulator has other Rust tricks as well.  Good source.
 
 * [2016-09-22 jeu.]
-** Trying to use the ~keyboard-layout~ layer of spacemacs
+** Trying to use the ~keyboard-layout~ layer of spacemacs             :emacs:
 As suggested by [[https://github.com/syl20bnr/spacemacs/issues/6631][issue 6631]].
 
 I tried to add a simple Colemak substitution, JKHL instead of HJKL.  It works
@@ -3788,11 +3790,11 @@ the code for magit does not look up to date, since there is no
 ~evil-magit-map~.  Also, it's macros all the way down, and there are no
 docstrings :(
 
-** Finding the keymap where a key is bound
+** Finding the keymap where a key is bound                            :emacs:
 ~describe-key~ seems to take care of it.
 
 * [2016-09-23 ven.]
-** Diving into a smartparens bug for rust-mode
+** Diving into a smartparens bug for rust-mode                  :smartparens:
 Namely [[https://github.com/Fuco1/smartparens/issues/642][issue 642]].
 
 Maybe this line?
@@ -3855,7 +3857,7 @@ and there are no regexp cases that match.
 
 One way to fix that is to add a ">" case to the regexp.
 
-** Writing an ERT test for this smartparens bug
+** Writing an ERT test for this smartparens bug                 :smartparens:
 Okay, now that it's fixed, it might be good idea to leave a test there to ensure
 this does not pop up again.
 
@@ -3868,7 +3870,7 @@ Great.  Now, reading the existing tests, this looks pretty straightforward.
 Done.
 
 * [2016-09-26 lun.]
-** A Github burndown chart
+** A Github burndown chart                                         :burndown:
 Motivated by answering a simple question: how is a project catching up with its
 maintenance load?  Specifically, I always see that Spacemacs has >1000 open
 issues and that scares me a bit.
@@ -3961,7 +3963,7 @@ However, I failed to filter out specific lines based on their text colors.  I
 think I would need more control over the image, maybe by using OpenCV or
 assorted tools.
 
-** Going back to the burndown chart
+** Going back to the burndown chart                                :burndown:
 Outputting an SVG circle for every (7192) issue is clearly not the right way to
 go about it.  I wanted to use SVG paths.  d3.area handles that nicely; I just
 had to find an example with the updated v4 syntax.
@@ -3987,7 +3989,7 @@ Oh yes!  I also need to maybe separate issues and pull requests.  Same graphs,
 but different colors.
 
 * [2016-09-28 mer.]
-** Finding a host provider for burndown chart
+** Finding a host provider for burndown chart                      :burndown:
 Hmm, seems Heroku is not as gracious as it once was.  Can't seem to find a
 decent free service for small applications that are not also utterly useless.
 
@@ -4005,7 +4007,7 @@ Ultimately, the page will be the one to initiate the sync.
 
 Also, why use a DB, when I can use perfectly reasonable JSON files?
 
-** Caching version done
+** Caching version done                                            :burndown:
 I've now got a nice little tool that fetches issues from Github and saves them
 to a file.  When the file already exists, it only gets the newest issues.
 
@@ -4020,7 +4022,7 @@ Well, actually, since I need to deal with the errors anyway, I prefer handling
 them as callbacks than exceptions.  This way the code stays asynchronous if need
 be.  Although I will try to see if promises would make it nicer.
 
-** Using promises
+** Using promises                                                  :burndown:
 Okaaaay.  Using promises was not straightforward.  I clearly don't grasp the
 idioms yet.  I might need to implement the Promises/A+ or look at an
 implementation to understand what's going on.
@@ -4030,12 +4032,12 @@ But I managed to make it work.  Is the resulting code clearer?  It got rid of
 plus.  It does make the control flow a bit awkward, with ~P.join~ in one place.
 But maybe there's a better way to write it.
 
-** Making an app
+** Making an app                                                   :burndown:
 So now the good thing would be to add a text input to the web page, and fetch
 the corresponding issues.  Or a file selector, and drag and drop.
 
 * [2016-10-03 lun.]
-** Fixing a bug with macro errors in the JSON parser for flycheck errors
+** Fixing a bug with macro errors in the JSON parser for flycheck errors :flycheck:
 Seems macro errors are not captured by the JSON parser actually.
 
 See flycheck/flycheck-rust/issues/36.
@@ -4156,12 +4158,12 @@ So when walking the JSON error recursively, we need to know if we are in an
 worthwhile to write different parsing functions for these cases.
 
 * [2016-10-04 mar.]
-** Fixing the parsing bug for macro errors in flycheck (cont.)
+** Fixing the parsing bug for macro errors in flycheck (cont.)     :flycheck:
 To simplify the logic, it might be best to collect the "causes" (filename,
 line/column info) first, then build the flycheck error objects afterwards.
 
 * [2016-10-06 jeu.]
-** Revamping flycheck-rust
+** Revamping flycheck-rust                                         :flycheck:
 The goal of flycheck-rust is to set the flycheck variables used by the rust and
 rust-cargo checkers automatically.
 
@@ -4273,7 +4275,7 @@ edge cases if none can be found.
 
 I'll try the second option first.
 
-** Using cargo to build targets
+** Using cargo to build targets                                    :flycheck:
 There is one canonical way to build things with cargo: ~cargo build~.
 
 We can determine the current target automatically for some files, using
@@ -4309,7 +4311,7 @@ targets exactly first, then using heuristics based on the conventional cargo
 layout, then let the user use the buffer-local variables to specify the target.
 
 * [2016-10-07 ven.]
-** Adding tests to flycheck-rust
+** Adding tests to flycheck-rust                                   :flycheck:
 Since we have many different crate types and targets, it makes sense to add
 tests to catch them all and avoid regressions.
 
@@ -4318,7 +4320,7 @@ easier to setup and use.
 
 Yep, wasn't hard.
 
-** Fallback strategy for non-exact file/target matches
+** Fallback strategy for non-exact file/target matches             :flycheck:
 In the conventional cargo layout, it seems we can try to match the file by
 stripping off directories:
 
@@ -4326,7 +4328,7 @@ stripping off directories:
 beginning with 'test/support' (no match), then 'test/' (multiple matches);
 assume the first one.  Stop at the project root.
 
-** Cannot pass error-format to ~cargo rustc~
+** Cannot pass error-format to ~cargo rustc~                       :flycheck:
 AAARGH.  Passing options to ~cargo rustc~ will only apply to the given target,
 not to dependencies.  So if main depends on lib, and we build main, but lib has
 an error, we will get errors as plain text, not in JSON...
@@ -4335,7 +4337,7 @@ Ok ok.  RUSTFLAGS it is then until ~--message-format~ stabilizes.  But RUSTFLAGS
 will trigger recompilation.  Hmmm.
 
 * [2016-10-12 mer.]
-** Updating Spacemacs to 0.200
+** Updating Spacemacs to 0.200                                        :emacs:
 Especially dreadful, updating colemak-hjkl.
 
 Seems the issues I was encountering with keyboard-layout are also present
@@ -4343,7 +4345,7 @@ there.  Hmm, maybe it would be worth it to complete the colemak support for
 keyboard-layout rather than duplicating the work?
 
 * [2016-10-12 mer.]
-** Updating colemak-hjkl for Spacemacs 0.200
+** Updating colemak-hjkl for Spacemacs 0.200                          :emacs:
 Argh, the new transient maps with hydra are less easily redefined than the
 micro-states.
 
@@ -4372,7 +4374,7 @@ messy fast though.
 Hmm okay, managed to ~pcase~ it.
 
 * [2016-10-13 jeu.]
-** The simple fix that was surprisingly tricky
+** The simple fix that was surprisingly tricky                     :flycheck:
 Trying to fix [[https://github.com/flycheck/flycheck-rust/issues/40][issue 40]] by adding a `user-error` call when cargo cannot be found.
 It works, but a bit too much.  Most command interaction after that will trigger
 the error, rendering Emacs unusable.
@@ -4397,7 +4399,7 @@ really better.  You get a suspicious checker error, but at least it lets you use
 Emacs.
 
 * [2016-10-19 mer.]
-** Rust Language Server first alpha is here
+** Rust Language Server first alpha is here                    :flycheck:rls:
 [[https://internals.rust-lang.org/t/introducing-rust-language-server-source-release/4209][Announcement]]
 
 It seems it does much more than just checking errors, but advertises "errors as
@@ -4471,7 +4473,7 @@ changed, give me compilation errors".
 Now, let's see if we can get the build target information for a file from cargo
 directly.
 
-** Can cargo gives us a list of build targets for a given file?
+** Can cargo gives us a list of build targets for a given file?    :flycheck:
 The read-manifest command seems to return a ~Package~.  Does it build a
 dependency graph to find targets, or does it only reads the ~cargo.toml~?
 
@@ -4516,7 +4518,7 @@ Hmm, it's probably reading /etc/passwd to determine my $HOME folder.  This is
 most probably in cargo/util/config.rs::walk_tree, which in turn relies on
 std::env::home_dir.  Which calls sys::os::home_dir, which reads passwd.
 
-** Avoiding errors in flycheck-rust
+** Avoiding errors in flycheck-rust                                :flycheck:
 As expected, the absence of cargo is not the only potential source of errors.  I
 should really catch all errors to avoid breaking emacs.
 
@@ -4567,7 +4569,7 @@ The solving is not that simple, but the gist of it is a bread search in the
 solution space, where the goal is to have no cards left in the lower area.
 
 * [2016-11-22 mar.]
-** Fixing my GBS emulator
+** Fixing my GBS emulator                                               :gbs:
 So, after a full rewrite of the CPU, it /still/ doesn't pass Blargg's tests.
 Now, I could carefully go over each instruction, /again/, and each opcode, to
 see if I've messed up anywhere.  But doing this manually is prone to error.
@@ -4584,7 +4586,7 @@ exactly what failed.
 So, for starters, I could take a working emulator or two, get them to generate a
 trace for executing the cpu_instrs test ROM, and compare the output with mine.
 
-** Running cpu_instr on Higan
+** Running cpu_instr on Higan                                           :gbs:
 Higan is one of the most accurate GB emulator out there.  So let's try that one
 first.  It'll be interesting to compare its output to that of Boyo's.
 
@@ -4643,7 +4645,7 @@ information
 
 Yes it loads!  And all tests pass.  Now to get a trace.
 
-** Getting a trace out of Higan
+** Getting a trace out of Higan                                         :gbs:
 For reference, here's how the traces looked like for the NES test ROM:
 
 #+BEGIN_EXAMPLE
@@ -4791,7 +4793,7 @@ emulator.
 
 Now, I just need to generate a CPU trace from my end, then we diff!
 
-** Getting a trace from my Rust GB emulator
+** Getting a trace from my Rust GB emulator                             :gbs:
 Hopefully the Rust stdlib will cover outputting padded hex values.  I can skip
 writing a disassembler by cutting the second column.
 
@@ -4809,7 +4811,7 @@ Tomorrow, I can start fixing.  Then it would be interesting to add a third
 emulator (Boyo?) to the mix.
 
 * [2016-11-23 mer.]
-** Fixing my GBS emulator, one step at a time
+** Fixing my GBS emulator, one step at a time                           :gbs:
 Now that I've got the trace set up, let's see where the errors are.
 
 First error on ~rl c~ with:
@@ -4867,7 +4869,7 @@ At all.
 So I guess I'll have to emulate at least part of the LCD.
 
 * [2016-11-27 dim.]
-** There's a language server protocol package for Emacs
+** There's a language server protocol package for Emacs        :flycheck:rls:
 [[https://github.com/sourcegraph/emacs-lsp][In development]].  Does it work with the RLS?
 
 At the moment, it seems this mode only supports TCP.  It appears to work for the
@@ -4877,7 +4879,7 @@ worked over stdio or HTTP, but I don't remember seeing an option for TCP.
 The RLS looks like it supports only stdio now.  Shoot.
 
 * [2016-12-06 mar.]
-** This week's goal: improving Rust support for Emacs
+** This week's goal: improving Rust support for Emacs          :flycheck:rls:
 Plan A: interface the RLS and Flycheck to get diagnostics support through the
 language protocol.
 
@@ -4891,7 +4893,7 @@ So I need:
 If that does not work, or if the RLS is still flaky, then I can fall back on
 finishing my PR for flycheck-rust.
 
-** Communicating with the RLS over stdio
+** Communicating with the RLS over stdio                       :flycheck:rls:
 Last time I checked, I got nothing.  Only the HTTP server worked, but now it has
 been removed.
 
@@ -5302,7 +5304,7 @@ Tomorrow I will try a wrapper around the RLS to insert carriage returns.
 Unanswered question: which version of the LS protocol does RLS use?
 
 * [2016-12-07 mer.]
-** Making the LSP mode and the RLS talk to each other
+** Making the LSP mode and the RLS talk to each other          :flycheck:rls:
 Written a wrapper python script to add the damned carriage returns:
 
 #+BEGIN_SRC python
@@ -5353,13 +5355,13 @@ So this approach works.  But it requires a wrapper, so that's not adequate for a
 plugin.  I now remember that I wanted to try comint.
 
 * [2016-12-08 jeu.]
-** Comint
+** Comint                                                      :flycheck:rls:
 Hmm reading the documentation for comint, it seems more suited for interacting
 with REPLs.  I guess you can sort of see the RLS as a REPL, where you
 communicate with JSON, but there's no interactive part at all.  Not sure this is
 the right way.
 
-** Another emacs-lsp in the wild
+** Another emacs-lsp in the wild                               :flycheck:rls:
 That's hilarious.  A few hours ago, [[https://lists.gnu.org/archive/html/emacs-devel/2016-12/msg00263.html][someone]] asked on emacs-devel why did
 "process-send-string" eat carriage returns, for the purpose of making an LSP
 package to communicate with Rust.  Turns out, [[https://github.com/vibhavp/emacs-lsp][their implementation]] seems more
@@ -5367,7 +5369,7 @@ advanced than the one from @cmr.
 
 No definite answer on the carriage return problem.
 
-** Trying out the new emacs-lsp
+** Trying out the new emacs-lsp                                :flycheck:rls:
 Seems more solid.  Works over stdout, I can see the messages going out to the
 server and coming back.
 
@@ -5401,7 +5403,7 @@ Now we just need the RLS to catch up.
 That means that, for the rest of the week, I should probably focus on improving
 the state of flycheck-rust using cargo and rustc directly.
 
-** Flycheck issues
+** Flycheck issues                                                 :flycheck:
 A few weeks ago, I was in the process of refactoring flycheck-rust, and adding
 tests.  I didn't care much for the plain rust checker, since it seemed hackish
 in the way it looked for dependencies.
@@ -5437,7 +5439,7 @@ Also, there may be lingering flycheck issues over at Spacemacs that were never
 reported upstream.  Might be worth to take a look.
 
 * [2016-12-09 ven.]
-** Finding the right target for a rust file
+** Finding the right target for a rust file                  :flycheck:cargo:
 That's the sole goal of flycheck-rust, and I have seen that the RLS is not there
 yet.  I suspect IntelliJ also requires you to specify which target to run, since
 it gives you the results in a bottom window, and from there you can jump to the
@@ -5502,7 +5504,7 @@ bla.
 Okay then.  ~rustc --emit dep-info~ is not an option.  racer is third party
 dependencies.  Then we'll stick to hackish heuristics then.
 
-** On cargo metadata and workspaces
+** On cargo metadata and workspaces                          :flycheck:cargo:
 It the same [[https://github.com/rust-lang/cargo/issues/3211][PR]] was suggested to use ~cargo metadata~ rather than ~cargo
 read-manifest~.  The reasons mentioned were that ~read-manifest~ was deprecated,
 and didn't support workspaces (had to read up on what they are).
@@ -5535,8 +5537,7 @@ In any case, I think we are safe if we just aggregate all "targets" for all
 "packages" when looking for a best match.
 
 Testing against a project with workspaces... (looking for one on Github is
-rather easy, just code search for workspace in TOML files).  Ok, [[Or, we can drop the guessing feature
-https://github.com/bluejekyll/trust-dns ][found one]].
+rather easy, just code search for workspace in TOML files).  Ok, [[https://github.com/bluejekyll/trust-dns%20][found one]].
 
 cargo metadata --no-deps gives me two packages, and plenty of targets:
 
@@ -5567,7 +5568,7 @@ So: replace ~read-manifest~ by ~cargo metadata --no-deps~, gather all targets,
 and build in the current directory is fine.
 
 * [2016-12-12 lun.]
-** Actually pushing PR
+** Actually pushing PR                                       :flycheck:cargo:
 The time for research is done.  Now is the time to actually code and push.
 
 First things first: enhance the rust-cargo checker in flycheck proper, since
@@ -5682,7 +5683,7 @@ What I /can/ do though, is fast-track the clippy checker PR and integrate the
 changes on top of it.  Since it requires nightly anyway, I will be able to use
 --message-format without troubles.
 
-** Fast-tracking the rust-cargo-clippy checker
+** Fast-tracking the rust-cargo-clippy checker              :flycheck:clippy:
 Downloading the PR locally to test.
 
 Argh, cannot compile cargo-clippy with latest nightly.  Asking on IRC.  Oh, it's
@@ -5714,7 +5715,7 @@ Also, we are not using ~-Z no-trans~ there.  Don't know if we should... maybe
 choose between correctness and speed.
 
 * [2016-12-14 mer.]
-** Emulating the GameBoy screen
+** Emulating the GameBoy screen                                         :gbs:
 Trying to separate concerns a bit.
 
 The background is 256*256 pixels, or 32*32 tiles, and tiles is 8*8 pixel.
@@ -5746,7 +5747,7 @@ places.  Changing and accessing the RAM or the field is the same, no additional
 work needed.
 
 * [2016-12-16 ven.]
-** Data-binding in Rust
+** Data-binding in Rust                                                 :gbs:
 I did some tests yesterday.  What I can do in C, I can do in Rust using
 mem::transmute at the very least.  Create a large RAM array, create a struct for
 Tiles, and transmute a pointer to the RAM as a pointer to a Tile.
@@ -5778,7 +5779,7 @@ the PPU chip.
 
 So this approach is fine.
 
-** flycheck-rust errors when browsing cargo
+** flycheck-rust errors when browsing cargo                  :flycheck:cargo:
 When fixing bug #3390 in cargo, I noticed flycheck-rust had trouble finding
 the right build targets in some files.  Should probably investigate.
 
@@ -5796,7 +5797,7 @@ And the other error was caused by a relative path as a target file name given by
 more appropriate that ~cargo read-manifest~ (and ~cargo metadata~) gave
 canonical file names throughout, so I reported an issue.  Might even send a PR.
 
-** Looking at how mooneye is structured
+** Looking at how mooneye is structured                                 :gbs:
 Because Rust definitely favors a single-owner for structs, since having multiple
 mutable references to things is a nightmare.
 
@@ -5845,13 +5846,13 @@ each other through a Trait, that should be good enough for reuse.  Just have to
 make sure that when you assemble them, you put them in the proper order.
 
 * [2016-12-20 mar.]
-** Investigating template parameters for traits
+** Investigating template parameters for traits                        :rust:
 I saw the solution, but not why it was necessary.  After starting from the bits
 I understand and expanding, I think I'm getting more familiar with how the
 pieces work together.
 
 * [2016-12-23 ven.]
-** Installing ArchLinux on a VAIO z13
+** Installing ArchLinux on a VAIO z13                                  :arch:
 Because I'm tired of Ubuntu.
 
 Installing ArchLinux on my desktop was mostly a breeze.  Configuring took time,
@@ -5973,7 +5974,7 @@ Fira Sans is nice, but it hints pretty badly on small sizes (8px).  And without
 hinting, antialiased fonts are blurry.  Noto scales well.
 
 * [2016-12-25 dim.]
-** ArchLinux with z13 cont.
+** ArchLinux with z13 cont.                                            :arch:
 *** systemd-backlight service
 This is supposed to save and restore the brightness on sleep/reboot.  I never
 had this working before, and always had the screen brightness set to
@@ -6056,11 +6057,11 @@ https://github.com/JoyJing1/Planarity
 
 Though they all perform poorly on mobile.
 
-** Fixed failing tests in flycheck ERT suite
+** Fixed failing tests in flycheck ERT suite                       :flycheck:
 Making a note here: ERT failures are not very readable.  A simple diff would be
 better.
 
-** Writing an Emacs module in Rust
+** Writing an Emacs module in Rust                                    :emacs:
 Should be possible with Emacs 25.
 
 There is a [[https://github.com/janestreet/ecaml][library for OCaml]], and a [[http://diobla.info/blog-archive/modules-tut.html][tutorial for C]].
@@ -6070,13 +6071,13 @@ users would not benefit from them without going through the trouble of building
 their own Emacs.
 
 * [2017-01-05 jeu.]
-** TODO Merge the flycheck/refactor-rust-cargo branch
+** TODO Merge the flycheck/refactor-rust-cargo branch        :flycheck:cargo:
 Or find out why it was blocked.
 
 Even if the flycheck-rust branch is not ready to automatically fill the
 variables, the checkers should work with benches and tests targets.
 
-** Finding a way to test Flycheck with multiple versions of external tools
+** Finding a way to test Flycheck with multiple versions of external tools :flycheck:
 I've updated the tests to pass with the latest GHC (8.0) for instance, but what
 about support for versions < 8.0?
 
@@ -6095,7 +6096,7 @@ Investigate how to test multiple versions: Docker image?  CI?
 As a first step, I opened an issue to know if best-effort backward-compatibility
 was something we wanted.
 
-** Finding out why help window does not behave the same as in stock Emacs
+** Finding out why help window does not behave the same as in stock Emacs :emacs:
 Help windows are always tiny and on the bottom in Spacemacs.  This is annoying
 since I usually want to read all of more than a few lines if I'm calling the
 help.  It does the same thing for explain error buffers for flycheck-rust as
@@ -6156,7 +6157,7 @@ Time to call it quits.  I should timestamp my paragraph as well.  These
 inquiries take /hours/.
 
 * [2017-01-06 ven.]
-** Displaying errors from other files in Flycheck
+** Displaying errors from other files in Flycheck                  :flycheck:
 Mentoring someone who volunteered to pick up the work from the previous PR.
 
 After reading the discussion in that PR, it seems there were potential lingering
