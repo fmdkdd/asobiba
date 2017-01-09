@@ -6208,3 +6208,303 @@ PR.
 That's an interesting feature, but it may not sit well with the way Flycheck
 works.  I'm especially worried about the interaction with flycheck instances in
 other buffers.
+
+* [2017-01-09 lun.]
+** Cross-compiling rust binaries                                  :rust:arch:
+Now that rustup is the official way to get rust, it means I might be able to get
+around the cross-compilation rust bug I encountered last time I tried.
+
+So, removing rust and cargo from Arch packages... Ah, rustup /is/ in Arch now,
+so better use that than ~curl | sh~.
+
+Trying to build chipers with:
+
+: rustup target add x86_64-pc-windows-msvc
+: rustup run stable cargo build --release --target=x86_64-pc-windows-msvc
+
+Nope:
+
+#+BEGIN_EXAMPLE
+running: "c++" "/nologo" "/MD" "/O2" "/Fo/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-msvc/release/build/imgui-sys-7f10381dd17cf63f/out/third-party/cimgui/cimgui/cimgui.o" "/c" "third-party/cimgui/cimgui/cimgui.cpp"
+cargo:warning=c++: error: /nologo: No such file or directory
+cargo:warning=c++: error: /MD: No such file or directory
+cargo:warning=c++: error: /O2: No such file or directory
+cargo:warning=c++: error: /Fo/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-msvc/release/build/imgui-sys-7f10381dd17cf63f/out/third-party/cimgui/cimgui/cimgui.o: No such file or directory
+cargo:warning=c++: error: /c: No such file or directory
+ExitStatus(ExitStatus(256))
+#+END_EXAMPLE
+
+Hmm, seems that cargo tries to pass windows-style arguments to ~c++~, and that
+fails.
+
+The error appears when trying to build imgui-sys, which has a custom build
+script.
+
+Okay, let's try the other win64 target using the GNU toolchain.
+
+: rustup target add x86_64-pc-windows-gnu
+: rustup run stable cargo build --release --target=x86_64-pc-windows-gnu
+
+#+BEGIN
+running: "x86_64-w64-mingw32-g++" "-O3" "-ffunction-sections" "-fdata-sections" "-m64" "-o" "/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/release/build/imgui-sys-7f10381dd17cf63f/out/third-party/cimgui/cimgui/cimgui.o" "-c" "third-party/cimgui/cimgui/cimgui.cpp"
+
+
+failed to execute command: No such file or directory (os error 2)
+Is `x86_64-w64-mingw32-g++` not installed?
+#+END_EXAMPLE
+
+According to archwiki, this is normal.  Just install mingw-64-gcc.
+
+#+BEGIN_EXAMPLE
+  = note: /usr/bin/ld: unrecognized option '--enable-long-section-names'
+/usr/bin/ld: use the --help option for usage information
+collect2: error: ld returned 1 exit status
+#+END_EXAMPLE
+
+Ah, this is unexpected.  Let's try to follow the archwiki again, which instructs
+us to specify the linker in ~/.cargo/config.
+
+#+BEGIN_EXAMPLE
+/build/mingw-w64-crt/src/mingw-w64-v5.0.0/mingw-w64-crt/secapi/vsprintf_s.c:39: undefined reference to `__ms_vsnprintf'
+/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/release/deps/libimgui_sys-09713921de9d394a.rlib(cimgui.o):cimgui.cpp:(.text$igGetColorU32+0x1): undefined reference to `ImGui::GetColorU32(int, float)'
+/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/release/deps/libimgui_sys-09713921de9d394a.rlib(cimgui.o):cimgui.cpp:(.text$igGetColorU32Vec+0x1): undefined reference to `ImGui::GetColorU32(ImVec4 const&)'
+/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/release/deps/libimgui_sys-09713921de9d394a.rlib(imgui.o):imgui.cpp:(.text$_ZL34ImeSetInputScreenPosFn_DefaultImplii+0x1e): undefined reference to `ImmGetContext'
+/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/release/deps/libimgui_sys-09713921de9d394a.rlib(imgui.o):imgui.cpp:(.text$_ZL34ImeSetInputScreenPosFn_DefaultImplii+0x40): undefined reference to `ImmSetCompositionWindow'
+#+END_EXAMPLE
+
+Better, but not there yet.  Let's try... cargo update and rebuild?  Same thing.
+
+Without ~--release~?  Maybe the symbols disappear because of an optimization.
+
+#+BEGIN_EXAMPLE
+/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libimgui_sys-09713921de9d394a.rlib(imgui.o): In function `ImeSetInputScreenPosFn_DefaultImpl':
+/home/fmdkdd/.cargo/git/checkouts/imgui-rs-161fde41895667b9/e60e5161c5fd5142b6e776e37f57fc485b684ba7/imgui-sys/third-party/cimgui/imgui/imgui.cpp:9573: undefined reference to `ImmGetContext'
+/home/fmdkdd/.cargo/git/checkouts/imgui-rs-161fde41895667b9/e60e5161c5fd5142b6e776e37f57fc485b684ba7/imgui-sys/third-party/cimgui/imgui/imgui.cpp:9579: undefined reference to `ImmSetCompositionWindow'
+collect2: error: ld returned 1 exit status
+#+END_EXAMPLE
+
+Haha, it found GetColorU32 for some reason, but not the others.
+
+So it looks like a hairy linking issues with missing or mismatched libraries.
+
+Maybe it's not possible to build cimgui using mingw?  But that's only part of
+the problem; the ~__ms_vsnprintf~ is also worrying since it's unrelated to the
+compilation of Imgui.
+
+Looking through the code and ImGui issues, [[https://github.com/ocornut/imgui/issues/738][this one might be related]].  How do I
+pass that flag?
+
+Trying out the i686 target... it's worse.  Now it fails to link pthreads.
+
+Maybe I can set the flag directly in the source and recompile everything after
+~cargo clean~.  Hopes it picks it up (and that it solves /that/ issue at
+least).  Starting to doubt it's worth it...  But.  I have to train my grit.
+
+Okay setting the flag in imconfig.h does not have effect.  Let's try commenting
+the code out in imgui.cpp.  Ah, as I suspected, changing the source does not
+affect the error.  It's still choking on an undefined reference to a symbol
+that's not even in the source anymore!  So where are you getting your code,
+cargo, hmm?
+
+Let's see, the command that runs is this monstrosity:
+
+#+BEGIN_EXAMPLE
+"/usr/bin/x86_64-w64-mingw32-gcc"
+"-Wl,--enable-long-section-names" "-fno-use-linker-plugin" "-Wl,--nxcompat" "-nostdlib" "-m64"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/crt2.o"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/rsbegin.o"
+"-L" "/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/chipers.0.o"
+"-o" "/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/chipers.exe"
+"-Wl,--gc-sections" "-nodefaultlibs"
+"-L" "/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps"
+"-L" "/home/fmdkdd/.cargo/registry/src/github.com-1ecc6299db9ec823/dbghelp-sys-0.2.0/x86_64"
+"-L" "/home/fmdkdd/.cargo/registry/src/github.com-1ecc6299db9ec823/dwmapi-sys-0.1.0/x86_64"
+"-L" "/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/build/imgui-sys-7f10381dd17cf63f/out"
+"-L" "/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib"
+"-Wl,-Bstatic" "-Wl,-Bdynamic"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/librand-8ea7d489d4a383a0.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libtime-750bfdd52feafcb7.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libdocopt-664aa2a6d9ccf7ca.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libstrsim-5346333e54880be8.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/librustc_serialize-6b938435173797f7.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libimgui-918c9f0a49f6af9f.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libimgui_sys-09713921de9d394a.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libglium-daf79273501e0d39.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libsmallvec-cf4677c7857fc4a9.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libbitflags-0e272044714c8076.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libregex-36c8e259ac5ba542.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libutf8_ranges-5c6a6dacba3be7ce.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libregex_syntax-6602c4e3d91326a4.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libthread_local-a3c0092e9fb6507d.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libbacktrace-dffaf784d6265843.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/librustc_demangle-9f84838926c47318.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libcfg_if-72c1f992b13d5087.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libdbghelp-72843bd5c387f78b.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libaho_corasick-d1dfd931d7cac82f.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libmemchr-c555f740a543880f.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libglutin-e21168db28d54279.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libdwmapi-b7b4ef7bb14c9654.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libgdi32-37f11392e9ac4edd.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libshell32-1cd19799b8066c32.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libshared_library-94c5183073084fbf.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/liblibc-e1db4c5f3a4f3c2f.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/liblazy_static-7f1b96a3a3eb529d.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libthread_id-bcd46c79a620a618.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libkernel32-df86a08647459244.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libuser32-ab4e7be30af20d1b.rlib"
+"/home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/debug/deps/libwinapi-0889532d327ff4e2.rlib"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/libstd-f5a209a9.rlib"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/libpanic_unwind-f5a209a9.rlib"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/libunwind-f5a209a9.rlib"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/liblibc-f5a209a9.rlib"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/librand-f5a209a9.rlib"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/libcollections-f5a209a9.rlib"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/liballoc-f5a209a9.rlib"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/liballoc_system-f5a209a9.rlib"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/librustc_unicode-f5a209a9.rlib"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/libcore-f5a209a9.rlib"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/libcompiler_builtins-f5a209a9.rlib"
+"-l" "advapi32" "-l" "stdc++" "-l" "dbghelp" "-l" "opengl32" "-l" "dwmapi" "-l" "gdi32" "-l" "shell32" "-l" "kernel32"
+"-l" "user32" "-l" "ws2_32" "-l" "userenv" "-l" "shell32" "-l" "advapi32" "-l" "gcc_eh" "-lmingwex" "-lmingw32" "-lgcc"
+"-lmsvcrt" "-luser32" "-lkernel32"
+"/home/fmdkdd/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/x86_64-pc-windows-gnu/lib/rsend.o"
+#+END_EXAMPLE
+
+(I broke it up for readability).
+
+So I guess imgui-sys is compiled in target/pc/debug/deps, and
+target/pc/debug/build/imgui-sys/out is also added on lib path.  What's in that?
+The libcimgui.a static library.  But when is it built?  And from what sources?
+
+It seems the ~output~ file in there is a log of the custom compilation for
+imgui-sys.  It looks for imgui.cpp under... a relative path.  Damn.
+
+I actually have two checkouts of imgui-rs under .cargo/git/checkouts.  The one
+I've been modifying was the one given to me by ~locate~.  But I also updated the
+Cargo.lock, so maybe the second checkout is the most recent one, not yet in the
+locate db?
+
+Haha yes!  That does it.  It's not pretty, since I have to toggle a flag inside
+directly.  There may be a way to pass that flag from imgui-sys, but maybe that's
+a bug for cimgui itself, since it doesn't appear to compile with mingw.
+
+#+BEGIN_EXAMPLE
+  = note: /usr/lib/gcc/x86_64-w64-mingw32/6.2.1/../../../../x86_64-w64-mingw32/lib/../lib/libmsvcrt.a(lib64_libmsvcrt_a-vsprintf_s.o): In function `_int_vsprintf_s':
+/build/mingw-w64-crt/src/mingw-w64-v5.0.0/mingw-w64-crt/secapi/vsprintf_s.c:39: undefined reference to `__ms_vsnprintf'
+#+END_EXAMPLE
+
+Now only one error to go...
+
+This one is worrying, because I'm not sure I will be able to fix it as easily,
+unless rebuilding libmsvcrt from source, which at that point I really don't want
+to do.
+
+If it's a linking error, then I'm just not loading the right library.  Where is
+that symbol?
+
+That functions is declared in /usr/x86_64-w64-mingw32/include/stdio.h:
+
+: $ rg ms_vsnprintf /usr/x86_64-w64-mingw32/include
+: /usr/x86_64-w64-mingw32/include/stdio.h
+: 553:  int __cdecl __ms_vsnprintf(char * __restrict__ d,size_t n,const char * __restrict__ format,va_list arg)
+: 560:    return __ms_vsnprintf (__stream, __n, __format, __local_argv);
+: 573:  __retval = __ms_vsnprintf (__stream, __n, __format, __local_argv);
+
+In libmsvcrt, the symbol is undefined:
+
+: $ x86_64-w64-mingw32-nm /usr/x86_64-w64-mingw32/lib/libmsvcrt.a | rg ms_vs
+: 16415:                 U __ms_vsnprintf
+
+Hmm okay, so it's coming from somewhere else.  I see that the linking command
+above is disables default libs: "-nostdlibs", "-nodefaultlibs".  Maybe one is
+missing there?
+
+Removing ~-nodefaultlibs~ does not make a difference.  Removing ~-nostdlib~, I
+have multiple definitions clashing.
+
+So where is __ms_vsnprintf ultimately defined?
+
+Turns out, I can use ~nm~ to look it up!
+
+: x86_64-w64-mingw32-nm /usr/x86_64-w64-mingw32/lib/* | rg '(^lib)|(ms_vs)'
+
+The symbol is defined in libmingwex.a.  Let's try that huge command again with
+that library (fingers crossed)... wait.  There's already ~-lmingwex~ in there.
+
+Actually, there are "user32" "shell32" and "kernel32" appear multiple times as
+well...
+
+So, swapping "lmingwex" at the end of the loaded libraries triggers many
+undefined references... this is order dependent, apparently I forgot (or never
+knew?).
+
+Adding "lmingwex" at the end, but leaving the one before "lmingw32" gives me
+another (different) error:
+
+: /usr/lib/gcc/x86_64-w64-mingw32/6.2.1/../../../../x86_64-w64-mingw32/lib/../lib/libmingwex.a(lib64_libmingwex_a-vsnprintf.o): In function `__ms_vsnprintf':
+: /build/mingw-w64-crt/src/mingw-w64-v5.0.0/mingw-w64-crt/stdio/vsnprintf.c:12: undefined reference to `_vsnprintf'
+
+Haha.  Let me guess where _vsnprintf is defined... lmsvcrt?
+
+: $ x86_64-w64-mingw32-nm /usr/x86_64-w64-mingw32/lib/libmsvcrt.a | rg vsn
+: 1613:0000000000000000 T vsnprintf
+
+Circular dependency.  But, apparently adding "-lmsvcrt" one more time does it.
+So in the end I load:
+
+: "-l" "advapi32" "-l" "stdc++" "-l" "dbghelp" "-l" "opengl32" "-l" "dwmapi" "-l" "gdi32" "-l" "shell32" "-l" "kernel32"
+: "-l" "user32" "-l" "ws2_32" "-l" "userenv" "-l" "shell32" "-l" "advapi32" "-l" "gcc_eh" "-lmingwex" "-lmingw32" "-lgcc"
+: "-luser32" "-lkernel32"  "-lmsvcrt" "-lmingwex" "-lmsvcrt"
+
+That's bit ridiculous.  But also logical [[https://stackoverflow.com/questions/45135/why-does-the-order-in-which-libraries-are-linked-sometimes-cause-errors-in-gcc#409470][if you read up on how ld works]].  But IT
+COMPILES.
+
+I don't know how to tell cargo to actually use these flags.  Maybe worth
+inquiring.  But now I have an exe.
+
+Running on windows... it needs libstdc++6.dll.  WTF!  I thought that the
+"nostdlib" flag was here on purpose, to avoid a runtime requirement.  Guess I
+was wrong.
+
+Okay, now to get that dll without going through a shady website...  The windows
+mingw installer does not work on wine x_x.  Let's try something else.  Msys
+bundles mingw, apparently.  Msys installer fails at 66%.  This is testing my
+patience.
+
+Trying with a DLL from QEmu, which seems to be libgcc, but not exactly named as
+I want it to be.  Bah, as long as defines the symbols...
+
+Oh wow it runs.  But it crashes with an undefined reference a bit later.  [[https://stackoverflow.com/questions/329059/what-is-gxx-personality-v0-for/329195#329195][This
+ref]].  Hmm exceptions.
+
+Wait a minute.  I dropped the ~--release~ flag when tinkering, so maybe I still
+have the exception library shared, and that does not work when cross-compiling
+right now.  Let's try a release binary.
+
+F*ck:
+
+: /home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/release/deps/libimgui_sys-09713921de9d394a.rlib(cimgui.o):cimgui.cpp:(.text$igGetColorU32+0x1): undefined reference to `ImGui::GetColorU32(int, float)'
+: /home/fmdkdd/proj/chipers/target/x86_64-pc-windows-gnu/release/deps/libimgui_sys-09713921de9d394a.rlib(cimgui.o):cimgui.cpp:(.text$igGetColorU32Vec+0x1): undefined reference to `ImGui::GetColorU32(ImVec4 const&)'
+
+That's why I dropped the release flag.  It's strange I have undefined references
+in one instance but not the other.  Is an optimization kicking in?  Well anyway,
+I'm seeing an "lstdc++" in the linking command, so there are chances it will
+need libstdc++6 in the end.
+
+Since the wine error is actually a missing reference, let's add it in imgui.cpp
+(since I already have a C file).
+
+: void *__gxx_personality_seh0;
+
+It's dirty, since this error has nothing to do with imgui or cimgui, but if it
+works...
+
+: wine: Call from 0x7bc5f96c to unimplemented function libstdc++-6.dll.__gxx_personality_seh0, aborting
+
+Weeeeeeeeeeeell.  It doesn't complain about that missing symbol anymore.  But it
+still fails with a stack overflow.  Trying on windows instead of wine... worse,
+it complains about another missing symbol, cxa_guard something.
+
+So, still no success cross-compiling.  Might have been faster spinning a Windows
+VM and building the thing from there (maybe even with wine).
