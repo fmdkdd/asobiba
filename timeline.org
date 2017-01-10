@@ -6028,7 +6028,7 @@ interface was already up.  The workaround is to add the Force-Connect=yes option
 to the netctl profile, though that's not the preferred course of action.
 
 * [2016-12-30 ven.]
-** (Puzzle) game ideas
+** (Puzzle) game ideas                                              :tangled:
 Untangling a graph.  Generate a random planar graph and shuffle the node
 positions.  Player can move nodes around.  Goal is to have no edges overlapping
 each other.
@@ -6036,7 +6036,7 @@ each other.
 Variant: instead of total freedom, nodes can only go in predefined positions.
 
 * [2017-01-04 mer.]
-** Prototype puzzle game
+** Prototype puzzle game                                            :tangled:
 I built a prototype.  It works on tablet, but not as fast as I would like it
 to.  50fps on tablet and lower on the phone.  On top of that, there are hiccups
 caused by GC pauses.  For just displaying four nodes... sigh.
@@ -6048,7 +6048,7 @@ the antialias option to true, circles are not as nice as using canvas.
 
 I might get more mileage out of not redrawing everything every frame.
 
-** Related game
+** Related game                                                     :tangled:
 Looking around, there seems to be plenty of similar games:
 
 http://johntantalo.com/wiki/Planarity/
@@ -6210,7 +6210,7 @@ works.  I'm especially worried about the interaction with flycheck instances in
 other buffers.
 
 * [2017-01-09 lun.]
-** Cross-compiling rust binaries                                  :rust:arch:
+** Cross-compiling rust binaries                                       :rust:
 Now that rustup is the official way to get rust, it means I might be able to get
 around the cross-compilation rust bug I encountered last time I tried.
 
