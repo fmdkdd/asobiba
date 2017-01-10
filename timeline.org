@@ -6588,3 +6588,56 @@ on screen now.
 So let's try to build that graph puzzle again, but maybe using gfx-rs this time.
 
 ** Rust tangled an Android                                          :tangled:
+Actually, I may not need gfx-rs for tangled.  I just need to draw in 2D.  That
+might be easier just using SDL2 directly.
+
+Let's see.  Wow, the sdl2 crate compiles much faster than glium.  Nearly
+instantaneous to have a window after ~cargo run~.
+
+Now ~cargo apk~.
+
+: error: cannot find -lSDL2
+
+Duh.  [[https://github.com/AngryLawyer/rust-sdl2/issues/526][Have to]] compile it myself for the target, apparently.  Let's try!
+
+: wget libsdl
+: tar; cd
+: ndk-build NDK_PROJECT_PATH=. APP_BUILD_SCRIPT=./Android.mk APP_PLATFORM=android-18
+
+Now I've got the libSDL2.so for the android platforms.
+
+: cp libs/armeabi/libSDL2.so ~/.rustup/toolchains/stable-x86_64-unknown-linux-gnu/lib/rustlib/arm-linux-androideabi/lib/
+
+It builds.
+
+Now to run:
+
+: RustAndroidGlueStdouterr: thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: "Application didn\'t initialize properly, did you include SDL_main.h in the file containing your main() function?"', ../src/libcore/result.rs:837
+
+Looks like the android-glue might not work with SDL2 out of the box.  It looks
+like SDL2 has support for Android though, and even provides an android project
+template to wrap your C code in a Java app.
+
+Seems the SDL template project implements a bunch of stuff in Java however.
+Grmbl I don't see an easy way out of that.  Maybe I should try to gfx-rs after
+all.
+
+With gfx, it compiles without troubles.  But:
+
+:  RustAndroidGlueStdouterr: thread 'main' panicked at 'not yet implemented', /home/fmdkdd/.cargo/registry/src/github.com-1ecc6299db9ec823/glutin-0.7.2/src/api/egl/mod.rs:497
+
+We are running in circles here.
+
+Trying to copy [[https://github.com/ozkriff/zoc][ZOC]], because reportedly it builds and runs on Android.  There are
+gotchas with the shader version, but luckily he uses only basic shaders.
+
+Also, passing the GlRequest::Specific to glutin seems to fail.  He uses
+GlRequest::GlThenGles so at least it runs using OpenGL on my desktop.  And on
+android it should use ES.
+
+: RustAndroidGlueStdouterr: thread 'main' panicked at 'gl function was not loaded', /home/fmdkdd/proj/asobiba/rust/tangled/target/arm-linux-androideabi/debug/build/gfx_gl-f278bd537d4e476a/out/gl_bindings.rs:1479
+
+Okayyy.  Well, gfx-rs is no better than glium then.  At least I /got/ glium to
+work.  Let's use glium instead then.
+
+Yes!  No errors!

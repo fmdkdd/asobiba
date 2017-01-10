@@ -1,0 +1,7 @@
+[package]
+name = "tangled"
+version = "0.1.0"
+authors = ["fmdkdd <fmdkdd@gmail.com>"]
+
+[dependencies]
+glium = "0.16"
