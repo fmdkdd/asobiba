@@ -5,3 +5,6 @@ authors = ["fmdkdd <fmdkdd@gmail.com>"]
 
 [dependencies]
 glium = "0.16"
+
+[package.metadata.android]
+fullscreen = true
