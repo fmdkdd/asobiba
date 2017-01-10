@@ -2,7 +2,7 @@
 extern crate glium;
 
 use glium::{DisplayBuild, Surface};
-use glium::glutin::{Event, VirtualKeyCode};
+use glium::glutin::{Event, Touch, TouchPhase, VirtualKeyCode};
 
 pub fn main() {
   let display = glium::glutin::WindowBuilder::new()
@@ -14,12 +14,18 @@ pub fn main() {
     .with_vsync()
     .build_glium().unwrap();
 
+  let mut touched = false;
+
   // Main loop
   'running: loop {
     for event in display.poll_events() {
       match event {
         Event::Closed | Event::KeyboardInput( .., Some(VirtualKeyCode::Escape))
           => { break 'running },
+
+        Event::Touch ( Touch { phase: TouchPhase::Started, ..} ) => {
+          touched = !touched;
+        }
 
         _ => {}
       }
@@ -29,7 +35,11 @@ pub fn main() {
     let mut frame = display.draw();
 
     // Clear the frame, otherwise welcome to Windows 95 error mode.
-    frame.clear_color(0.02, 0.02, 0.024, 0.0);
+    if touched {
+      frame.clear_color(0.02, 0.02, 1.0, 0.0);
+    } else {
+      frame.clear_color(1.00, 0.02, 0.024, 0.0);
+    }
 
     // Swap buffers
     frame.finish().unwrap();
