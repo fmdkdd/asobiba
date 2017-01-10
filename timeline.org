@@ -6508,3 +6508,83 @@ it complains about another missing symbol, cxa_guard something.
 
 So, still no success cross-compiling.  Might have been faster spinning a Windows
 VM and building the thing from there (maybe even with wine).
+
+* [2017-01-10 mar.]
+** Cross-compiling Rust to Android                                     :rust:
+Because yesterday's struggles were not enough to turn me trying crazy
+experiments.  Well, not that crazy.  There are tutorials for what I'm trying to
+do.
+
+Anyway.  My puzzle game on JavaScript lags unacceptably on Android.  With the
+hardware that my mobile devices possess, I wonder how much performance I can get
+if I eschew the browser and launch a binary directly.
+
+Hopefully I /can/ run a Rust binary in developer mode without having to root the
+device first.  Let's see.
+
+I'll try [[https://github.com/tomaka/android-rs-glue][cargo-apk]], as it seems promising.  Have to download and install a bunch
+of stuff for building on Android...
+
+Grmbl, trying to compile space-bang-bang, but for some reason I fails to load
+the ship.stl file, even though the path is correct.  The only way to make it
+load the file is to run cargo from the src directory.  Well, going back to
+hardcoded meshes to test the APK.
+
+Also, commenting out imgui because it requires string.h that the g++ does not
+find...
+
+: BUILD FAILED
+: /opt/android-sdk/tools/ant/build.xml:538: Unable to resolve project target 'android-18'
+
+Okay, I admit I did not follow the howto for cargo-apk to the letter, preferring
+to follow the archwiki on Android in parallel because I don't want to pollute my
+home folder with this stuff.
+
+Anyway, it looks like I don't have the tools needed to build the 18 revision of
+the Android API.  Maybe installing the android-platform-18 from AUR will
+suffice.  Otherwise, I can do android update sdk -u, but it seems to fetch /all/
+revisions.
+
+Okay, that seems to do it.  What's next?
+
+: [aapt] /home/fmdkdd/proj/asobiba/rust/space-bang-bang/target/android-artifacts/build/bin/AndroidManifest.xml:3: Tag <manifest> attribute package has invalid character '-'.
+
+Hmmmmmmm.  Looking at the manifest, the culprit must be the project name:
+
+: package="rust.space-bang-bang"
+
+Okay.  If I remove these dashes from the package name in Cargo.toml... it works!
+
+Now, to load it on the tablet.  After ~adb install~, I have a ~spacebangbang~
+app I can run.
+
+Black screen.
+
+Okay that's not encouraging.  Maybe a debugger would help here.
+
+: $ adb logcat
+: RustAndroidGlueStdouterr: thread 'main' panicked at 'not yet implemented', /home/fmdkdd/.cargo/registry/src/github.com-1ecc6299db9ec823/glutin-0.6.1/src/api/egl/mod.rs:497
+
+Oh.  Let's try updating the dependencies, maybe glutin will pick up the pace.
+Otherwise I will try building a simpler app using gfx-rs, since that was
+reported to work.
+
+Updating does not change.  Looking at the source, this is still unimplemented in
+master.  But what is that feature exactly?  It seems it tries to build an
+unsupported OpenGLEs version.  It should work for versions 1, 2 and 3, but fail
+otherwise.
+
+Let's try to request a specific version.
+
+Okayy, turns out OpenGL/ES does not exactly use the same shader language as
+OpenGL.  There are subtle differences, and of course the version correspondence
+is a mess ([[https://github.com/mattdesl/lwjgl-basics/wiki/GLSL-Versions][this]] is useful).  Am tempted to use an engine rather than deal with
+this mess.  But, now that I've got the thing running on my desktop, with
+OpenGL/ES specified, let's try on Android one more time.
+
+Ahah! It works.  Well, Glium still triggers an error, but I've got a spaceship
+on screen now.
+
+So let's try to build that graph puzzle again, but maybe using gfx-rs this time.
+
+** Rust tangled an Android                                          :tangled:
