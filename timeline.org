@@ -6641,3 +6641,25 @@ Okayyy.  Well, gfx-rs is no better than glium then.  At least I /got/ glium to
 work.  Let's use glium instead then.
 
 Yes!  No errors!
+
+* [2017-01-12 jeu.]
+** Android app sometimes runs, sometimes doesn't                    :tangled:
+When it doesn't, I just have a black screen.  Restarting the app seems to do it.
+I'm suspecting that I should watch for 'resume' events, as launching an Android
+app is not like running a program in the shell.  Or rather, one does not simply
+terminate an Android app.
+
+Okay so looking at the given example for NativeActivity, it seems I have to do
+some cleanup of the EGL context depending on events.  But, even if I comment out
+all the glium and glutin related code, the app will badly break if I run it,
+exit, and run it again:
+
+#+BEGIN_EXAMPLE
+184:D/RustAndroidGlueStdouterr(13537): Creating application thread
+196:D/RustAndroidGlueStdouterr(13537): thread 'main' panicked at 'assertion failed: (*ptr).is_none()', ../src/libstd/sys/unix/args.rs:83
+197:D/RustAndroidGlueStdouterr(13537): note: Run with `RUST_BACKTRACE=1` for a backtrace.
+198:D/RustAndroidGlueStdouterr(13537): fatal runtime error: failed to initiate panic, error 9
+199:D/RustAndroidGlueStdouterr(13537): In mgmain JNI_OnLoad
+#+END_EXAMPLE
+
+which tells me that the Android target from Rust may not be very stable yet.

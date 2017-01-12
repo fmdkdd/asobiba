@@ -2,6 +2,7 @@
 name = "tangled"
 version = "0.1.0"
 dependencies = [
+ "android_glue 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "glium 0.16.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
