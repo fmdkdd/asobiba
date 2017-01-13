@@ -6663,3 +6663,25 @@ exit, and run it again:
 #+END_EXAMPLE
 
 which tells me that the Android target from Rust may not be very stable yet.
+
+* [2017-01-13 ven.]
+** MVP for Android puzzle game                                      :tangled:
+I haven't managed to solve the crash on resume yet.  But, I want to see first if
+I can get 60fps this way with a small graph.  If I don't, it's no use going
+further in this route.
+
+(Reminder: test debug and release performance)
+
+Well, debug mode seems smooth enough to the eye.  Didn't time it, but it's fluid
+and doesn't seem to suffer from hiccups.
+
+Annoyingly, I get a glium error when trying to draw lines using the
+PrimitiveType::LinesList.  It works in OpenGL, but not OpenGL/ES it seems.  Or
+it a case not handled in Glium.
+
+Anyway, it works, and it's rather fast.  Let's try some timings.
+
+Yep, confirmed 60fps.  Not as steady as what I can get on the desktop though.
+Sometimes 15, often 17.  But that's +- 1ms, so that's an acceptable variance.
+
+Release mode is the same.
