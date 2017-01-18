@@ -6685,3 +6685,29 @@ Yep, confirmed 60fps.  Not as steady as what I can get on the desktop though.
 Sometimes 15, often 17.  But that's +- 1ms, so that's an acceptable variance.
 
 Release mode is the same.
+
+* [2017-01-18 mer.]
+** Systemd and netctl are in a boat                                    :arch:
+After a recent upgrade to systemd (I think it was to 232), I wasn't able to get
+a working ethernet connection.  Fortunately, I could revert back to a previous
+version using the pacman cache.
+
+After a few weeks, I switched from systemd to netctl to manage the ethernet
+connection.  This allowed me to upgrade systemd and everything was fine.
+
+Except, my boot time went up.  Diagnosing with systemd-analyze revealed that
+netctl took a few seconds at boot to setup the connection and get a dhcp lease
+(presumably), while systemd did it asynchronously or something, and I never had
+to wait.  This was annoying, but I had to suffer it once a day at most.
+
+But then it hit me: I had had trouble with the MTU when setting up the ethernet
+connection with systemd previously.  The default value of 1500 was not working
+for some reason one day, and switching to 1480 fixed it.  Today, I tried to
+switch back to systemd to manage the ethernet, and as before, it didn't work.
+But, after removing the MTU override and using the default 1500, it went fine.
+
+Booting is snappier now.  Well, except for pulseaudio taking a few seconds to
+time out when trying to discover my USB midi keyboard when it's not plugged in.
+
+But making a note here of the MTU trick.  When ethernet doesn't work, wiggle the
+MTU.
