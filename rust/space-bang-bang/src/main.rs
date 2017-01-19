@@ -75,9 +75,10 @@ impl BulletDrawer {
 
     let mut shape: Vec<Vertex> = Vec::new();
     for i in 0..stl_data.header.num_triangles {
-      shape.push(stl_data.triangles[i as usize].v1.into());
-      shape.push(stl_data.triangles[i as usize].v2.into());
-      shape.push(stl_data.triangles[i as usize].v3.into());
+      let t = &stl_data.triangles[i as usize];
+      shape.push(Vertex { position: t.v1, normal: t.normal, ..Default::default() });
+      shape.push(Vertex { position: t.v2, normal: t.normal, ..Default::default() });
+      shape.push(Vertex { position: t.v3, normal: t.normal, ..Default::default() });
     }
     let vertex_buffer = VertexBuffer::new(display, &shape).unwrap();
 
@@ -128,7 +129,10 @@ impl BulletDrawer {
                        model: model,
                        view: *view,
                      },
-                     &Default::default()).unwrap();
+                     &glium::draw_parameters::DrawParameters {
+                       polygon_mode: glium::draw_parameters::PolygonMode::Line,
+                       .. Default::default()
+                     }).unwrap();
   }
 }
 
@@ -161,9 +165,10 @@ fn main() {
 
   let mut shape: Vec<Vertex> = Vec::new();
   for i in 0..ship_stl.header.num_triangles {
-    shape.push(ship_stl.triangles[i as usize].v1.into());
-    shape.push(ship_stl.triangles[i as usize].v2.into());
-    shape.push(ship_stl.triangles[i as usize].v3.into());
+    let t = &ship_stl.triangles[i as usize];
+    shape.push(Vertex { position: t.v1, normal: t.normal, ..Default::default() });
+    shape.push(Vertex { position: t.v2, normal: t.normal, ..Default::default() });
+    shape.push(Vertex { position: t.v3, normal: t.normal, ..Default::default() });
   }
 
   // The ship can rotate and move on its own.
@@ -192,14 +197,18 @@ fn main() {
   ];
 
   let vertex_shader_src = r#"
-    #version 120
+    #version 140
 
-    attribute vec3 position;
+    in vec3 position;
+    in vec3 normal;
 
     uniform mat4 matrix;
     uniform mat4 view;
 
+    out vec3 v_normal;
+
     void main() {
+        v_normal = transpose(inverse(mat3(matrix))) * normal;
         gl_Position = view * matrix * vec4(position, 1.0);
     }
 "#;
@@ -207,8 +216,15 @@ fn main() {
   let fragment_shader_src = r#"
     #version 120
 
+    varying vec3 v_normal;
+
+    uniform vec3 light;
+
     void main() {
-        gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
+        float brightness = dot(normalize(v_normal), normalize(light));
+        vec3 dark_color = vec3(0.4, 0.4, 0.4);
+        vec3 regular_color = vec3(1.0, 1.0, 1.0);
+        gl_FragColor = vec4(mix(dark_color, regular_color, brightness), 1.0);
     }
 "#;
 
@@ -227,10 +243,10 @@ fn main() {
 
   // The quad to draw the texture on
   let quad_vertices = [
-    Vertex { position: [-1.0, -1.0, 0.0], tex_coords: [0.0, 0.0] },
-    Vertex { position: [-1.0,  1.0, 0.0], tex_coords: [0.0, 1.0] },
-    Vertex { position: [ 1.0,  1.0, 0.0], tex_coords: [1.0, 1.0] },
-    Vertex { position: [ 1.0, -1.0, 0.0], tex_coords: [1.0, 0.0] }
+    Vertex { position: [-1.0, -1.0, 0.0], tex_coords: [0.0, 0.0], ..Default::default() },
+    Vertex { position: [-1.0,  1.0, 0.0], tex_coords: [0.0, 1.0], ..Default::default() },
+    Vertex { position: [ 1.0,  1.0, 0.0], tex_coords: [1.0, 1.0], ..Default::default() },
+    Vertex { position: [ 1.0, -1.0, 0.0], tex_coords: [1.0, 0.0], ..Default::default() }
   ];
 
   let quad_vertex_buffer = VertexBuffer::immutable(&display, &quad_vertices).unwrap();
@@ -420,8 +436,12 @@ fn main() {
                      &uniform! {
                        matrix: projection,
                        view: view,
+                       light: [-1.0, 0.0, 0.0f32],
                      },
-                     &Default::default()).unwrap();
+                     &glium::draw_parameters::DrawParameters {
+                       // polygon_mode: glium::draw_parameters::PolygonMode::Line,
+                       .. Default::default()
+                     }).unwrap();
 
     // Update and draw the bullets
     for b in bullets.iter_mut() {
@@ -484,10 +504,10 @@ fn main() {
       .build(|| {
         ui.slider_int(im_str!("Virtual width"),
                       &mut virtual_resolution.0,
-                      1, 2000).build();
+                      1, 4000).build();
         ui.slider_int(im_str!("Virtual height"),
                       &mut virtual_resolution.1,
-                      1, 2000).build();
+                      1, 4000).build();
 
         ui.slider_int(im_str!("Turn speed"),
                       &mut turn_speed,
@@ -515,21 +535,13 @@ fn main() {
 }
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default, Debug)]
 struct Vertex {
   position: [f32; 3],
+  normal: [f32; 3],
   tex_coords: [f32; 2],
 }
-implement_vertex!(Vertex, position, tex_coords);
-
-impl From<[f32; 3]> for Vertex {
-  fn from(v: [f32; 3]) -> Self {
-    Vertex {
-      position: v,
-      tex_coords: [0.0, 0.0],
-    }
-  }
-}
+implement_vertex!(Vertex, position, normal, tex_coords);
 
 fn clamp(x: f32, min: f32, max: f32) -> f32 {
   // Hmm, have to use min/max specific to floats to handle NaN properly.
@@ -549,7 +561,7 @@ mod stl {
   use self::byteorder::{ReadBytesExt, LittleEndian};
 
   pub struct Triangle {
-    normal: [f32; 3],
+    pub normal: [f32; 3],
     pub v1: [f32; 3],
     pub v2: [f32; 3],
     pub v3: [f32; 3],
