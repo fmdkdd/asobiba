@@ -6711,3 +6711,25 @@ time out when trying to discover my USB midi keyboard when it's not plugged in.
 
 But making a note here of the MTU trick.  When ethernet doesn't work, wiggle the
 MTU.
+
+* [2017-01-19 jeu.]
+** Fixing pulseaudio slow startup                                      :arch:
+So my midi keyboard /was/ plugged in all this time.  That's why pulseaudio
+complained.  But, unplugging it unveiled that pulseaudio was just slow to start
+up.
+
+Now, I don't remember exactly why I installed pulseaudio in the first case.  It
+might have been for running a Steam game.
+
+Anyway, pulseaudio is able to start up on its own with autospawning.  That is
+disabled by default in /etc/pulse/client.conf by Arch, but can be re-enabled
+locally in .config/pulse/client.conf:
+
+: autospawn=yes
+
+Tested to work with mpd.  Now my login is below 1s.
+
+Also, why did I use pulse with mpd?  Might as well use straight ALSA to avoid
+running pulseaudio.
+
+Yep, it works.
