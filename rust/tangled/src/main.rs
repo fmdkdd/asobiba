@@ -1,16 +1,17 @@
+mod display;
+
 #[macro_use]
 extern crate glium;
 
-extern crate android_glue;
 extern crate rand;
 extern crate time;
 
-use std::sync::mpsc;
-
-use glium::{DisplayBuild, Program, Surface, VertexBuffer};
+use glium::{Program, Surface, VertexBuffer};
 use glium::glutin::{Event, Touch, TouchPhase, VirtualKeyCode};
 
 use time::SteadyTime;
+
+use display::Display;
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -60,15 +61,18 @@ impl Transition {
   }
 }
 
+#[cfg(target_os = "android")]
+fn create_window(title: &str) -> display::display_android::AndroidWindow {
+  display::display_android::AndroidWindow::new(title)
+}
+
+#[cfg(not(target_os = "android"))]
+fn create_window(title: &str) -> display::display_glutin::GlutinWindow {
+  display::display_glutin::GlutinWindow::new(title)
+}
+
 pub fn main() {
   let mut rng = rand::thread_rng();
-
-  // Init android
-  let (tx, rx) = mpsc::channel();
-  android_glue::add_sender_missing(tx);
-
-  let mut touched = false;
-  let mut animate = false;
 
   let mut nodes = vec![
     [-3.0, -3.0],
@@ -84,74 +88,19 @@ pub fn main() {
     (1, 2),
   ];
 
+  let mut touched = false;
+
   let mut transitions = vec![
     Transition::new(&nodes, 0, nodes[1], 30),
     Transition::new(&nodes, 1, nodes[0], 30),
   ];
 
-  let mut display = None;
-  let mut node_program = None;
-  let mut edge_program = None;
-  let mut node_vbo = None;
+  let mut window = create_window("Tangled");
 
   let mut last_frame = SteadyTime::now();
 
   // Main loop
   'running: loop {
-    match rx.try_recv() {
-      Err(_) => { /* No event, do nothing */ }
-      Ok(ev) => {
-        android_glue::write_log(&format!("android event {:?}", ev));
-
-        match ev {
-          android_glue::Event::InitWindow => {
-            animate = true;
-
-            let disp = glium::glutin::WindowBuilder::new()
-              .with_title("Tangled")
-              .with_gl(glium::glutin::GlRequest::GlThenGles {
-                opengles_version: (2, 0),
-                opengl_version: (2, 1),
-              })
-              .with_vsync()
-              .build_glium().unwrap();
-
-            node_program = Some(Program::from_source(
-              &disp,
-              include_str!("shader/edge.v.glsl"),
-              include_str!("shader/edge.f.glsl"),
-              None).unwrap());
-
-            node_vbo = Some(VertexBuffer::immutable(&disp, &[
-              Vertex { position: [-1.0, -1.0] },
-              Vertex { position: [-1.0,  1.0] },
-              Vertex { position: [ 1.0, -1.0] },
-              Vertex { position: [ 1.0,  1.0] },
-            ]).unwrap());
-
-            edge_program = Some(Program::from_source(
-              &disp,
-              include_str!("shader/edge.v.glsl"),
-              include_str!("shader/edge.f.glsl"),
-              None).unwrap());
-
-            display = Some(disp);
-          }
-
-          android_glue::Event::TermWindow => {
-            animate = false;
-
-            display = None;
-            node_program = None;
-            // node_vbo = None;
-            // edge_program = None;
-          }
-
-          _ => {}
-        }
-      }
-    }
-
     let edge_proj = [
       [ 1.0, 0.0, 0.0, 0.0],
       [ 0.0, 1.0, 0.0, 0.0],
@@ -159,20 +108,37 @@ pub fn main() {
       [ 0.0, 0.0, 0.0, 5.0f32],
     ];
 
-    if animate {
-      let display = display.as_ref().unwrap();
-      for event in display.poll_events() {
-        match event {
-          Event::Closed | Event::KeyboardInput( .., Some(VirtualKeyCode::Escape))
-            => { break 'running },
-
-          Event::Touch ( Touch { phase: TouchPhase::Started, ..} ) => {
-            touched = !touched;
-          }
-
-          _ => {}
+    for event in window.events() {
+      match event {
+        Event::Closed |
+        Event::KeyboardInput(.., Some(VirtualKeyCode::Escape)) => {
+          break 'running
         }
+
+        Event::MouseInput(..) |
+        Event::Touch(Touch { phase: TouchPhase::Started, .. }) => {
+          touched = !touched
+        }
+
+        _ => {}
       }
+    }
+
+    if window.can_render() {
+      let node_program = Program::from_source(
+        window.facade(),
+        include_str!("shader/edge.v.glsl"),
+        include_str!("shader/edge.f.glsl"),
+        None).unwrap();
+
+      let node_vbo = VertexBuffer::immutable(
+        window.facade(),
+        &[
+          Vertex { position: [-1.0, -1.0] },
+          Vertex { position: [-1.0,  1.0] },
+          Vertex { position: [ 1.0, -1.0] },
+          Vertex { position: [ 1.0,  1.0] },
+        ]).unwrap();
 
       // Update transitions
       for t in transitions.iter_mut() {
@@ -186,26 +152,29 @@ pub fn main() {
       }
 
       let dt = SteadyTime::now() - last_frame;
-      android_glue::write_log(&format!("{:.3}ms", dt.num_microseconds().unwrap() as f32 / 1000f32));
+      window.log(&format!("{:.3}ms", dt.num_microseconds().unwrap() as f32 / 1000f32));
       last_frame = SteadyTime::now();
 
-
       // Create frame to draw on
-      let mut frame = display.draw();
+      let mut frame = window.frame();
 
       // Clear the frame, otherwise welcome to Windows 95 error mode.
-      frame.clear_color(0.3, 0.2, 0.4, 1.0);
+      if touched {
+        frame.clear_color(0.3, 0.2, 0.4, 1.0);
+      } else {
+        frame.clear_color(0.4, 0.2, 0.3, 1.0);
+      }
 
       // Draw edges below nodes
       for e in edges.iter() {
-        let vbo = VertexBuffer::immutable(display, &[
+        let vbo = VertexBuffer::immutable(window.facade(), &[
           Vertex { position: nodes[e.0] },
           Vertex { position: nodes[e.1] },
         ]).unwrap();
 
         frame.draw(&vbo,
                    glium::index::NoIndices(glium::index::PrimitiveType::LinesList),
-                   node_program.as_ref().unwrap(),
+                   &node_program,
                    &uniform! { projection: edge_proj, },
                    &glium::draw_parameters::DrawParameters {
                      // Can't use this mode in GLES, but line_width is applied
@@ -225,9 +194,9 @@ pub fn main() {
           [ n[0], n[1], 0.0, 5.0f32],
         ];
 
-        frame.draw(node_vbo.as_ref().unwrap(),
+        frame.draw(&node_vbo,
                    glium::index::NoIndices(glium::index::PrimitiveType::TriangleStrip),
-                   node_program.as_ref().unwrap(),
+                   &node_program,
                    &uniform! { projection: projection, },
                    &Default::default()).unwrap();
       }
