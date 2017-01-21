@@ -1,4 +1,5 @@
 mod display;
+mod graph;
 
 #[macro_use]
 extern crate glium;
@@ -12,6 +13,7 @@ use glium::glutin::{Event, Touch, TouchPhase, VirtualKeyCode};
 use time::SteadyTime;
 
 use display::Display;
+use graph::{Graph, Node};
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -74,30 +76,28 @@ fn create_window(title: &str) -> display::display_glutin::GlutinWindow {
 pub fn main() {
   let mut rng = rand::thread_rng();
 
-  let mut nodes = vec![
-    [-3.0, -3.0],
-    [-3.0,  2.0],
-    [ 2.0, -3.0],
-    [ 2.0,  2.0f32],
-  ];
+  // Construct the graph
+  let mut g = Graph::new();
 
-  let edges = vec![
-    (0, 1),
-    (0, 2),
-    (0, 3),
-    (1, 2),
-  ];
+  g.add_node(-3.0, -3.0);
+  g.add_node(-3.0, -2.0);
+  g.add_node( 2.0, -3.0);
+  g.add_node( 2.0, -2.0);
 
-  let mut touched = false;
+  g.add_edge(0, 1);
+  g.add_edge(0, 2);
+  g.add_edge(0, 3);
+  g.add_edge(1, 2);
 
   let mut transitions = vec![
     Transition::new(&nodes, 0, nodes[1], 30),
     Transition::new(&nodes, 1, nodes[0], 30),
   ];
 
+  // Construct the rendering context
   let mut window = create_window("Tangled");
-
   let mut last_frame = SteadyTime::now();
+  let mut touched = false;
 
   // Main loop
   'running: loop {
@@ -166,10 +166,10 @@ pub fn main() {
       }
 
       // Draw edges below nodes
-      for e in edges.iter() {
+      for e in g.edges() {
         let vbo = VertexBuffer::immutable(window.facade(), &[
-          Vertex { position: nodes[e.0] },
-          Vertex { position: nodes[e.1] },
+          Vertex { position: g.node(e.n1).into() },
+          Vertex { position: g.node(e.n2).into() },
         ]).unwrap();
 
         frame.draw(&vbo,
@@ -186,12 +186,12 @@ pub fn main() {
       }
 
       // Draw nodes
-      for n in nodes.iter() {
+      for n in g.nodes() {
         let projection = [
           [ 1.0, 0.0, 0.0, 0.0],
           [ 0.0, 1.0, 0.0, 0.0],
           [ 0.0, 0.0, 1.0, 0.0],
-          [ n[0], n[1], 0.0, 5.0f32],
+          [ n.x, n.y, 0.0, 5.0f32],
         ];
 
         frame.draw(&node_vbo,
