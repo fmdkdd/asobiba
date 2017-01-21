@@ -1,0 +1,8 @@
+[package]
+name = "test-kiss3d"
+version = "0.1.0"
+authors = ["fmdkdd <fmdkdd@gmail.com>"]
+
+[dependencies]
+kiss3d = "*"
+nalgebra = "0.9.*"
