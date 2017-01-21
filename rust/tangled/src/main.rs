@@ -1,4 +1,5 @@
 mod display;
+mod transition;
 mod graph;
 
 #[macro_use]
@@ -13,6 +14,7 @@ use glium::glutin::{Event, Touch, TouchPhase, VirtualKeyCode};
 use time::SteadyTime;
 
 use display::Display;
+use transition::Transition;
 use graph::{Graph, Node};
 
 #[derive(Copy, Clone)]
@@ -20,48 +22,6 @@ struct Vertex {
   position: [f32; 2],
 }
 implement_vertex!(Vertex, position);
-
-struct Transition {
-  node_idx: usize,
-  frames: u32,
-  elapsed: u32,
-  target: [f32; 2],
-  step: [f32; 2],
-  done: bool,
-}
-
-impl Transition {
-  fn new(nodes: &Vec<[f32; 2]>, node_idx: usize, target: [f32; 2], frames: u32) -> Self {
-    let n = nodes[node_idx];
-
-    // println!("{} {} {}", target[0], n[0], (target[0] - n[0]) / (frames as f32));
-    // println!("{} {} {}", target[1], n[1], (target[1] - n[1]) / (frames as f32));
-
-    Transition {
-      node_idx: node_idx,
-      frames: frames,
-      elapsed: 0,
-      target: target,
-      step: [(target[0] - n[0]) / (frames as f32),
-             (target[1] - n[1]) / (frames as f32)],
-      done: false,
-    }
-  }
-
-  fn update(&mut self, nodes: &mut Vec<[f32; 2]>) {
-    let mut n = &mut nodes[self.node_idx];
-
-    n[0] += self.step[0];
-    n[1] += self.step[1];
-    self.elapsed += 1;
-
-    if self.elapsed >= self.frames {
-      n[0] = self.target[0];
-      n[1] = self.target[1];
-      self.done = true;
-    }
-  }
-}
 
 #[cfg(target_os = "android")]
 fn create_window(title: &str) -> display::display_android::AndroidWindow {
@@ -71,6 +31,11 @@ fn create_window(title: &str) -> display::display_android::AndroidWindow {
 #[cfg(not(target_os = "android"))]
 fn create_window(title: &str) -> display::display_glutin::GlutinWindow {
   display::display_glutin::GlutinWindow::new(title)
+}
+
+fn swap_nodes<'a, 'b>(transitions: &'a mut Vec<Transition<'b>>, n1: &'b mut Node, n2: &'b mut Node) {
+  transitions.push(Transition::new(n1, n2.into(), 30));
+  transitions.push(Transition::new(n2, [n1.x, n1.y], 30));
 }
 
 pub fn main() {
@@ -89,10 +54,9 @@ pub fn main() {
   g.add_edge(0, 3);
   g.add_edge(1, 2);
 
-  let mut transitions = vec![
-    Transition::new(&nodes, 0, nodes[1], 30),
-    Transition::new(&nodes, 1, nodes[0], 30),
-  ];
+  // Add a first transition
+  let mut transitions = Vec::new();
+  swap_nodes(&mut transitions, &mut g.node(0), &mut g.node(1));
 
   // Construct the rendering context
   let mut window = create_window("Tangled");
@@ -142,13 +106,14 @@ pub fn main() {
 
       // Update transitions
       for t in transitions.iter_mut() {
-        t.update(&mut nodes);
+        t.update();
+        // FIXME: use t.current to update the node
+        // but need to establish link beforehand in a TransitionManager or smth
       }
-      transitions.retain(|t| t.done == false);
+      transitions.retain(|t| t.done() == false);
       if transitions.len() == 0 {
-        let n = rand::sample(&mut rng, 0..nodes.len(), 2);
-        transitions.push(Transition::new(&nodes, n[0], nodes[n[1]], 30));
-        transitions.push(Transition::new(&nodes, n[1], nodes[n[0]], 30));
+        let n = rand::sample(&mut rng, 0..g.nodes_len(), 2);
+        swap_nodes(&mut transitions, &mut g.node(n[0]), &mut g.node(n[1]));
       }
 
       let dt = SteadyTime::now() - last_frame;
