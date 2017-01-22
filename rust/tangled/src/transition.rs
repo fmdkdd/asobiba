@@ -1,36 +1,29 @@
-use graph::Node;
-
-pub struct Transition<'a> {
+pub struct Transition {
   frames: u32,
   elapsed: u32,
-  // start: [f32; 2],
-  node: &'a mut Node,
   goal: [f32; 2],
   step: [f32; 2],
   current: [f32; 2],
   done: bool,
 }
 
-impl<'a> Transition<'a> {
-  pub fn new(node: &'a mut Node, goal: [f32; 2], frames: u32) -> Self {
-    let step = [(goal[0] - node.x) / (frames as f32),
-                (goal[1] - node.y) / (frames as f32)];
+impl Transition {
+  pub fn new(start: [f32; 2], goal: [f32; 2], frames: u32) -> Self {
 
     Transition {
       frames: frames,
       elapsed: 0,
-      // start: start,
-      node: node,
       goal: goal,
-      step: step,
-      current: [0.0, 0.0f32],
+      step: [(goal[0] - start[0]) / (frames as f32),
+             (goal[1] - start[1]) / (frames as f32)],
+      current: start,
       done: false,
     }
   }
 
   pub fn update(&mut self) {
-    self.node.x += self.step[0];
-    self.node.y += self.step[1];
+    self.current[0] += self.step[0];
+    self.current[1] += self.step[1];
     self.elapsed += 1;
 
     if self.elapsed >= self.frames {
@@ -44,7 +37,7 @@ impl<'a> Transition<'a> {
     self.done
   }
 
-  // pub fn current(&self) -> [f32; 2] {
-  //   self.current
-  // }
+  pub fn current(&self) -> [f32; 2] {
+    self.current
+  }
 }

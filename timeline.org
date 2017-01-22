@@ -6797,3 +6797,31 @@ In the second snippet, this is still the case.  But, since the call is made from
 another reference to a T, it's fine.  Except, if I understand correctly, we are
 in fact dealing with the same T; ~t == t2~.  That means the exact same call, on
 the same object, is disallowed in one instance, but allowed in another.
+
+** Transitions and ownership                                   :tangled:rust:
+Been struggling with implementing Transitions as cleanly as possible.  The
+problem is the way I do it in JS, is I hold a list of active transitions, and
+each transition holds a reference to the object it modifies.
+
+In Rust that means trouble, since I must hold a mutable reference for the
+lifetime of the transition, ensuring that I can never do anything else with the
+object.
+
+I think it could work if I went with an ECS pattern.  But I'm not there yet.
+
+I thought about letting the transition hold a /node index/ rather than a
+reference to the node.  In fact, that's what I had at first.  But that's
+obviously brittle if we move nodes around in the vector that holds them.  (But
+in fact, I don't remove nodes actually, so it could be fine...).
+
+On the topic of dealing with cycles in Rust, [[https://m-decoster.github.io//2017/01/16/fighting-borrowchk/][someone mentioned]] that you could
+follow the same tactic as normalizing tables in relational algebra.  Here, a
+node can have at most one transition, and a transition is tied to a node, so I
+can in fact let the node /own/ the transition.  That way, the node updates the
+transition, and can update its position after it.
+
+That works, but it's still a pain fighting the checker for creating swapping
+transitions, since it requires mutable references to two nodes, and the nodes
+are inside a graph.
+
+Still not satisfied.  Maybe I can clean up that, or try an ECS.

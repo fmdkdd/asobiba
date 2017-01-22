@@ -33,9 +33,9 @@ fn create_window(title: &str) -> display::display_glutin::GlutinWindow {
   display::display_glutin::GlutinWindow::new(title)
 }
 
-fn swap_nodes<'a, 'b>(transitions: &'a mut Vec<Transition<'b>>, n1: &'b mut Node, n2: &'b mut Node) {
-  transitions.push(Transition::new(n1, n2.into(), 30));
-  transitions.push(Transition::new(n2, [n1.x, n1.y], 30));
+fn swap_nodes(n1: &mut Node, n2: &mut Node) {
+  n1.init_transition(n2.into(), 30);
+  n2.init_transition(n1.into(), 30);
 }
 
 pub fn main() {
@@ -55,8 +55,12 @@ pub fn main() {
   g.add_edge(1, 2);
 
   // Add a first transition
-  let mut transitions = Vec::new();
-  swap_nodes(&mut transitions, &mut g.node(0), &mut g.node(1));
+  // let n2 = g.node_mut(1);
+  // swap_nodes(g.node_mut(0), n2);
+  let n1 : [f32; 2] = g.node(0).into();
+  let n2 : [f32; 2] = g.node(1).into();
+  g.node_mut(0).init_transition(n2, 30);
+  g.node_mut(1).init_transition(n1, 30);
 
   // Construct the rendering context
   let mut window = create_window("Tangled");
@@ -105,15 +109,21 @@ pub fn main() {
         ]).unwrap();
 
       // Update transitions
-      for t in transitions.iter_mut() {
-        t.update();
+      let mut active_transitions = 0;
+      for n in g.nodes_mut() {
+        if n.update_transition() {
+          active_transitions += 1;
+        }
         // FIXME: use t.current to update the node
         // but need to establish link beforehand in a TransitionManager or smth
       }
-      transitions.retain(|t| t.done() == false);
-      if transitions.len() == 0 {
-        let n = rand::sample(&mut rng, 0..g.nodes_len(), 2);
-        swap_nodes(&mut transitions, &mut g.node(n[0]), &mut g.node(n[1]));
+      if active_transitions == 0 {
+        let r = rand::sample(&mut rng, 0..g.nodes().len(), 2);
+        let n1 : [f32; 2] = g.node(r[0]).into();
+        let n2 : [f32; 2] = g.node(r[1]).into();
+        g.node_mut(r[0]).init_transition(n2, 30);
+        g.node_mut(r[1]).init_transition(n1, 30);
+        // swap_nodes(g.node_mut(n[0]), g.node_mut(n[1]));
       }
 
       let dt = SteadyTime::now() - last_frame;
