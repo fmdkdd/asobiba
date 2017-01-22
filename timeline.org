@@ -6733,3 +6733,67 @@ Also, why did I use pulse with mpd?  Might as well use straight ALSA to avoid
 running pulseaudio.
 
 Yep, it works.
+
+* [2017-01-22 dim.]
+** Lifetimes, references and borrowing                                 :rust:
+Having a hard time dealing with these for a seemingly straightforward use-case.
+
+First, [[https://manishearth.github.io/blog/2015/05/17/the-problem-with-shared-mutability/][this post]] gives arguments as to why you still want a single mutable
+reference in single-threaded code.  Iterator invalidation is the most common
+counter-example.  Holding a mutable reference to a vec while iterating over it,
+you can modify the vec while going through it and making things explode.
+
+Reading the [[https://rust-lang.github.io/book/ch04-01-what-is-ownership.html][new book]] sections on ownership and lifetimes.  Ownership makes more
+sense with the String example, where you can clearly see that copying the struct
+part is only a shallow copy, and having multiple shallow copies around is a bad
+idea.  That explains what 'moving' is: it's marking one shallow copy as owned,
+and freezing the others.  From the example, I also get the sentiment that you
+can safely make a struct Copy when it has no pointers to anything.  And indeed,
+the documentation gives the advice to derive Copy whenever you could.
+
+I don't think these sections have made entirely clear for me how lifetime
+annotations interact with values.  For instance, [[https://internals.rust-lang.org/t/relaxing-the-borrow-checker-for-fn-mut-self-t/3256][someone suggested]] that the
+following should pass borrow checking, since it's safe:
+
+#+BEGIN_SRC rust
+struct T {...}
+impl T {
+    pub fn mutate_and_return_immut_ref(&mut self) -> &Foo { ... }
+    pub fn use_immutable(&self) { ... }
+}
+
+let mut t : T = T { ... };
+let foo : &Foo = t.mutate_and_return_immut_ref();
+t.use_immutable();
+#+END_SRC
+
+And indeed I don't see why there is a restriction there, and none of the
+participants in the thread managed to exhibit a counter-example where allowing
+this code would lead to unsafe behavior.
+
+In fact, the thread ends with a [[https://stackoverflow.com/questions/38078936/borrowing-reference-in-structure/38080934][curious workaround]] from stackoverflow:
+
+#+BEGIN_SRC rust
+fn mutate_and_return_immut_ref(&mut self) -> (&Self, &Foo) {
+  (self, &Foo { .. })
+}
+
+let (t2, foo : &Foo) = t.mutate_and_return_immut_ref();
+t2.use_immutable();
+#+END_SRC
+
+This will compile, but it seems to go against the restriction of the first
+snippet.  In the first snippet, the last line is disallowed by the borrow
+checker because the reference ~foo~ is still in scope at the time of the last
+call.
+
+My understanding is that the call to ~mutate_and_return~, because of elided
+lifetimes, will compute that the reference to ~mut self~ has the same lifetime
+as the returned reference ~&Foo~.  Consequently, as long as ~foo~ is around,
+~t~ is mutably borrowed.  Hence, the last call is forbidden, since it tries to
+borrow ~t~.
+
+In the second snippet, this is still the case.  But, since the call is made from
+another reference to a T, it's fine.  Except, if I understand correctly, we are
+in fact dealing with the same T; ~t == t2~.  That means the exact same call, on
+the same object, is disallowed in one instance, but allowed in another.
