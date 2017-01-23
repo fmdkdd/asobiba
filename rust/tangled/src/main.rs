@@ -57,8 +57,8 @@ pub fn main() {
   // Add a first transition
   // let n2 = g.node_mut(1);
   // swap_nodes(g.node_mut(0), n2);
-  let n1 : [f32; 2] = g.node(0).into();
-  let n2 : [f32; 2] = g.node(1).into();
+  let n1 = g.node(0).xy();
+  let n2 = g.node(1).xy();
   g.node_mut(0).init_transition(n2, 30);
   g.node_mut(1).init_transition(n1, 30);
 
@@ -119,8 +119,8 @@ pub fn main() {
       }
       if active_transitions == 0 {
         let r = rand::sample(&mut rng, 0..g.nodes().len(), 2);
-        let n1 : [f32; 2] = g.node(r[0]).into();
-        let n2 : [f32; 2] = g.node(r[1]).into();
+        let n1 = g.node(r[0]).xy();
+        let n2 = g.node(r[1]).xy();
         g.node_mut(r[0]).init_transition(n2, 30);
         g.node_mut(r[1]).init_transition(n1, 30);
         // swap_nodes(g.node_mut(n[0]), g.node_mut(n[1]));
@@ -143,8 +143,8 @@ pub fn main() {
       // Draw edges below nodes
       for e in g.edges() {
         let vbo = VertexBuffer::immutable(window.facade(), &[
-          Vertex { position: g.node(e.n1).into() },
-          Vertex { position: g.node(e.n2).into() },
+          Vertex { position: g.edge_n1(e).xy() },
+          Vertex { position: g.edge_n2(e).xy() },
         ]).unwrap();
 
         frame.draw(&vbo,
@@ -162,11 +162,12 @@ pub fn main() {
 
       // Draw nodes
       for n in g.nodes() {
+        let xy = n.xy();
         let projection = [
           [ 1.0, 0.0, 0.0, 0.0],
           [ 0.0, 1.0, 0.0, 0.0],
           [ 0.0, 0.0, 1.0, 0.0],
-          [ n.x, n.y, 0.0, 5.0f32],
+          [ xy[0], xy[1], 0.0, 5.0f32],
         ];
 
         frame.draw(&node_vbo,

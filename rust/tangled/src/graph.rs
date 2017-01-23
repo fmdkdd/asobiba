@@ -1,27 +1,28 @@
 use std::slice::{Iter, IterMut};
-use std::mem;
 
 use transition::Transition;
 
 pub struct Node {
-  pub x: f32,
-  pub y: f32,
+  xy: [f32; 2],
   transition: Option<Transition>,
 }
 
 impl Node {
   pub fn new(x: f32, y: f32) -> Self {
     Node {
-      x: x,
-      y: y,
+      xy: [x, y],
       transition: None,
     }
   }
 }
 
 impl Node {
+  pub fn xy(&self) -> [f32; 2] {
+    self.xy
+  }
+
   pub fn init_transition(&mut self, to: [f32; 2], frames: u32) {
-    self.transition = Some(Transition::new(self.into(), to, frames));
+    self.transition = Some(Transition::new(self.xy, to, frames));
   }
 
   pub fn update_transition(&mut self) -> bool {
@@ -30,8 +31,7 @@ impl Node {
     match self.transition {
       Some(ref mut t) => {
         t.update();
-        self.x = t.current()[0];
-        self.y = t.current()[1];
+        self.xy = t.current();
 
         // Cleanup
         if t.done() {
@@ -50,21 +50,9 @@ impl Node {
   }
 }
 
-impl<'a> From<&'a Node> for [f32; 2] {
-  fn from(n: &Node) -> Self {
-    [n.x, n.y]
-  }
-}
-
-impl<'a> From<&'a mut Node> for [f32; 2] {
-  fn from(n: &mut Node) -> Self {
-    [n.x, n.y]
-  }
-}
-
 pub struct Edge {
-  pub n1: usize,
-  pub n2: usize,
+  n1: usize,
+  n2: usize,
 }
 
 impl Edge {
@@ -97,6 +85,14 @@ impl Graph {
     assert!(n1 < self.nodes.len());
     assert!(n2 < self.nodes.len());
     self.edges.push(Edge::new(n1, n2));
+  }
+
+  pub fn edge_n1(&self, e: &Edge) -> &Node {
+    &self.nodes[e.n1]
+  }
+
+  pub fn edge_n2(&self, e: &Edge) -> &Node {
+    &self.nodes[e.n2]
   }
 
   pub fn node(&self, idx: usize) -> &Node {

@@ -27,8 +27,7 @@ impl Transition {
     self.elapsed += 1;
 
     if self.elapsed >= self.frames {
-      self.current[0] = self.goal[0];
-      self.current[1] = self.goal[1];
+      self.current = self.goal;
       self.done = true;
     }
   }
