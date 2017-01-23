@@ -39,9 +39,9 @@ pub fn main() {
   let mut g = Graph::new();
 
   g.add_node(-3.0, -3.0);
-  g.add_node(-3.0, -2.0);
-  g.add_node( 2.0, -3.0);
-  g.add_node( 2.0, -2.0);
+  g.add_node(-3.0,  3.0);
+  g.add_node( 3.0, -3.0);
+  g.add_node( 3.0,  3.0);
 
   g.add_edge(0, 1);
   g.add_edge(0, 2);
