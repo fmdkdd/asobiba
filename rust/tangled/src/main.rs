@@ -4,7 +4,6 @@ mod graph;
 
 #[macro_use]
 extern crate glium;
-
 extern crate rand;
 extern crate time;
 
@@ -47,14 +46,6 @@ pub fn main() {
   g.add_edge(0, 2);
   g.add_edge(0, 3);
   g.add_edge(1, 2);
-
-  // Add a first transition
-  // let n2 = g.node_mut(1);
-  // swap_nodes(g.node_mut(0), n2);
-  let n1 = g.node(0).xy();
-  let n2 = g.node(1).xy();
-  g.node_mut(0).init_transition(n2, 30);
-  g.node_mut(1).init_transition(n1, 30);
 
   // Construct the rendering context
   let mut window = create_window("Tangled");
@@ -102,22 +93,11 @@ pub fn main() {
           Vertex { position: [ 1.0,  1.0] },
         ]).unwrap();
 
-      // Update transitions
-      let mut active_transitions = 0;
-      for n in g.nodes_mut() {
-        if n.update_transition() {
-          active_transitions += 1;
-        }
-        // FIXME: use t.current to update the node
-        // but need to establish link beforehand in a TransitionManager or smth
-      }
-      if active_transitions == 0 {
+      // Update transitions and add a new one when empty
+      g.update_transitions();
+      if !g.has_transitions() {
         let r = rand::sample(&mut rng, 0..g.nodes().len(), 2);
-        let n1 = g.node(r[0]).xy();
-        let n2 = g.node(r[1]).xy();
-        g.node_mut(r[0]).init_transition(n2, 30);
-        g.node_mut(r[1]).init_transition(n1, 30);
-        // swap_nodes(g.node_mut(n[0]), g.node_mut(n[1]));
+        g.swap_nodes(r[0], r[1], 30);
       }
 
       let dt = SteadyTime::now() - last_frame;

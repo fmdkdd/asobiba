@@ -14,18 +14,19 @@ impl Node {
       transition: None,
     }
   }
-}
 
-impl Node {
   pub fn xy(&self) -> [f32; 2] {
     self.xy
   }
+}
 
+// Transition-related
+impl Node {
   pub fn init_transition(&mut self, to: [f32; 2], frames: u32) {
     self.transition = Some(Transition::new(self.xy, to, frames));
   }
 
-  pub fn update_transition(&mut self) -> bool {
+  pub fn update_transition(&mut self) {
     let mut clean = false;
 
     match self.transition {
@@ -45,7 +46,9 @@ impl Node {
     if clean {
       self.transition = None;
     }
+  }
 
+  pub fn has_transition(&self) -> bool {
     self.transition.is_some()
   }
 }
@@ -95,14 +98,6 @@ impl Graph {
     &self.nodes[e.n2]
   }
 
-  pub fn node(&self, idx: usize) -> &Node {
-    &self.nodes[idx]
-  }
-
-  pub fn node_mut(&mut self, idx: usize) -> &mut Node {
-    &mut self.nodes[idx]
-  }
-
   pub fn nodes<'a>(&'a self) -> Iter<'a, Node> {
     self.nodes.iter()
   }
@@ -113,5 +108,31 @@ impl Graph {
 
   pub fn edges<'a>(&'a self) -> Iter<'a, Edge> {
     self.edges.iter()
+  }
+}
+
+// Transition-related
+impl Graph {
+  pub fn update_transitions(&mut self) {
+    for n in self.nodes.iter_mut() {
+      n.update_transition();
+    }
+  }
+
+  pub fn has_transitions(&self) -> bool {
+    self.nodes.iter().any(|n| n.has_transition())
+  }
+
+  pub fn swap_nodes(&mut self, n1: usize, n2: usize, frames: u32) {
+    {
+      let to = self.nodes[n2].xy();
+      let mut n = &mut self.nodes[n1];
+      n.init_transition(to, frames);
+    }
+    {
+      let to = self.nodes[n1].xy();
+      let mut n = &mut self.nodes[n2];
+      n.init_transition(to, frames);
+    }
   }
 }
