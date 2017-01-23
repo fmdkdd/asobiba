@@ -26,6 +26,8 @@ impl Display for GlutinWindow {
     println!("{}", msg);
   }
 
+  fn update(&mut self) {}
+
   fn events(&mut self) -> Vec<Event> {
     self.display.poll_events().collect()
   }

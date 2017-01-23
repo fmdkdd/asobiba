@@ -1,6 +1,7 @@
+mod collision;
 mod display;
-mod transition;
 mod graph;
+mod transition;
 
 #[macro_use]
 extern crate glium;
@@ -8,12 +9,13 @@ extern crate rand;
 extern crate time;
 
 use glium::{Program, Surface, VertexBuffer};
-use glium::glutin::{Event, Touch, TouchPhase, VirtualKeyCode};
+use glium::glutin::{Event, ElementState, MouseButton, Touch, TouchPhase, VirtualKeyCode};
 
 // use time::SteadyTime;
 
+use collision::Contains;
 use display::Display;
-use graph::Graph;
+use graph::{Graph, Node};
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -29,6 +31,13 @@ fn create_window(title: &str) -> display::display_android::AndroidWindow {
 #[cfg(not(target_os = "android"))]
 fn create_window(title: &str) -> display::display_glutin::GlutinWindow {
   display::display_glutin::GlutinWindow::new(title)
+}
+
+struct Input {
+  x: f64,
+  y: f64,
+  down: bool,
+  selected_node: Option<usize>,
 }
 
 pub fn main() {
@@ -50,33 +59,106 @@ pub fn main() {
   // Construct the rendering context
   let mut window = create_window("Tangled");
   // let mut last_frame = SteadyTime::now();
-  let mut touched = false;
+
+  // Input handling
+  let mut input = Input {
+    x: 0.0,
+    y: 0.0,
+    down: false,
+    selected_node: None,
+  };
 
   // Main loop
   'running: loop {
-    for event in window.events() {
-      match event {
-        Event::Closed |
-        Event::KeyboardInput(.., Some(VirtualKeyCode::Escape)) => {
-          break 'running
-        }
-
-        Event::MouseInput(..) |
-        Event::Touch(Touch { phase: TouchPhase::Started, .. }) => {
-          touched = !touched
-        }
-
-        _ => {}
-      }
-    }
+    // Let the window update its state.  Necessary for Android to tear-down or
+    // setup the window as needed.
+    window.update();
 
     if window.can_render() {
+      // TODO: display on screen instead, in debug version
+      // let dt = SteadyTime::now() - last_frame;
+      // window.log(&format!("{:.3}ms", dt.num_microseconds().unwrap() as f32 / 1000f32));
+      // last_frame = SteadyTime::now();
+
+      // Create frame to draw on
+      let mut frame = window.frame();
+
+      for event in window.events() {
+        match event {
+          Event::Closed |
+          Event::KeyboardInput(.., Some(VirtualKeyCode::Escape)) => {
+            break 'running
+          }
+
+          Event::MouseMoved(x, y) => {
+            // Convert pixel coordinates [0, width] to GL [-1, +1]
+            let dims = frame.get_dimensions();
+            let width = dims.0 as f64;
+            let height = dims.1 as f64;
+            input.x = (x as f64) / width * 2.0 - 1.0;
+            input.y = (height - (y as f64)) / height * 2.0 - 1.0;
+          }
+
+          Event::MouseInput(ElementState::Pressed, MouseButton::Left) => {
+            input.down = true;
+          }
+
+          Event::Touch(Touch { phase: TouchPhase::Started, location: xy, .. }) => {
+            // Convert pixel coordinates [0, width] to GL [-1, +1]
+            let dims = frame.get_dimensions();
+            let width = dims.0 as f64;
+            let height = dims.1 as f64;
+            input.x = (xy.0 as f64) / width * 2.0 - 1.0;
+            input.y = (height - (xy.1 as f64)) / height * 2.0 - 1.0;
+            input.down = true;
+          }
+
+          _ => {}
+        }
+      }
+
+      // User clicked.  Check if it's on a node.
+      if input.down {
+        // Only take the first node
+        let touched_node = g.nodes()
+          .find(|n| n.bbox().contains([input.x as f32, input.y as f32]))
+          .map(|n| n.id);
+
+        match touched_node {
+          Some(id) => {
+            match input.selected_node {
+              // Had we selected a node before?
+              Some(selected) => {
+                // Is it the same one?  If so, unselect it
+                if selected == id {
+                  input.selected_node = None;
+                }
+                // If not, swap the two nodes
+                else {
+                  g.swap_nodes(selected, id, 30);
+                  input.selected_node = None;
+                }
+              }
+
+              // Otherwise, select this one
+              None => {
+                input.selected_node = Some(id);
+              }
+            }
+          }
+
+          None => {}
+        }
+
+        input.down = false;
+      }
+
       // Update transitions and add a new one when empty
       g.update_transitions();
-      if !g.has_transitions() {
-        let r = rand::sample(&mut rng, 0..g.nodes().len(), 2);
-        g.swap_nodes(r[0], r[1], 30);
-      }
+      // if !g.has_transitions() {
+      //   let r = rand::sample(&mut rng, 0..g.nodes().len(), 2);
+      //   g.swap_nodes(r[0], r[1], 30);
+      // }
 
       // FIXME: should not recreate these each frame
       let node_program = Program::from_source(
@@ -94,20 +176,8 @@ pub fn main() {
           Vertex { position: [ 1.0,  1.0] },
         ]).unwrap();
 
-      // TODO: display on screen instead, in debug version
-      // let dt = SteadyTime::now() - last_frame;
-      // window.log(&format!("{:.3}ms", dt.num_microseconds().unwrap() as f32 / 1000f32));
-      // last_frame = SteadyTime::now();
-
-      // Create frame to draw on
-      let mut frame = window.frame();
-
       // Clear the frame, otherwise welcome to Windows 95 error mode.
-      if touched {
-        frame.clear_color(0.3, 0.2, 0.4, 1.0);
-      } else {
-        frame.clear_color(0.4, 0.2, 0.3, 1.0);
-      }
+      frame.clear_color(0.3, 0.3, 0.3, 1.0);
 
       // Draw edges below nodes
       let edge_proj = [
@@ -145,10 +215,18 @@ pub fn main() {
           [ n.x, n.y, 0.0, 5.0f32],
         ];
 
+        let color = if input.selected_node.is_some()
+          && input.selected_node.unwrap() == n.id {
+            [1.0, 0.0, 0.0f32]
+          } else { [0.0, 0.0, 0.0f32] };
+
         frame.draw(&node_vbo,
                    glium::index::NoIndices(glium::index::PrimitiveType::TriangleStrip),
                    &node_program,
-                   &uniform! { projection: projection, },
+                   &uniform! {
+                     projection: projection,
+                     color: color,
+                   },
                    &Default::default()).unwrap();
       }
 

@@ -47,7 +47,7 @@ impl<'a> Display for AndroidWindow<'a> {
     self.can_render
   }
 
-  fn events(&mut self) -> Vec<Event> {
+  fn update(&mut self) {
     match self.rx.try_recv() {
       Err(_) => { /* No event, do nothing */ }
       Ok(ev) => {
@@ -55,11 +55,12 @@ impl<'a> Display for AndroidWindow<'a> {
 
         match ev {
           android_glue::Event::InitWindow => {
-            self.display = Some(glutin::WindowBuilder::new()
-              .with_title(self.title)
-              .with_gl(glutin::GlRequest::Specific(glutin::Api::OpenGlEs, (2, 0)))
-              .with_vsync()
-              .build_glium().unwrap());
+            self.display = Some(
+              glutin::WindowBuilder::new()
+                .with_title(self.title)
+                .with_gl(glutin::GlRequest::Specific(glutin::Api::OpenGlEs, (2, 0)))
+                .with_vsync()
+                .build_glium().unwrap());
 
             self.can_render = true;
           }
@@ -73,7 +74,10 @@ impl<'a> Display for AndroidWindow<'a> {
         }
       }
     }
+  }
 
+  fn events(&mut self) -> Vec<Event> {
+    // FIXME: maybe try to get as many events as possible instead of just one
     match self.display {
       None => Vec::new(),
       Some(ref display) => display.poll_events().collect()
