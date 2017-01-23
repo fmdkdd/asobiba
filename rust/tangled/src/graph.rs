@@ -1,21 +1,23 @@
 use std::slice::{Iter, IterMut};
 
-use collision::BoundingBox;
+use collision::BoundingCircle;
 use transition::Transition;
 
 pub struct Node {
   pub id: usize,
   pub x: f32,
   pub y: f32,
+  pub radius: f32,
   transition: Option<Transition>,
 }
 
 impl Node {
-  fn new(id: usize, x: f32, y: f32) -> Self {
+  fn new(id: usize, x: f32, y: f32, radius: f32) -> Self {
     Node {
       id: id,
       x: x,
       y: y,
+      radius: radius,
       transition: None,
     }
   }
@@ -24,9 +26,8 @@ impl Node {
     [self.x, self.y]
   }
 
-  pub fn bbox(&self) -> BoundingBox {
-    BoundingBox::new([self.x - 2.5, self.y + 2.5],
-                     [self.x + 2.5, self.y - 2.5])
+  pub fn bounding_circle(&self, zoom: f32) -> BoundingCircle {
+    BoundingCircle::new(self.x / zoom, self.y / zoom, (self.radius + 0.1) / zoom)
   }
 }
 
@@ -91,9 +92,9 @@ impl Graph {
     }
   }
 
-  pub fn add_node(&mut self, x: f32, y: f32) {
+  pub fn add_node(&mut self, x: f32, y: f32, radius: f32) {
     let id = self.nodes.len();
-    self.nodes.push(Node::new(id, x, y));
+    self.nodes.push(Node::new(id, x, y, radius));
   }
 
   pub fn add_edge(&mut self, n1: usize, n2: usize) {

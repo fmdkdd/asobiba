@@ -4,7 +4,6 @@ precision mediump float;
 precision mediump int;
 
 attribute vec2 position;
-
 uniform mat4 projection;
 
 void main() {

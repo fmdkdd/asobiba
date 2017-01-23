@@ -1,3 +1,5 @@
+// TODO: Handle more properly mapping to/from GL coordinates from/to screen
+
 mod collision;
 mod display;
 mod graph;
@@ -46,10 +48,10 @@ pub fn main() {
   // Construct the graph
   let mut g = Graph::new();
 
-  g.add_node(-3.0, -3.0);
-  g.add_node(-3.0,  3.0);
-  g.add_node( 3.0, -3.0);
-  g.add_node( 3.0,  3.0);
+  g.add_node(-3.0, -3.0, 0.5);
+  g.add_node(-3.0,  3.0, 0.5);
+  g.add_node( 3.0, -3.0, 0.5);
+  g.add_node( 3.0,  3.0, 0.5);
 
   g.add_edge(0, 1);
   g.add_edge(0, 2);
@@ -87,6 +89,10 @@ pub fn main() {
         match event {
           Event::Closed |
           Event::KeyboardInput(.., Some(VirtualKeyCode::Escape)) => {
+            // Cleanup the frame
+            // FIXME: or is there a way to get the window dimensions for picking
+            // before getting a frame?
+            frame.finish().unwrap();
             break 'running
           }
 
@@ -121,7 +127,7 @@ pub fn main() {
       if input.down {
         // Only take the first node
         let touched_node = g.nodes()
-          .find(|n| n.bbox().contains([input.x as f32, input.y as f32]))
+          .find(|n| n.bounding_circle(5.0).contains([input.x as f32, input.y as f32]))
           .map(|n| n.id);
 
         match touched_node {
@@ -160,26 +166,24 @@ pub fn main() {
       //   g.swap_nodes(r[0], r[1], 30);
       // }
 
+      // Clear the frame, otherwise welcome to Windows 95 error mode.
+      frame.clear_color(0.3, 0.3, 0.3, 1.0);
+
+      // Draw edges below nodes
+
       // FIXME: should not recreate these each frame
-      let node_program = Program::from_source(
+      let edge_program = Program::from_source(
         window.facade(),
         include_str!("shader/edge.v.glsl"),
         include_str!("shader/edge.f.glsl"),
         None).unwrap();
 
-      let node_vbo = VertexBuffer::immutable(
+      let node_program = Program::from_source(
         window.facade(),
-        &[
-          Vertex { position: [-1.0, -1.0] },
-          Vertex { position: [-1.0,  1.0] },
-          Vertex { position: [ 1.0, -1.0] },
-          Vertex { position: [ 1.0,  1.0] },
-        ]).unwrap();
+        include_str!("shader/edge.v.glsl"),
+        include_str!("shader/node.f.glsl"),
+        None).unwrap();
 
-      // Clear the frame, otherwise welcome to Windows 95 error mode.
-      frame.clear_color(0.3, 0.3, 0.3, 1.0);
-
-      // Draw edges below nodes
       let edge_proj = [
         [ 1.0, 0.0, 0.0, 0.0],
         [ 0.0, 1.0, 0.0, 0.0],
@@ -195,7 +199,7 @@ pub fn main() {
 
         frame.draw(&vbo,
                    glium::index::NoIndices(glium::index::PrimitiveType::LinesList),
-                   &node_program,
+                   &edge_program,
                    &uniform! { projection: edge_proj, },
                    &glium::draw_parameters::DrawParameters {
                      // Can't use this mode in GLES, but line_width is applied
@@ -207,6 +211,21 @@ pub fn main() {
       }
 
       // Draw nodes
+      let node_vbo = VertexBuffer::immutable(
+        window.facade(),
+        &[
+          Vertex { position: [-1.0, -1.0] },
+          Vertex { position: [-1.0,  1.0] },
+          Vertex { position: [ 1.0, -1.0] },
+          Vertex { position: [ 1.0,  1.0] },
+        ]).unwrap();
+
+      let node_center_vbo = VertexBuffer::immutable(
+        window.facade(),
+        &[
+          Vertex { position: [0.0, 0.0] },
+        ]).unwrap();
+
       for n in g.nodes() {
         let projection = [
           [ 1.0, 0.0, 0.0, 0.0],
@@ -214,6 +233,17 @@ pub fn main() {
           [ 0.0, 0.0, 1.0, 0.0],
           [ n.x, n.y, 0.0, 5.0f32],
         ];
+
+        // Compute the center of the node in screen coordinates for the fragment
+        // shader
+        let dims = frame.get_dimensions();
+        let width = dims.0 as f32;
+        let height = dims.1 as f32;
+        let center = [(n.x / 10.0 + 0.5) * width,
+                      (n.y / 10.0 + 0.5) * height];
+
+        // Compute radius size in screen coordinates
+        let r = n.radius / 10.0 * width;
 
         let color = if input.selected_node.is_some()
           && input.selected_node.unwrap() == n.id {
@@ -226,9 +256,45 @@ pub fn main() {
                    &uniform! {
                      projection: projection,
                      color: color,
+                     radius: r,
+                     center: center,
                    },
                    &Default::default()).unwrap();
+
+        frame.draw(&node_center_vbo,
+                   glium::index::NoIndices(glium::index::PrimitiveType::Points),
+                   &node_program,
+                   &uniform! {
+                     projection: projection,
+                     color: [1.0, 0.0, 0.0f32],
+                     radius: 5.0f32,
+                     center: center,
+                   },
+                   &glium::draw_parameters::DrawParameters {
+                     point_size: Some(10.0f32),
+                     .. Default::default()
+                   }).unwrap();
       }
+
+      // Draw mouse
+      let projection = [
+        [ 1.0, 0.0, 0.0, 0.0],
+        [ 0.0, 1.0, 0.0, 0.0],
+        [ 0.0, 0.0, 1.0, 0.0],
+        [ input.x as f32, input.y as f32, 0.0, 1.0f32],
+      ];
+
+      frame.draw(&node_center_vbo,
+                 glium::index::NoIndices(glium::index::PrimitiveType::Points),
+                 &node_program,
+                 &uniform! {
+                   projection: projection,
+                   color: [1.0, 0.0, 0.0f32],
+                 },
+                 &glium::draw_parameters::DrawParameters {
+                   point_size: Some(10.0f32),
+                   .. Default::default()
+                 }).unwrap();
 
       // Swap buffers
       frame.finish().unwrap();
