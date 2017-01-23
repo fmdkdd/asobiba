@@ -138,12 +138,11 @@ pub fn main() {
 
       // Draw nodes
       for n in g.nodes() {
-        let xy = n.xy();
         let projection = [
           [ 1.0, 0.0, 0.0, 0.0],
           [ 0.0, 1.0, 0.0, 0.0],
           [ 0.0, 0.0, 1.0, 0.0],
-          [ xy[0], xy[1], 0.0, 5.0f32],
+          [ n.x, n.y, 0.0, 5.0f32],
         ];
 
         frame.draw(&node_vbo,

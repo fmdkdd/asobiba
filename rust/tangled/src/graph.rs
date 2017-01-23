@@ -1,29 +1,39 @@
 use std::slice::{Iter, IterMut};
 
+use collision::BoundingBox;
 use transition::Transition;
 
 pub struct Node {
-  xy: [f32; 2],
+  pub id: usize,
+  pub x: f32,
+  pub y: f32,
   transition: Option<Transition>,
 }
 
 impl Node {
-  pub fn new(x: f32, y: f32) -> Self {
+  fn new(id: usize, x: f32, y: f32) -> Self {
     Node {
-      xy: [x, y],
+      id: id,
+      x: x,
+      y: y,
       transition: None,
     }
   }
 
   pub fn xy(&self) -> [f32; 2] {
-    self.xy
+    [self.x, self.y]
+  }
+
+  pub fn bbox(&self) -> BoundingBox {
+    BoundingBox::new([self.x - 2.5, self.y + 2.5],
+                     [self.x + 2.5, self.y - 2.5])
   }
 }
 
 // Transition-related
 impl Node {
   pub fn init_transition(&mut self, to: [f32; 2], frames: u32) {
-    self.transition = Some(Transition::new(self.xy, to, frames));
+    self.transition = Some(Transition::new(self.xy(), to, frames));
   }
 
   pub fn update_transition(&mut self) {
@@ -32,7 +42,8 @@ impl Node {
     match self.transition {
       Some(ref mut t) => {
         t.update();
-        self.xy = t.current();
+        self.x = t.current()[0];
+        self.y = t.current()[1];
 
         // Cleanup
         if t.done() {
@@ -81,7 +92,8 @@ impl Graph {
   }
 
   pub fn add_node(&mut self, x: f32, y: f32) {
-    self.nodes.push(Node::new(x, y));
+    let id = self.nodes.len();
+    self.nodes.push(Node::new(id, x, y));
   }
 
   pub fn add_edge(&mut self, n1: usize, n2: usize) {
