@@ -54,13 +54,6 @@ pub fn main() {
 
   // Main loop
   'running: loop {
-    let edge_proj = [
-      [ 1.0, 0.0, 0.0, 0.0],
-      [ 0.0, 1.0, 0.0, 0.0],
-      [ 0.0, 0.0, 1.0, 0.0],
-      [ 0.0, 0.0, 0.0, 5.0f32],
-    ];
-
     for event in window.events() {
       match event {
         Event::Closed |
@@ -78,6 +71,14 @@ pub fn main() {
     }
 
     if window.can_render() {
+      // Update transitions and add a new one when empty
+      g.update_transitions();
+      if !g.has_transitions() {
+        let r = rand::sample(&mut rng, 0..g.nodes().len(), 2);
+        g.swap_nodes(r[0], r[1], 30);
+      }
+
+      // FIXME: should not recreate these each frame
       let node_program = Program::from_source(
         window.facade(),
         include_str!("shader/edge.v.glsl"),
@@ -92,13 +93,6 @@ pub fn main() {
           Vertex { position: [ 1.0, -1.0] },
           Vertex { position: [ 1.0,  1.0] },
         ]).unwrap();
-
-      // Update transitions and add a new one when empty
-      g.update_transitions();
-      if !g.has_transitions() {
-        let r = rand::sample(&mut rng, 0..g.nodes().len(), 2);
-        g.swap_nodes(r[0], r[1], 30);
-      }
 
       let dt = SteadyTime::now() - last_frame;
       window.log(&format!("{:.3}ms", dt.num_microseconds().unwrap() as f32 / 1000f32));
@@ -115,6 +109,13 @@ pub fn main() {
       }
 
       // Draw edges below nodes
+      let edge_proj = [
+        [ 1.0, 0.0, 0.0, 0.0],
+        [ 0.0, 1.0, 0.0, 0.0],
+        [ 0.0, 0.0, 1.0, 0.0],
+        [ 0.0, 0.0, 0.0, 5.0f32],
+      ];
+
       for e in g.edges() {
         let vbo = VertexBuffer::immutable(window.facade(), &[
           Vertex { position: g.edge_n1(e).xy() },
