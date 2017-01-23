@@ -114,8 +114,4 @@ impl Graph {
   pub fn edges<'a>(&'a self) -> Iter<'a, Edge> {
     self.edges.iter()
   }
-
-  pub fn nodes_len(&self) -> usize {
-    self.nodes.len()
-  }
 }

@@ -14,8 +14,7 @@ use glium::glutin::{Event, Touch, TouchPhase, VirtualKeyCode};
 use time::SteadyTime;
 
 use display::Display;
-use transition::Transition;
-use graph::{Graph, Node};
+use graph::Graph;
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -31,11 +30,6 @@ fn create_window(title: &str) -> display::display_android::AndroidWindow {
 #[cfg(not(target_os = "android"))]
 fn create_window(title: &str) -> display::display_glutin::GlutinWindow {
   display::display_glutin::GlutinWindow::new(title)
-}
-
-fn swap_nodes(n1: &mut Node, n2: &mut Node) {
-  n1.init_transition(n2.into(), 30);
-  n2.init_transition(n1.into(), 30);
 }
 
 pub fn main() {
