@@ -10,7 +10,7 @@ extern crate time;
 use glium::{Program, Surface, VertexBuffer};
 use glium::glutin::{Event, Touch, TouchPhase, VirtualKeyCode};
 
-use time::SteadyTime;
+// use time::SteadyTime;
 
 use display::Display;
 use graph::Graph;
@@ -49,7 +49,7 @@ pub fn main() {
 
   // Construct the rendering context
   let mut window = create_window("Tangled");
-  let mut last_frame = SteadyTime::now();
+  // let mut last_frame = SteadyTime::now();
   let mut touched = false;
 
   // Main loop
@@ -94,9 +94,10 @@ pub fn main() {
           Vertex { position: [ 1.0,  1.0] },
         ]).unwrap();
 
-      let dt = SteadyTime::now() - last_frame;
-      window.log(&format!("{:.3}ms", dt.num_microseconds().unwrap() as f32 / 1000f32));
-      last_frame = SteadyTime::now();
+      // TODO: display on screen instead, in debug version
+      // let dt = SteadyTime::now() - last_frame;
+      // window.log(&format!("{:.3}ms", dt.num_microseconds().unwrap() as f32 / 1000f32));
+      // last_frame = SteadyTime::now();
 
       // Create frame to draw on
       let mut frame = window.frame();
