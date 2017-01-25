@@ -1,0 +1,31 @@
+svg {
+  background-color: #efefef;
+}
+
+.box {
+  filter: drop-shadow(2px 2px 1px hsla(211, 14%, 39%, 0.15));
+}
+
+.cell .ref {
+  fill: #556270;
+}
+
+.cell rect {
+  stroke: #556270;
+  stroke-width: 2;
+  fill: white;
+}
+
+.box.focused .cell rect {
+  stroke: #4ECDC4;
+}
+
+.cell text {
+  font: 21px monospace;
+  fill: #556270;
+}
+
+.cell line {
+  stroke: #556270;
+  stroke-width: 2;
+}
