@@ -1,18 +1,23 @@
 import React, { Component } from 'react'
 import './App.css'
 
+const REF = {}
+
 class App extends Component {
   render() {
+    let children = [
+      { label: 'a', value: 1 },
+      { label: 'b', value: REF },
+    ]
+
     return (
       <svg width="500" height="500">
-        <Box x="100" y="30"/>
-        <Box x="250" y="80"/>
+        <Box x="100" y="30" children={children} />
+        <Box x="250" y="80" children={children} />
       </svg>
     )
   }
 }
-
-const REF = {};
 
 class Box extends Component {
   constructor(props) {
@@ -27,6 +32,7 @@ class Box extends Component {
       originY: 0,
       isFocused: false,
       isDragged: false,
+      children: this.props.children,
     }
 
     this.mouseEnter = this.mouseEnter.bind(this)
@@ -37,10 +43,14 @@ class Box extends Component {
   }
 
   render() {
-    let className = "box";
+    let className = "box"
     if (this.state.isFocused) {
       className += " focused"
     }
+
+    let children = this.state.children.map((c, idx) =>
+      <Cell key={c.label}
+            x="0" y={idx * 40} label={c.label} value={c.value} />)
 
     return (
       <g className={className}
@@ -48,8 +58,7 @@ class Box extends Component {
          onMouseEnter={this.mouseEnter}
          onMouseLeave={this.mouseLeave}
          onMouseDown={this.mouseDown}>
-        <Cell x="0" y="0" label="a" value="1" />
-        <Cell x="0" y="40" label="b" value={REF} />
+        {children}
       </g>
     )
   }
@@ -144,4 +153,4 @@ function translate(x, y) {
   return `translate(${x} ${y})`
 }
 
-export default App;
+export default App
