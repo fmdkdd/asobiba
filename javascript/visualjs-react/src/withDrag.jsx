@@ -6,12 +6,8 @@ function withDrag(Comp) {
       super(props)
 
       this.state = {
-        x: 0,
-        y: 0,
-        mouseAtDragStartX: 0,
-        mouseAtDragStartY: 0,
-        posAtDragStartX: 0,
-        posAtDragStartY: 0,
+        dragStartX: 0,
+        dragStartY: 0,
         dragging: false,
       }
 
@@ -64,20 +60,28 @@ function withDrag(Comp) {
     dragStart(x, y) {
       document.body.style.cursor = 'grabbing'
 
-      this.setState(prev => ({
-        mouseAtDragStartX: x,
-        mouseAtDragStartY: y,
-        posAtDragStartX: prev.x,
-        posAtDragStartY: prev.y,
+      this.setState({
+        dragStartX: x,
+        dragStartY: y,
         dragging: true,
-      }))
+      })
     }
 
     drag(x, y) {
-      this.setState(prev => ({
-        x: prev.posAtDragStartX + x - prev.mouseAtDragStartX,
-        y: prev.posAtDragStartY + y - prev.mouseAtDragStartY,
-      }))
+      this.setState(prev => {
+        const dx = x - prev.dragStartX
+        const dy = y - prev.dragStartY
+
+        if (this.props.dragCallback) {
+          this.props.dragCallback(dx, dy)
+        }
+
+        return {
+          dragStartX: x,
+          dragStartY: y,
+          dragging: true,
+        }
+      })
     }
 
     dragEnd() {
