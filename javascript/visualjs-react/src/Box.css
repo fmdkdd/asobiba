@@ -29,3 +29,10 @@ svg {
   stroke: #556270;
   stroke-width: 2;
 }
+
+.link {
+  stroke: #556270;
+  stroke-width: 2;
+  fill: none;
+  filter: drop-shadow(2px 2px 1px hsla(211, 14%, 39%, 0.15));
+}

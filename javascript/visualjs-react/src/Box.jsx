@@ -1,12 +1,54 @@
 import React from 'react'
+import withDrag from './withDrag'
 import './Box.css'
 
-function BoxArea(props) {
-  return (
-    <svg width={props.width} height={props.height}>
-      {props.children}
-    </svg>
-  )
+class BoxArea extends React.Component {
+  constructor(props) {
+    super(props)
+
+    this.state = {
+      boxes: this.props.boxes,
+      links: this.props.links,
+    }
+
+    this.boxMoved = this.boxMoved.bind(this)
+  }
+
+  boxMoved(id, dx, dy) {
+    this.setState(prev => {
+      let b = prev.boxes.find(b => b.id === id)
+      b.x += dx
+      b.y += dy
+      // Hmm, state is shallow merged, so we are in fact mutating the previous
+      // boxes value.  This is fine, but it's not pure either
+      return {boxes: prev.boxes}
+    })
+  }
+
+  render() {
+    const children = this.props.boxes.map(b =>
+      <BoxWithDrag key={'b' + b.id}
+                   x={b.x} y={b.y}
+                   dragCallback={(dx, dy) => this.boxMoved(b.id, dx, dy)}>
+        {b.cells.map(c => <Cell key={c.label} label={c.label} value={c.value} />)}
+      </BoxWithDrag>
+    ).concat(this.props.links.map(l => {
+      let start = this.props.boxes.find(b => b.id === l.start)
+      let end = this.props.boxes.find(b => b.id === l.end)
+
+      return (
+        <Line key={'l' + l.id}
+              startX={start.x} startY={start.y}
+              endX={end.x} endY={end.y} />
+      )
+    }))
+
+    return (
+      <svg width={this.props.width} height={this.props.height}>
+        {children}
+      </svg>
+    )
+  }
 }
 
 class Box extends React.Component {
@@ -27,9 +69,12 @@ class Box extends React.Component {
       classes.push("focused")
     }
 
-    const children = this.props.children.map((c, idx) =>
-      <Cell key={c.props.label}
-            x="0" y={idx * 40} label={c.props.label} value={c.props.value} />)
+    let children = null;
+    if (this.props.children) {
+      children = this.props.children.map((c, idx) =>
+        <Cell key={c.props.label}
+              x="0" y={idx * 40} label={c.props.label} value={c.props.value} />)
+    }
 
     return (
       <g className={classes.join(' ')}
@@ -63,6 +108,8 @@ class Box extends React.Component {
   }
 }
 
+const BoxWithDrag = withDrag(Box)
+
 const REF = {}
 
 function Cell(props) {
@@ -80,4 +127,12 @@ function Cell(props) {
   )
 }
 
-export {BoxArea, Box, Cell, REF}
+function Line(props) {
+  const path = `M ${props.startX} ${props.startY} L ${props.endX} ${props.endY}`
+
+  return (
+    <path className="link" d={path} />
+  )
+}
+
+export {BoxArea, Box, Cell, REF, Line}
