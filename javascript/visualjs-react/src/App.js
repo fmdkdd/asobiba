@@ -5,15 +5,16 @@ const REF = {}
 
 class App extends Component {
   render() {
-    let children = [
-      { label: 'a', value: 1 },
-      { label: 'b', value: REF },
-    ]
-
     return (
       <svg width="500" height="500">
-        <Box x="100" y="30" children={children} />
-        <Box x="250" y="80" children={children} />
+        <Box x="100" y="30">
+          <Cell label="a" value="1" />
+          <Cell label="b" value={REF} />
+        </Box>
+        <Box x="250" y="80">
+          <Cell label="a" value="1" />
+          <Cell label="b" value={REF} />
+        </Box>
       </svg>
     )
   }
@@ -32,7 +33,6 @@ class Box extends Component {
       originY: 0,
       isFocused: false,
       isDragged: false,
-      children: this.props.children,
     }
 
     this.mouseEnter = this.mouseEnter.bind(this)
@@ -48,9 +48,9 @@ class Box extends Component {
       className += " focused"
     }
 
-    let children = this.state.children.map((c, idx) =>
-      <Cell key={c.label}
-            x="0" y={idx * 40} label={c.label} value={c.value} />)
+    let children = this.props.children.map((c, idx) =>
+      <Cell key={c.props.label}
+            x="0" y={idx * 40} label={c.props.label} value={c.props.value} />)
 
     return (
       <g className={className}
