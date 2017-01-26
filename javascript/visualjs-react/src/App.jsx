@@ -1,5 +1,5 @@
 import React from 'react'
-import * as Box from './boxes'
+import * as Box from './Box'
 import withDrag from './withDrag'
 
 const BoxWithDrag = withDrag(Box.Box)
