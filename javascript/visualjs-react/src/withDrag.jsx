@@ -61,6 +61,9 @@ function withDrag(Comp) {
         dragStartY: y,
         dragging: true,
       })
+
+      if (this.props.dragStart)
+        this.props.dragStart()
     }
 
     drag(x, y) {
@@ -68,8 +71,8 @@ function withDrag(Comp) {
         const dx = x - prev.dragStartX
         const dy = y - prev.dragStartY
 
-        if (this.props.dragCallback) {
-          this.props.dragCallback(dx, dy)
+        if (this.props.drag) {
+          this.props.drag(dx, dy)
         }
 
         return {

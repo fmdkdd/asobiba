@@ -11,10 +11,22 @@ class BoxArea extends React.Component {
       links: this.props.links,
     }
 
-    this.boxMoved = this.boxMoved.bind(this)
+    this.moveBoxBy = this.moveBoxBy.bind(this)
+    this.putBoxOnTop = this.putBoxOnTop.bind(this)
   }
 
-  boxMoved(id, dx, dy) {
+  putBoxOnTop(id) {
+    this.setState(prev => {
+      // Draw the box on top of all others by putting it last in state.boxes
+      let idx = prev.boxes.indexOf(prev.boxes.find(b => b.id === id))
+      let [b] = prev.boxes.splice(idx, 1)
+      prev.boxes.push(b)
+      return {boxes: prev.boxes}
+    })
+  }
+
+
+  moveBoxBy(id, dx, dy) {
     this.setState(prev => {
       let b = prev.boxes.find(b => b.id === id)
       b.x += dx
@@ -26,26 +38,29 @@ class BoxArea extends React.Component {
   }
 
   render() {
-    const children = this.props.boxes.map(b =>
+    const boxes = this.state.boxes.map(b =>
       <BoxWithDrag key={'b' + b.id}
                    x={b.x} y={b.y}
-                   dragCallback={(dx, dy) => this.boxMoved(b.id, dx, dy)}>
+                   dragStart={() => this.putBoxOnTop(b.id)}
+                   drag={(dx, dy) => this.moveBoxBy(b.id, dx, dy)}>
         {b.cells.map(c => <Cell key={c.label} label={c.label} value={c.value} />)}
       </BoxWithDrag>
-    ).concat(this.props.links.map(l => {
-      let start = this.props.boxes.find(b => b.id === l.start)
-      let end = this.props.boxes.find(b => b.id === l.end)
+    )
+
+    const links = this.state.links.map(l => {
+      let start = this.state.boxes.find(b => b.id === l.start)
+      let end = this.state.boxes.find(b => b.id === l.end)
 
       return (
         <Line key={'l' + l.id}
               startX={start.x} startY={start.y}
               endX={end.x} endY={end.y} />
       )
-    }))
+    })
 
     return (
       <svg width={this.props.width} height={this.props.height}>
-        {children}
+        {boxes.concat(links)}
       </svg>
     )
   }
