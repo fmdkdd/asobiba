@@ -6825,3 +6825,79 @@ transitions, since it requires mutable references to two nodes, and the nodes
 are inside a graph.
 
 Still not satisfied.  Maybe I can clean up that, or try an ECS.
+
+* [2017-01-27 ven.]
+** RLS alpha, take two (three?)                                :rls:flycheck:
+So let's try that again.
+
+Got diagnostics to work now with latest RLS and latest lsp-mode from vibhavp.
+
+Here's what's needed in .emacs:
+
+#+BEGIN_SRC elisp
+  (add-to-load-path "~/proj/vibhavp-lsp")
+  (require 'lsp-mode)
+  (setenv "RLS_ROOT" "/home/fmdkdd/proj/rustls")
+  (global-lsp-mode t)
+#+END_SRC
+
+emacs-lsp takes care of running ~cargo run~ for you.  Except, of course, my
+default cargo is stable, and the RLS requires nightly.  I tweaked the command to
+add ~+nightly~ there.
+
+Need to toggle the global-lsp-mode /before/ opening a Rust file.  Because that's
+how it triggers the connection:
+
+: (add-hook 'find-file-hook #'lsp-on-open)
+
+Then, it asks whether to start a server.  Answer yes, and after some edit it
+will gather diagnostics from the server.  Diagnostics are put in a hashtable,
+but are not displayed right now.  I suppose the author will want to use flycheck
+as a backend for displaying errors?  Or is the other way around, by defining a
+flycheck-rust-lsp checker that communicates with lsp-mode?
+
+Inspired by [[https://github.com/flycheck/flycheck-ocaml/blob/master/flycheck-ocaml.el][flycheck-ocaml]], I defined a generic flycheck checker that merely
+reports the diagnostics collected by the lsp-mode.  When global-lsp-mode is
+active, it will collect diagnostics from the RLS into an hashmap.  Whenever
+flycheck decides to run the checker, we transform the diagnostics from the
+hashmap into flycheck errors, and that's it.
+
+It doesn't look like the RLS is particularly faster than using cargo at the
+moment.  And it's (slightly) more involved to setup.  But, on flycheck's side,
+it's a lot simpler to implement, since the communication is taken care of by the
+LSP package.
+
+For reference, so I don't have to keep this in my head, here is the life cycle
+of the rust-lsp checker:
+
+- enable flycheck-mode in a rust buffer
+- select the rust-lsp checker
+
+  At this point, flycheck should start the checker automatically according to
+  the value of flycheck-check-syntax-automatically.  'idle-change' is the most
+  likely to trigger a syntax check first.
+
+- on syntax check, the ':start' function property of rust-lsp is called with a
+  callback
+
+  In rust-lsp, this function will just save the callback for later.
+
+- When diagnostics have been received by lsp-mode, a hook defined by rust-lsp is
+  called, where it transforms the diagnostics to flycheck-error objects and
+  passes them to flycheck using the saved callback.
+
+- With the list of flycheck-error objects, flycheck populates the error list,
+  updates the overlays etc.
+
+Ideally, since lsp-mode does all the interaction with the server, we would like
+flycheck to simply update the overlays and error list whenever new diagnostics
+are received by the LSP.  There's no mechanism at present in lsp-mode to signal
+diagnostics, that's why I added a hook.
+
+So ideally, flycheck wouldn't have to initiate a checker, as that would be done
+by lsp-mode.  Currently, flycheck initiates a check on idle, and since the RLS
+is a bit slow, waiting for the diagnostics works.  But if diagnostics arrive at
+any other time, we won't get them.
+
+Also, since the hashmap is never cleared by lsp-mode, it means that it's the RLS
+that will report "no diagnostics" for a file.
