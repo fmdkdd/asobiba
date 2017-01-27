@@ -14,9 +14,6 @@ function withDrag(Comp) {
       this.mouseDown = this.mouseDown.bind(this)
       this.mouseUp = this.mouseUp.bind(this)
       this.mouseMove = this.mouseMove.bind(this)
-      this.dragStart = this.dragStart.bind(this)
-      this.dragEnd = this.dragEnd.bind(this)
-      this.drag = this.drag.bind(this)
     }
 
     render() {
