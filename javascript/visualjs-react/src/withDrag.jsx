@@ -21,8 +21,7 @@ function withDrag(Comp) {
 
     render() {
       return (
-        <g onMouseDown={this.mouseDown}
-           transform={`translate(${this.state.x} ${this.state.y})`}>
+        <g onMouseDown={this.mouseDown}>
           <Comp {...this.props} />
         </g>
       )
