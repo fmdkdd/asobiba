@@ -6077,6 +6077,10 @@ Or find out why it was blocked.
 Even if the flycheck-rust branch is not ready to automatically fill the
 variables, the checkers should work with benches and tests targets.
 
+*** [2017-02-03 ven.]
+It was blocked by [[https://github.com/rust-lang/cargo/issues/3390][cargo#3390]].  The fix has landed in rust 1.15, so I should be
+able to merge now.
+
 ** Finding a way to test Flycheck with multiple versions of external tools :flycheck:
 I've updated the tests to pass with the latest GHC (8.0) for instance, but what
 about support for versions < 8.0?
@@ -6901,3 +6905,34 @@ any other time, we won't get them.
 
 Also, since the hashmap is never cleared by lsp-mode, it means that it's the RLS
 that will report "no diagnostics" for a file.
+
+* [2017-02-03 ven.]
+** Merging rust-cargo branch with multiple targets                 :flycheck:
+There was an issue with dependencies, and the fact that we did not pass
+--error-format with RUSTFLAGS.  This can be fixed by using --message-format
+instead.  But, --message-format is an option for ~cargo rustc~, not ~rustc~
+directly, and the output of rustc is wrapped.
+
+To use --message-format then, we need a slightly different parser for
+rust-cargo, which unwraps the message and uses the previous rust parser.
+
+After a bit of refactoring, this works as intended.  I can start brushing up the
+multiple targets PR by rebasing on that.
+
+Hmm, the previous behavior relied on ~cargo rustc~ to invoke the "default"
+target when none is provided.  With my patch, the target type and name /must/ be
+supplied.
+
+I've added :enabled code to ensure we don't call the checker prematurely, and
+:verify to inform the user in case of a wrong setup.
+
+I should move the test-crate tests I had written for flycheck-rust in flycheck
+proper, since they are more useful as integration tests.  To ensure we catch
+errors when the crate type and binary name are properly setup.
+
+That reminds me, I should have added one test to ensure error from dependencies
+were correctly caught in the previous PR.  Not merged yet, so still time to do
+it.
+
+Done.  Had to modify the flycheck-ert helpers since I wanted to catch a
+suspicious state, but that was not registered.
