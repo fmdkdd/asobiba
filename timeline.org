@@ -6936,3 +6936,43 @@ it.
 
 Done.  Had to modify the flycheck-ert helpers since I wanted to catch a
 suspicious state, but that was not registered.
+
+* [2017-02-05 dim.]
+** Generating a trace of Flycheck to understand the whole flow     :flycheck:
+I figure that using Edebug should do it.  As in, I could follow the code, look
+at values coming in and out, and take note on the side of the most interesting
+steps.
+
+Problem: Edebug is barely usable with evil-normal-state.
+
+I found a [[https://github.com/syl20bnr/spacemacs/pull/2398][somewhat promising PR]] that was abandoned without any answer.  Trying
+it out...
+
+Okay, micro-states are deprecated.  Should use transient-states instead.
+
+Transient states are based on [[https://github.com/syl20bnr/spacemacs/pull/2398][Hydra]], whose documentation is ... not quite
+friendly.
+
+Anyhow, looking at examples in the spacemacs source, I manage to make it work.
+The first time you enter an instrumented function.  Then, hitting any key
+managed by Hydra makes the docstring disappear.
+
+This is unlike the behavior I am witnessing in other transient states, and I
+don't see how I am doing things differently.
+
+Looking through the edebug source code, I found the culprit:
+help:edebug-save-windows.  Set to nil, the bindings of the transient state are
+kept on screen.
+
+But now we do not exit the transient state when Edebug does.
+
+Managed to exit by calling ~hydra-disable~ in the edebug-mode-hook, since the
+hook is called at exit of the mode as well.
+
+Last thing: Edebug indicates the current expression with an arrow.  In
+Spacemacs, this arrow is invisible.
+
+Hmm, looking at a vanilla Emacs, I remember this one wrong.  Edebug seems to put
+arrows in the fringe instead.  And I know Spacemacs disable all fringy stuff.
+Found the missing value in ~fringe-indicator-alist~ by looking at its value in
+vanilla Emacs.
