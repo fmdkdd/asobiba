@@ -6976,3 +6976,98 @@ Hmm, looking at a vanilla Emacs, I remember this one wrong.  Edebug seems to put
 arrows in the fringe instead.  And I know Spacemacs disable all fringy stuff.
 Found the missing value in ~fringe-indicator-alist~ by looking at its value in
 vanilla Emacs.
+
+* [2017-02-06 lun.]
+** Heisenbug in i3                                                  :arch:i3:
+Cannot reproduce.  But I had it a couple of times with Emacs not getting focus
+back after a short-lived application closes itself.
+
+Might be related to: https://github.com/i3/i3/issues/2600
+
+If I can reproduce I might reply to this thread.
+
+** Exploring Flycheck process with Edebug                          :flycheck:
+First of all, run Emacs in its own instance, since I cannot take notes on the
+side while Edebug is running.  It steals input.
+
+Instrument ~flycheck-buffer~, since I believe it's the entry point where the
+magic happens.
+
+On edit in a rust buffer, I fall into flycheck-buffer with the backtrace:
+
+: flycheck-buffer()
+: flycheck-buffer-automatically(save)
+: flycheck-handle-save()
+: run-hooks(after-save-hook)
+
+But flycheck does not find any checker, since ~flycheck-get-checker-for-buffer~
+returns nil.  This is because there isn't a checker in ~flycheck-checkers~ that
+returned true for ~flycheck-may-use-checker~.  The conditions to use a checker
+are:
+
+: (and (flycheck-valid-checker-p checker)
+:      (flycheck-checker-supports-major-mode-p checker)
+:      (flycheck-may-enable-checker checker)
+:      (or (null predicate) (funcall predicate)))
+
+- valid-checker makes sure ~checker~ was defined with ~define-checker~:
+
+  : (and (symbolp checker)
+  :      (= (or (get checker 'flycheck-generic-checker-version) 0)
+  :         flycheck-generic-checker-version)))
+
+  Since ~define-generic-checker~ adds the property
+  'flycheck-generic-checker-version, this is a way to ensure that arbitrary
+  symbols are not passed as checkers.
+
+  Also, this shows what checkers are: a bunch of properties put in a symbol
+  under the 'flycheck' namespace.
+
+  Curiously, valid-checker uses ~(get checker)~ instead of the dedicated
+  ~(flycheck-checker-get)~, so the code that sets and gets this property does
+  not quite match.
+
+- supports-major-mode is self-explanatory: checks the buffer major-mode in the
+  list of modes declared by the checker
+
+- may-enable determines if the checker can be enabled
+
+  : (shall-enable (and (not (flycheck-disabled-checker-p checker))
+  :                (or (memq checker flycheck-enabled-checkers)
+  :                    (null enabled)
+  :                    (funcall enabled)))))
+
+  - no if it has been explicitly disabled
+  - yes if it is in flycheck-enabled-checkers
+  - yes if :enabled is nil
+
+    Curious.  :enabled is a function given at definition to checker, but the
+    actual function put into the :enabled property on the checker symbol is a
+    lambda that calls :enabled.  In other words, :enabled is never nil unless
+    the checker has been altered after its creation.
+
+    Looking at git blame, :enabled was [[orgit-rev:~/proj/flycheck/::bade2de5][added recently]] for eslint.  At first it
+    there was no lambda.  Then [[orgit-rev:~/proj/flycheck/::bd33d6ea][some commits later]] the lambda was added to
+    disabled a checker if its executable could not be found.
+
+    (orgmode links to magit are delightful)
+
+  - yes if the :enabled function says it should be
+
+- finally the :predicate property, if present, determines whether the checker
+  will be used.  The :predicate function, like :enabled is run in the
+  working-directory for the checker.
+
+So the first checker in flycheck-checkers that matches true for these condition
+is selected, unless there is already a manually selected checker in
+flycheck-checker.
+
+Here flycheck-buffer was started automatically on idle, and no checker matched,
+so errors are cleared and the 'no-checker status is reported.
+
+Reporting status just calls hooks in flycheck-status-changed-functions, which by
+default is empty.  Maybe this is for using Flycheck from another package?
+
+Hmm seems I may be confusing things, as there are flycheck-status, and
+flycheck-checker-status.  One is the status of flycheck itself, the other is for
+checkers.
