@@ -7071,3 +7071,65 @@ default is empty.  Maybe this is for using Flycheck from another package?
 Hmm seems I may be confusing things, as there are flycheck-status, and
 flycheck-checker-status.  One is the status of flycheck itself, the other is for
 checkers.
+
+** Benchmark json-read vs json-read-string                         :flycheck:
+As suggested by cpitclaudel.
+
+Filled a buffer with a mix of JSON and plain text lines.
+
+#+BEGIN_SRC elisp
+(defun ~/read-str (str)
+  (let ((objects nil)
+        (json-array-type 'list)
+        (json-false nil))
+    (with-temp-buffer
+      (insert str)
+      (goto-char (point-min))
+      (while (not (eobp))
+        (when (memq (char-after) '(?\{ ?\[))
+          (push (json-read) objects))
+        (forward-line)))
+    (nreverse objects)))
+
+
+(defun flycheck-parse-json (output)
+  "Return parsed JSON data from OUTPUT.
+
+OUTPUT is a string that contains JSON data.  Each line of OUTPUT
+may be either plain text, a JSON array (starting with `['), or a
+JSON object (starting with `{').
+
+This function ignores the plain text lines, parses the JSON
+lines, and returns the parsed JSON lines in a list."
+  (let ((json-array-type 'list)
+        (json-false nil))
+    (seq-map #'json-read-from-string
+             (seq-filter (lambda (line)
+                           (or (string-prefix-p "{" line)
+                               (string-prefix-p "[" line)))
+                         (split-string output "\n")))))
+
+(defun fancy ()
+  (let ((str (buffer-string)))
+    (benchmark-run-compiled 100
+      (flycheck-parse-json str))))
+
+(defun raw ()
+  (let ((str (buffer-string)))
+    (benchmark-run-compiled 100
+      (~/read-str str))))
+#+END_SRC
+
+Result for running three times, the raw and fancy functions above.
+
+| test  | Run time (seconds) | # of GC pauses | Time of GC pauses (seconds) |
+|-------+--------------------+----------------+-----------------------------|
+| raw   | 5.3949537020000005 |              3 |         0.47090892299999965 |
+| fancy |        6.399940678 |              3 |          0.4271344749999999 |
+| raw   |         5.34557943 |              3 |          0.4363561350000005 |
+| fancy |        6.890653127 |              3 |          0.4778678799999998 |
+| raw   |         5.21638785 |              2 |         0.30012468800000036 |
+| fancy |        7.052852691 |              4 |          0.6481165220000005 |
+
+Fancy version seems to have larger variance, but is still consistently 1sec
+worse or more.  So raw it is.
