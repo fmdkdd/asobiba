@@ -7133,3 +7133,99 @@ Result for running three times, the raw and fancy functions above.
 
 Fancy version seems to have larger variance, but is still consistently 1sec
 worse or more.  So raw it is.
+
+* [2017-02-08 mer.]
+** Pipeline for Rust support in Flycheck                           :flycheck:
+After the current PR is merged, I still have the corresponding PR in
+flycheck-rust to take care of.
+
+That should take care of Rust stable support.
+
+Then, onto RLS support for the bleeding edge.
+
+*** TODO Merge flycheck-rust detection of targets for the full conventional layout
+*** TODO Add RLS checker (or flycheck support in lsp-mode)
+
+** Exploring Flycheck                                              :flycheck:
+Last time I looked at how a run of Flycheck went when no checker was found.  Now
+it's time to explore what happens when a checker is found.
+
+This time, the rust checker is eligible.  It's enabled, and I saved the buffer,
+so the predicate is true.
+
+Now it calls ~-start-current-syntax-check~, which creates a ~syntax-check~
+object, a struct that holds information about the state of the syntax check.
+
+It creates a callback to report status at a later point using passing this
+syntax check as first argument, and saves the syntax check as the
+~-current-syntax-check~.
+
+Flycheck status turn to "running" (but this only sends the status to hooks which
+by default are not present).
+
+Finally, it calls ~-syntax-check-start~ with the syntax check object and
+callback.  There, the :start function of the checker is called, and its return
+value put into the context slot of the syntax-check struct.
+
+In this case, the start function is -start-command-checker.  There, we call
+start-process, attach a sentinel and filter, and return the created process.
+The filter just accumulates output into the process property
+~flycheck-pending-output~.
+
+The signal handler, -handle-signal, waits for the process status to be 'signal'
+or 'exit'.  On 'signal', the syntax-check callback is called with 'interrupted'
+(so the syntax check will report the interrupted status).  On exit,
+-finish-checker-process is called with the accumulated output.
+
+First, the output is parsed by -parse-output.  If the exit status was non-zero,
+but no errors were collected, we have a suspicious state.
+
+Otherwise, we call the syntax-check callback with 'finished' after mapping
+-fix-error-filename for temporary files.
+
+Parsing is just calling the 'error-parser of the checker.  Nothing more.
+
+So next, control flows to -report-buffer-checker-status, since that's what the
+syntax check callback calls.  Here the status is 'finished', so we flow to
+-finish-current-syntax-check.
+
+There, we first filter the errors with -filter-errors (which calls
+:error-filter or -sanitize-errors), expand the filenames, and discard the
+irrelevant errors.
+
+Errors are relevant if they refer to the same buffer OR if they have no
+filename, and the buffer has no file name either (for checkers called with
+stdin).
+
+Then, if the number of errors exceed -checker-error-threshold, the checker is
+disabled.
+
+Otherwise, call -report-current-errors with the relevant errors.
+
+There, errors are added to the -current-errors, and sorted with -error-<
+(interesting, as the order from rustc actually matters, and I did not know how
+to control it).  Then, hooks from -process-error-functions are called for each
+/new/ error (/not/ with -current-errors).
+
+Initially, the only function present there is -add-overlay, which gets the
+region for the error and applies the overlay on the region and prepare the
+tooltip message.
+
+After -report-current-errors returns, we check if there is a next checker.  If
+we do, we -start-current-syntax-check with it.
+
+Otherwise, we set -current-syntax-check to nil, report 'finished' as flycheck
+status, delete the overlays that were marked /when this syntax checked had
+started/.  This is to avoid flickering.  Then refresh the error-list (using
+-current-errors).
+
+Lastly, run any deferred check.  From the comments, I gather that deferred
+checks are checks that were started while a syntax check was already active, and
+so were put in a queue.
+
+So it seems that flycheck does indeed merely two things with the errors: put
+overlays, and populates the error list.
+
+For lsp-mode, it means we could simply call -add-overlay and populate
+-current-errors without relying on a checker definition, since lsp-mode would
+take care of it.
