@@ -33,17 +33,44 @@ fn rms(samples: &RingBuffer) -> f32 {
     .sqrt()
 }
 
+fn note_freq(note: i32) -> f32 {
+  440.0 * f32::powi(1.05956, note - 24)
+}
+
+const SAMPLE_RATE: u32 = 44100;
+const SILENCE : f32 = 0.05;
+
+struct GuitarString {
+  buf: RingBuffer,
+}
+
+impl GuitarString {
+  fn new(note: i32) -> Self {
+    GuitarString {
+      buf: pluck(note_freq(note) as u32, SAMPLE_RATE)
+    }
+  }
+
+  fn tick(&mut self) -> f32 {
+    let r = self.buf[0];
+    vibrate(&mut self.buf);
+    r
+  }
+
+  fn is_vibrating(&self) -> bool {
+    rms(&self.buf) > SILENCE
+  }
+}
+
 fn main() {
-  let note = 0;
-  let freq = 440.0 * f32::powi(1.05956, note - 24);
-  let sample_rate = 44100;
-  let silence = 0.05;
-  let mut samples = pluck(freq as u32, sample_rate);
+  let mut strings = vec![GuitarString::new(0),
+                         GuitarString::new(3),
+                         GuitarString::new(7)];
 
   // Prepare WAV writer
   let spec = hound::WavSpec {
     channels: 1,
-    sample_rate: sample_rate,
+    sample_rate: SAMPLE_RATE,
     bits_per_sample: 16,
     sample_format: hound::SampleFormat::Int,
   };
@@ -51,8 +78,8 @@ fn main() {
 
   // Then write a sample and vibrate, until silence
   let amplitude = i16::MAX as f32;
-  while rms(&samples) > silence {
-    writer.write_sample((samples[0] * amplitude) as i16).unwrap();
-    vibrate(&mut samples);
+  while strings.iter().any(|s| s.is_vibrating()) {
+    let sample = strings.iter_mut().fold(0.0, |sum, s| sum + s.tick());
+    writer.write_sample((sample * amplitude) as i16).unwrap();
   }
 }
