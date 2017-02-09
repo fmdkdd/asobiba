@@ -7229,3 +7229,12 @@ overlays, and populates the error list.
 For lsp-mode, it means we could simply call -add-overlay and populate
 -current-errors without relying on a checker definition, since lsp-mode would
 take care of it.
+
+* [2017-02-09 jeu.]
+** Preparing the flycheck-rust PR                                  :flycheck:
+In parallel, to merge the changes as soon as the first is reviewed.
+
+*** TODO Fix the order of errors in the minibuffer
+This is annoying: the order of errors from rustc is meaningful, but they are
+given in the wrong order in the minibuffer for some reason.  The error list
+lists them in the proper order, but the minibuffer order is reversed.
