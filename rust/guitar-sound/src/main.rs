@@ -71,7 +71,13 @@ fn main() {
                          GuitarString::new(),
                          GuitarString::new()];
 
-  let mut chords = vec![(0,3,7), (0,4,6), (0,3,7), (0,5,12)];
+  let mut chords = vec![(0,3,7),
+                        (0,4,6),
+                        (0,3,7),
+                        (0,5,12),
+                        (5,9,12),
+                        (3,7,10)];
+  chords.reverse();
 
   // Prepare WAV writer
   let spec = hound::WavSpec {
