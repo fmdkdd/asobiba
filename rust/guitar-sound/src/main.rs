@@ -38,7 +38,7 @@ fn note_freq(note: i32) -> f32 {
 }
 
 const SAMPLE_RATE: u32 = 44100;
-const SILENCE : f32 = 0.05;
+const SILENCE : f32 = 0.07;
 
 struct GuitarString {
   buf: RingBuffer,
@@ -79,7 +79,9 @@ fn main() {
   // Then write a sample and vibrate, until silence
   let amplitude = i16::MAX as f32;
   while strings.iter().any(|s| s.is_vibrating()) {
-    let sample = strings.iter_mut().fold(0.0, |sum, s| sum + s.tick());
+    // Add string samples and clamp to [-1.0,1.0]
+    let sample = strings.iter_mut()
+      .fold(0.0, |sum, s| (sum + s.tick()).max(-1.0).min(1.0));
     writer.write_sample((sample * amplitude) as i16).unwrap();
   }
 }
