@@ -11,7 +11,7 @@ use rand::distributions::{IndependentSample, Range};
 type RingBuffer = VecDeque<f32>;
 
 // Generate random samples
-fn pluck(freq: u16, sample_rate: u16) -> RingBuffer {
+fn pluck(freq: u32, sample_rate: u32) -> RingBuffer {
   let mut rng = rand::thread_rng();
   let len = sample_rate / freq + 1;
   let range = Range::new(-0.5, 0.5);
@@ -26,37 +26,33 @@ fn vibrate(samples: &mut RingBuffer) {
   samples.push_back((a + b) / 2.0 * decay_factor);
 }
 
+// Root mean square, to get an idea of the amplitude of the whole buffer
+fn rms(samples: &RingBuffer) -> f32 {
+  samples.iter()
+    .fold(0.0, |sum, s| sum + s * s)
+    .sqrt()
+}
+
 fn main() {
   let note = 0;
   let freq = 440.0 * f32::powi(1.05956, note - 24);
   let sample_rate = 44100;
-  let mut samples = pluck(freq as u16, sample_rate);
+  let silence = 0.05;
+  let mut samples = pluck(freq as u32, sample_rate);
 
-  // Write the samples to WAV
+  // Prepare WAV writer
   let spec = hound::WavSpec {
     channels: 1,
-    sample_rate: 44100,
+    sample_rate: sample_rate,
     bits_per_sample: 16,
     sample_format: hound::SampleFormat::Int,
   };
-
   let mut writer = hound::WavWriter::create("out.wav", spec).unwrap();
 
-  for s in samples.iter() {
-    let amplitude = i16::MAX as f32;
-    writer.write_sample((s * amplitude) as i16).unwrap();
+  // Then write a sample and vibrate, until silence
+  let amplitude = i16::MAX as f32;
+  while rms(&samples) > silence {
+    writer.write_sample((samples[0] * amplitude) as i16).unwrap();
+    vibrate(&mut samples);
   }
-
-  // Then vibrate, and write again, a bunch of times
-  for _ in 0..400 {
-    for _ in 0..samples.len() {
-      vibrate(&mut samples);
-    }
-
-    for s in samples.iter() {
-      let amplitude = i16::MAX as f32;
-      writer.write_sample((s * amplitude) as i16).unwrap();
-    }
-  }
-
 }
