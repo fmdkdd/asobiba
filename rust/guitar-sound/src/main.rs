@@ -45,10 +45,14 @@ struct GuitarString {
 }
 
 impl GuitarString {
-  fn new(note: i32) -> Self {
+  fn new() -> Self {
     GuitarString {
-      buf: pluck(note_freq(note) as u32, SAMPLE_RATE)
+      buf: RingBuffer::new(),
     }
+  }
+
+  fn pluck(&mut self, note: i32) {
+    self.buf = pluck(note_freq(note) as u32, SAMPLE_RATE);
   }
 
   fn tick(&mut self) -> f32 {
@@ -63,9 +67,11 @@ impl GuitarString {
 }
 
 fn main() {
-  let mut strings = vec![GuitarString::new(0),
-                         GuitarString::new(3),
-                         GuitarString::new(7)];
+  let mut strings = vec![GuitarString::new(),
+                         GuitarString::new(),
+                         GuitarString::new()];
+
+  let mut chords = vec![(0,3,7), (0,4,6), (0,3,7), (0,5,12)];
 
   // Prepare WAV writer
   let spec = hound::WavSpec {
@@ -78,8 +84,21 @@ fn main() {
 
   // Then write a sample and vibrate, until silence
   let amplitude = i16::MAX as f32;
-  while strings.iter().any(|s| s.is_vibrating()) {
-    // Add string samples and clamp to [-1.0,1.0]
+  'run: loop {
+    // If previous chord is done, pluck the next one
+    if strings.iter().any(|s| !s.is_vibrating()) {
+      match chords.pop() {
+        Some(chord) => {
+          strings[0].pluck(chord.0);
+          strings[1].pluck(chord.1);
+          strings[2].pluck(chord.2);
+        }
+        // Quit if there are no more chords
+        None => break 'run
+      }
+    }
+
+    // Add string samples, clamp to [-1.0,1.0], and write to WAV
     let sample = strings.iter_mut()
       .fold(0.0, |sum, s| (sum + s.tick()).max(-1.0).min(1.0));
     writer.write_sample((sample * amplitude) as i16).unwrap();
