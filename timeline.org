@@ -7238,3 +7238,40 @@ In parallel, to merge the changes as soon as the first is reviewed.
 This is annoying: the order of errors from rustc is meaningful, but they are
 given in the wrong order in the minibuffer for some reason.  The error list
 lists them in the proper order, but the minibuffer order is reversed.
+
+* [2017-02-10 ven.]
+** Drawing on top of an Emacs buffer                         :flycheck:emacs:
+Seems Sublime text has very decent syntax checking similar to flycheck, but
+error messages can appear /in the buffer/ just below the code they refer.  See
+https://github.com/rust-lang/sublime-rust for a Rust example.
+
+That takes space, but it lets you avoid the back-and-forth of looking at the
+error message.
+
+Can I do that with Emacs?
+
+I've looked at overlays, and I think they can be used to display errors in the
+buffer, but with major limitations:
+
+- They have to be put at an existing buffer position.  You can't put an overlay
+  at an arbitrary position (x,y) in the window; there must be text or space in
+  the buffer.
+
+- They move when you cut text.  I guess this could be worked around by
+  recomputing their position after a text change.
+
+Trying to find packages that draw on a window.
+
+Looking at fill-column-indicator.  You would expect that a simple solution would
+be to tell Emacs that you want to draw a vertical rule on the 80th column of the
+window.  Instead, it uses overlays: one for each newline char.  After each
+newline, it adds an overlay, and position the vertical rule using the ~display~
+overlay property with a value of ~(space :align-to 80)~.
+
+Overlays are flexible.  The bad part is that you have to write the code to get
+rid of and redraw the overlays when the windows scrolls, or when the buffer
+contents change.
+
+Things like autocompletion with popups appear /on top/ of the text below.
+
+Hmm, can't find anything conclusive.  Will have to ask.
