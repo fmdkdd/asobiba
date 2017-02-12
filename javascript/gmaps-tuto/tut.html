@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <style>
+       #map {
+        height: 400px;
+        width: 100%;
+       }
+    </style>
+  </head>
+  <body>
+    <h3>My Google Maps Demo</h3>
+    <div id="map"></div>
+    <script>
+        function rad(x) {
+          return x * Math.PI / 180;
+        };
+
+        function getDistance(p1, p2) {
+          var R = 6378137; // Earth’s mean radius in meter
+          var dLat = rad(p2.lat - p1.lat);
+          var dLong = rad(p2.lng - p1.lng);
+          var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(rad(p1.lat)) * Math.cos(rad(p2.lat)) *
+          Math.sin(dLong / 2) * Math.sin(dLong / 2);
+          var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+          var d = R * c;
+          return d; // returns the distance in meter
+        };
+
+      function initMap() {
+        var uluru = {lat: -25.363, lng: 131.044};
+        var map = new google.maps.Map(document.getElementById('map'), {
+          zoom: 4,
+          center: uluru,
+          streetViewControl: false,
+          styles: [{
+            featureType: 'road',
+            elementType: 'all',
+            stylers: [{visibility: 'off'}]
+          }],
+        });
+
+        let goal = uluru;
+
+        map.addListener('click', function(ev) {
+          let guess = {lat: ev.latLng.lat(), lng: ev.latLng.lng()}
+
+          // Put a marker for the guess
+          let marker = new google.maps.Marker({
+            position: guess,
+            map: map,
+          })
+
+          // Draw goal
+          new google.maps.Circle({
+            strokeColor: '#0045C0',
+            strokeOpacity: 0.8,
+            strokeWeight: 2,
+            fillColor: '#0045C0',
+            fillOpacity: 0.35,
+            map: map,
+            center: goal,
+            radius: 50000,
+          });
+
+          // Draw line to goal
+          new google.maps.Polyline({
+            path: [
+              goal,
+              guess
+            ],
+            strokeColor: '#FF0000',
+            strokeWeight: 2,
+
+            map: map,
+          })
+
+          let infowindow = new google.maps.InfoWindow({
+            content: `Your guess was off by ${Math.floor(getDistance(goal, guess) / 1000)}km`
+          });
+
+          infowindow.open(map, marker)
+
+          console.log(getDistance(goal, guess) / 1000, "km")
+
+        })
+      }
+
+    </script>
+    <script async defer
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDZPYMav9fVqqztOcaH-gH2SlJF22-UXSM&callback=initMap">
+    </script>
+  </body>
+</html>
