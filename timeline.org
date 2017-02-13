@@ -7286,3 +7286,97 @@ possible in Emacs.
 
 The trick is to add overlays /at the end of the line/.  If the overlay text is
 wrapped in newlines, it will appear as phantom lines, like in Sublime text.
+
+* [2017-02-13 lun.]
+** Inline errors as a flycheck extension                           :flycheck:
+I've got a prototype working.  Inline errors show all related errors for Rust.
+That's what I want in the end, since it's the most useful for most Rust errors
+that have multiple parts.
+
+However, for a Flycheck extension, it makes the most sense to cut the
+functionality in two parts:
+
+1. Phantoms as an alternative flycheck-display-errors-function.
+2. Group errors from the same diagnostic in Flycheck; add support for
+   displaying phantoms of a whole group in flycheck-phantoms
+
+I may be able to leverage quick-peek by cpitclaudel if there is sufficient
+overlap.
+
+I wrote a minor-mode mostly lifted from flycheck-pos-tip, without caring for
+error groups.
+
+An open question is when to clear the phantoms.  After toying with it, editing
+with the phantoms is weird; but just moving around is fine.
+
+Experimenting with clearing the phantoms on post-command, I find the behavior of
+the display-error timer weird.  When you are just moving point around, it's
+supposed to debounce for 0.9 seconds (default display error delay).  But when
+using next-error, the error should show directly (and the timer is canceled).
+What I witness is that using next-error triggers the display-error function
+/twice/.
+
+I think the culprit is the post-command hook.  Next-error displays the error
+directly, but the post-command triggers a display-soon, and after the delay
+there's another display-error.  Which is fine with ~(message~ (though useless),
+but not with phantoms.
+
+So, that interferes with clearing the phantoms on post-command.  When using
+next-error, phantoms for the errors at point are added.  Then, the post-command
+hook clears them.  But the post-command hook also schedules a display-soon.
+So after the display error delay, phantoms are added again.  That's dumb.
+
+What's the correct fix for next-error?  We want errors to display right away,
+but display-soon should not be triggered in the post-command hook.  Hmm I think
+you can lookup what command has triggered the post-command hook with
+this-command, so maybe test that in the post-command hook?  Hmm, it breaks since
+I'm using spacemacs/next-error, but the idea works otherwise.
+
+I think I need a cflow ...  wait would it work?  When the post-command hooks are
+run, you are no longer below the control flow of next-error; next-error has
+returned.
+
+I think I want some sort of causality test:
+
+---- next-error      ---- post-command / display-soon : nope
+---- (anything else) ---- post-command / display-soon : ok
+
+If display-soon is called in the post-command of a next-error, do not display
+error.  For any other command, display error.
+
+But I can't test for next-error directly because spacemacs redefines it (and
+presumably, the user could wrap it).
+
+Sooo.  That leaves me with setting a flag when running next-error, and clearing
+it on post-command.
+
+Okay so that works, regardless of the command that ends up calling
+flycheck-next-error.
+
+Now, when to clear phantoms?  Post-command is tempting, but it's messy because
+that's also when we display them, so the order of insertion into the hook
+matters.  Or, we just have to /not/ clear them after a flycheck-next-error.
+That flag is useful.
+
+Had to clear the flag in a function run at the end of post-command-hook, but
+otherwise this works.
+
+Clearing right before displaying them makes sense, because we are only
+displaying one phantom at time (or one group).
+
+Err, that was tricky to get right.  Will proofread tomorrow.
+
+Aside: sometimes spacemacs/next-error is incapable of finding errors in a
+flycheck buffer, even when they are present.  That's confusing.  Found out
+that's because I have a Org buffer open in a window.  Since Org binds
+next-buffer-function, it is considered as next-error capable, and
+spacemacs/next-error prefers next-error buffers over flycheck.  Grrr
+
+A downside of error groups is that while they work fine for small examples,
+where you can see everything in the same buffer, but if your borrow starts a
+thousand lines prior, or even in another file, that's not helpful.  Maybe
+quick-peek would be best in these instances, since you could show the location
+of the borrow start/end right below the current line.
+
+But unless you have a very large function, you should be fine, since I don't
+think borrow errors can cross function boundaries.  Needs more testing.
