@@ -7275,3 +7275,14 @@ contents change.
 Things like autocompletion with popups appear /on top/ of the text below.
 
 Hmm, can't find anything conclusive.  Will have to ask.
+
+* [2017-02-11 sam.]
+** Inline errors                                                   :flycheck:
+After asking on Flycheck repo, cpitclaudel quickly provided his nifty quick-peek
+package.
+
+Looks like exactly what I need.  Or at least, it shows that phantoms are
+possible in Emacs.
+
+The trick is to add overlays /at the end of the line/.  If the overlay text is
+wrapped in newlines, it will appear as phantom lines, like in Sublime text.
