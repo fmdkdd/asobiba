@@ -7380,3 +7380,31 @@ of the borrow start/end right below the current line.
 
 But unless you have a very large function, you should be fine, since I don't
 think borrow errors can cross function boundaries.  Needs more testing.
+
+* [2017-02-14 mar.]
+** Tasks I would like to have done by the end of the month         :flycheck:
+Free time will probably dwindle starting in March.  That's two weeks.
+
+*** TODO Make PR for inline-errors
+To at least gather interest, review, and toy with it.
+
+*** TODO Make PR for grouping Rust errors
+This is is more controversial.  Don't know how it will fit with flycheck.
+
+*** TODO Experiment with nix (guix) to run integration tests
+The idea is to install checkers in sandbox (so it's separate from my regular
+system), with multiple versions, to be able to run all the flycheck integration
+tests without too much hassle.
+
+Eventually, put that inside a VM for reproductibility.
+
+*** TODO Document flycheck internals
+The intent is to have a point of entry on flycheck.org for adding or modifying a
+checker.
+
+*** TODO Add checklists to flycheck maintaining guide
+For things that are not automated: run integration tests, squash commits, make
+sure a new feature is added to CHANGES and doc/
+
+*** TODO Pick up next-checker PR
+Seemed important, and might be doable now that I have more Flycheck chops.
