@@ -6071,7 +6071,8 @@ users would not benefit from them without going through the trouble of building
 their own Emacs.
 
 * [2017-01-05 jeu.]
-** TODO Merge the flycheck/refactor-rust-cargo branch        :flycheck:cargo:
+** DONE Merge the flycheck/refactor-rust-cargo branch        :flycheck:cargo:
+CLOSED: [2017-02-15 mer. 14:28]
 Or find out why it was blocked.
 
 Even if the flycheck-rust branch is not ready to automatically fill the
@@ -7143,7 +7144,8 @@ That should take care of Rust stable support.
 
 Then, onto RLS support for the bleeding edge.
 
-*** TODO Merge flycheck-rust detection of targets for the full conventional layout
+*** DONE Merge flycheck-rust detection of targets for the full conventional layout
+CLOSED: [2017-02-15 mer. 14:28]
 *** TODO Add RLS checker (or flycheck support in lsp-mode)
 
 ** Exploring Flycheck                                              :flycheck:
@@ -7385,7 +7387,8 @@ think borrow errors can cross function boundaries.  Needs more testing.
 ** Tasks I would like to have done by the end of the month         :flycheck:
 Free time will probably dwindle starting in March.  That's two weeks.
 
-*** TODO Make PR for inline-errors
+*** DONE Make PR for inline-errors
+CLOSED: [2017-02-15 mer. 14:28]
 To at least gather interest, review, and toy with it.
 
 *** TODO Make PR for grouping Rust errors
@@ -7405,6 +7408,8 @@ checker.
 *** TODO Add checklists to flycheck maintaining guide
 For things that are not automated: run integration tests, squash commits, make
 sure a new feature is added to CHANGES and doc/
+
+And see: [[https://github.com/flycheck/flycheck/issues/928][#928]].
 
 *** TODO Pick up next-checker PR
 Seemed important, and might be doable now that I have more Flycheck chops.
