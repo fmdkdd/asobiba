@@ -7413,3 +7413,41 @@ And see: [[https://github.com/flycheck/flycheck/issues/928][#928]].
 
 *** TODO Pick up next-checker PR
 Seemed important, and might be doable now that I have more Flycheck chops.
+
+* [2017-02-15 mer.]
+** Making GIF screencasts                                              :arch:
+Was more tricky to get right than expected.
+
+First of all, forget recordmydesktop when using i3.  The GTK and QT versions are
+both unusable.
+
+Using raw ffmpeg is possible when you want a video:
+
+: ffmpeg -video_size 800x600 -framerate 10 -f x11grab -i :0.0+10,100 output.mp4
+
+But getting the area right is a pain.  So, instead, use ffcast
+
+: ffcast -s rec
+
+It wraps ffmpeg with xrectsel to let you select a region with the mouse first,
+then invoke ffmpeg.
+
+For a small Emacs screencast, the resulting video is only 30Kb.
+
+Now, to make a GIF, since Github won't accept a video for insertion into
+comments by drag and drop.
+
+I've tried to use ffmpeg to convert directly:
+
+: ffmpeg -i output.mkv -framerate 10 output.gif
+
+But that only gives me GIF >1Mb.  That's an insane inflation.
+
+So I've resorted to the imagemagick method [[https://superuser.com/questions/556029/how-do-i-convert-a-video-to-gif-using-ffmpeg-with-reasonable-quality][suggested here]]:
+
+: mkdir frames
+: ffmpeg -i output.mkv -vf fps=10 frames/ffout%03d.png
+: convert -loop 0 frames/ffout*.png -dither None -colors 10 -layers OptimizeFrame output.gif
+
+That gives me more reasonable 142Kb GIF.  Still a 500% size increase without the
+ability to pause... but blame the web.
