@@ -7451,3 +7451,61 @@ So I've resorted to the imagemagick method [[https://superuser.com/questions/556
 
 That gives me more reasonable 142Kb GIF.  Still a 500% size increase without the
 ability to pause... but blame the web.
+
+** Looking to improve our travis-ci build times             :flycheck:travis:
+And how to run integration tests as well.
+
+Currently looking at Travis documentation.  Of note:
+
+- we always build the manual even when the build fails.  There is
+  ~after_success~ for that.
+
+- travis.yml file states we build and deploy the manual.  Deploy where?
+  flycheck.org states Readthedocs hosts and builds the manual.
+
+- Half the time of each job is spent installing Emacs (70sec), the other half in
+  running the tests.
+
+  Building emacs from source takes 423sec.
+
+- Jobs can run in parallel.  Do they?  It appears they do.
+
+- Looking at [[https://github.com/flycheck/flycheck/pull/1159][#1159]] that uses docker to speed up Travis, the builds take 10min
+  instead of 3min with containers.  Not worth it?
+
+- Travis runs Ubuntu 12.04 or 14.04, either in VM or container.
+
+- .cask directory is intended to be cached, but ~make init~ still takes 9sec,
+  and end of the run states that cache has not changed.  Hmm.
+
+  The logs indicate that Cask manipulates ~/.emacs.d/cask, not ~/.cask.  Which
+  is weird, since on my machine running ~make init~ installs cask packages in a
+  .cask folder under flycheck
+
+  But regardless, it's probably not a good idea to cache Cask dependencies
+  anyway, since they are moving targets.
+
+- we have a 'matrix' field and an 'env.matrix'.  What is the difference here?
+  Trying to find documentation on the Travis.yaml file, because the official
+  docs only define it by examples, not exhaustively.
+
+  [[http://blog.tgrrtt.com/exploring-the-travisci-configuration-file][This]] is the best I found, and it's not much.
+
+
+So, I think we can cache the stable Emacs releases, since they are not supposed
+to change.
+
+We can still build Emacs snapshot from scratch, since it is an allowed failure
+it won't impact the build time.  (But is it reported somehow on a PR?  Or do you
+have to check the build page?)
+
+After a bunch of stupid mistakes and failing builds on Travis (the slow feedback
+time is killing me), I shaved 1min per job by caching Emacs and 30sec further by
+caching .emacs.d/.cask.
+
+I might have broken Emacs snapshot though.  Needs to double check it's on my
+end.  Haha, apparently [[https://hydra.nixos.org/build/48775188][it's a coincidence]].  The CI for Emacs has the same error.
+
+Okaaay.  After making a branch on flycheck/emacs-travis and fixing /its/
+travis.yml (in the process also caching Emacs there), the board is all green.
+Will send a proper PR tomorrow.
