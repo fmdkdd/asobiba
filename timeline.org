@@ -7509,3 +7509,52 @@ end.  Haha, apparently [[https://hydra.nixos.org/build/48775188][it's a coincide
 Okaaay.  After making a branch on flycheck/emacs-travis and fixing /its/
 travis.yml (in the process also caching Emacs there), the board is all green.
 Will send a proper PR tomorrow.
+
+* [2017-02-16 jeu.]
+** Mounting a VM using qemu and libvirt                        :qemu:libvirt:
+The intent here is to test Guix/Nix locally, and eventually use it for running
+the full suite of Flycheck integration tests, without polluting my system.
+
+Ideally.
+
+Following the archwiki on Qemu and Libvirt.
+
+Using virt-manager to manage VM, since I intend to use snapshots, or at least
+persistent storage.
+
+Only gotcha so far was to correctly set up polkit.  I didn't have any
+authentication agent running, so virt-manager was failing.  The correct fix was
+to install polkit-gnome and run:
+
+: /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1
+
+Then virt-manager was a breeze to use.
+
+Marie told me about [[https://www.vagrantup.com/][Vagrant]].  It cakes care of provisioning a VM with a given
+system, hence letting me avoid the installation step.  There's even a [[https://github.com/vagrant-libvirt/vagrant-libvirt][plugin for
+libvirt]] as a backend.  Though that's mostly useful if I need to reproduce
+installations.
+
+In fact, the [[https://github.com/flycheck/flycheck/commit/2449c3dd7a386e6b53597bf20b21ed3eb97d19c1][previous VM]] used vagrant.
+
+My intention is more to use Guix on Travis to manage dependencies.
+
+Had to disable ipv6 in NetworkManager (in the guest VM) to get the network
+going.
+
+** Trying Guix/Nix                                                 :guix:nix:
+Following the Guix tutorial / manual now.
+
+Hmm, not so sure about Guix.  ~guix package -i hello~ has been running for
+20 minutes now, with no end in sight.
+
+That does not bode well to be run on our CI.
+
+Let's see Nix instead.
+
+Hmm nix installs itself in /nix.  That means using sudo at some point to create
+and chown this directory.  You /can/ change the prefix, but apparently most
+packages are built with the /nix prefix in mind, so you'll have to rebuild them
+from source (??); [[https://nixos.org/nix/manual/#sec-building-source][cf. manual]].
+
+Okay I'm a bit lost by looking around for examples.  Will resume tomorrow.
