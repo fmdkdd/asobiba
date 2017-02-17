@@ -7558,3 +7558,194 @@ packages are built with the /nix prefix in mind, so you'll have to rebuild them
 from source (??); [[https://nixos.org/nix/manual/#sec-building-source][cf. manual]].
 
 Okay I'm a bit lost by looking around for examples.  Will resume tomorrow.
+
+* [2017-02-17 ven.]
+** Nix deadend                                                          :nix:
+So it turns out that Nix [[https://github.com/NixOS/nixpkgs/issues/9682][is not]] the right solution to manage multiple versions
+of a specific package.
+
+There /are/ multiple versions of /some/ packages in the default nixpkgs channel,
+e.g. go or lua:
+
+: $ nix-env -qa go
+: go-1.4
+: go-1.6.4
+: go-1.7.4
+
+But you can't install arbitrary versions other than these.  Or you have to
+specify your own derivation, which I gather is rabbit-holey.  Plus, chances are
+your specific version won't be in the build cache, so you'll end up rebuilding
+it from source (and potentially all its dependencies).
+
+So, in the end, rather than being Cargo.toml-like, it's much more like any other
+distro.  You are supposed to update your packages to the latest version that is
+in the nixpkgs channel and go with the flow.
+
+Well, for Flycheck I'm principally interested on running the integration tests
+with the version that most users will use.  Unfortunately, the Travis VM runs
+Ubuntu 12.04, which is outdated.  At the very least, running against the latest
+Debian is better.
+
+I think the most interesting use of Nix would be to deploy a build environment
+for running all integration tests, without polluting my Arch system.  Something
+[[https://ariya.io/2016/06/isolated-development-environment-using-nix][like this]].
+
+Just have to install Nix, and write a nix expression with a list of tools.  Then
+I should be able to spawn a nix-shell with all the tools in PATH whenever I want
+to run the tests.  No need for a VM.
+
+** Setup nix on Arch                                                   :arch:
+Tried to symlink /nix to a different partition... nix does not support
+symlinks.  But, you can use ~mount -o bind~ [[https://stackoverflow.com/a/34966233][instead]]:
+
+: sudo mount -o bind /mnt/foo/nix /nix
+
+and even put that in /etc/fstab for a permanent link (see man mount).
+
+** Using nix-shell for running flycheck integration tests      :nix:flycheck:
+Trying out with the following default.nix file:
+
+#+BEGIN_SRC nix
+with import <nixpkgs> {};
+stdenv.mkDerivation rec {
+  name = "env";
+  env = buildEnv { name = name; paths = buildInputs; };
+  buildInputs = [
+    go
+  ];
+}
+#+END_SRC
+
+Spawning ~nix-shell~ downloads a bunch a stuff (~linux-headers~, really?), but
+it's not too long.  After that, I do have ~go~ in PATH.  Running integration
+tests for flycheck...
+
+#+BEGIN_EXAMPLE
+([cl-struct-flycheck-error #<killed buffer> go-build "/home/fmdkdd/proj/flycheck/test/resources/language/go/src/b1/main.go" 4 2 "cannot find package \"b2\" in any of:
+	/usr/local/go/src/b2 (from $GOROOT)
+	($GOPATH not set)" error nil])
+       ([cl-struct-flycheck-error #<killed buffer> go-build "/home/fmdkdd/proj/flycheck/test/resources/language/go/src/b1/main.go" 4 2 "cannot find package \"b2\" in any of:
+	/nix/store/c3vvkavjzf33vcgi0l98vxr2r91id78p-go-1.7.4/share/go/src/b2 (from $GOROOT)
+	($GOPATH not set)" error nil]))
+#+END_EXAMPLE
+
+and
+
+#+BEGIN_EXAMPLE
+ skipped  5/8  flycheck-define-checker/go-errcheck/default
+   passed  6/8  flycheck-define-checker/go-gofmt/syntax-error
+   passed  7/8  flycheck-define-checker/go-test/default
+  skipped  8/8  flycheck-define-checker/go-unconvert/default
+#+END_EXAMPLE
+
+Two issues: first, since Nix use its own idiosyncratic system hierarchy, a test
+fails.  Arguably, the test could maybe be written in a generic way.
+
+Second issue: I'm still missing binaries that other go checkers use.  Wow, we
+have seven go checkers.  It seems other tools can be fetched using ~go
+get~... but that would defeat the purpose of using a nix expression in the first
+place.  We'll look into that later (same issue with tools from npm).
+
+Let's try adding what I can find in nixpkgs, to see if this approach is
+worthwhile.  Running ~make integ~ without nix-shell gives me:
+
+: Ran 152 tests, 34 results as expected, 2 unexpected, 116 skipped (2017-02-17 13:57:56+0100)
+
+Well, that's interesting.  Added a bunch of packages to my nix expression, ran
+~nix-shell~ and went for lunch.  Came back to:
+
+: error: build of ‘/nix/store/sbnm4dams3zgamzrmv524xcz8m2i7pga-verilator-3.884.drv’ failed
+: /usr/bin/nix-shell: failed to build all dependencies
+
+Apparently, verilator is built from sources, and it fails.  Removing verilator
+then.
+
+Uhoh:
+
+: collision between `/nix/store/pp27kdpb0i8hgpjhwl64f498aj1xdkhx-gcc-wrapper-5.4.0/bin/cc' and `/nix/store/mc92v912d55s5nm6f1z45dqbx5hnn0dx-clang-wrapper-3.9.1/bin/cc'
+: builder for ‘/nix/store/d9bbzg7llqcq3z4amrgdsg3xp98n4kq4-env.drv’ failed with exit code 25
+: error: build of ‘/nix/store/d9bbzg7llqcq3z4amrgdsg3xp98n4kq4-env.drv’ failed
+: /usr/bin/nix-shell: failed to build all dependencies
+
+Looks like gcc and clang are both trying to provide /bin/cc.  Can't they play
+nice with each other?
+
+Can't find anything.  Might as well remove gcc since it's the most likely to be
+present already on a machine.
+
+Also, found out that nix [[https://docs.travis-ci.com/user/languages/nix][is supported by Travis]].  That means being able to use
+nix in a Travis container, so integration should be painless.  If I can get it
+to install all the checkers.
+
+: collision between `/nix/store/sx08223kn0aymmjcjd59sd0jmp1d9x0w-gfortran-wrapper-5.4.0/bin/cc' and `/nix/store/mc92v912d55s5nm6f1z45dqbx5hnn0dx-clang-wrapper-3.9.1/bin/cc'
+
+Grumble.
+
+Okay, let's ditch clang.  I have it on my machine anyway.  Wait, no.  Apparently
+I don't have it?
+
+: Ran 152 tests, 62 results as expected, 11 unexpected, 79 skipped (2017-02-17 14:42:29+0100)
+
+Progress.
+
+Grr.  Trying to install gnat, again running into a /bin/cc collision.  Stop it
+already.
+
+Maybe using ~nix-shell~ is not the right way to do it.  Maybe just using
+~nix-env~ would be sufficient, and maybe ~nix-shell~ is trying to do something
+more.
+
+Trying to install both gnat and clang with ~nix-env~.  First of all, there is no
+"gnat", though there is a "clang".
+
+: $ nix-env -i gnat
+: error: selector ‘gnat’ matches no derivations
+
+But it worked in the default.nix buildInputs list, where the names correspond to
+/attribute paths/.  We can pass attribute paths to nix-env with -A.
+
+#+BEGIN_EXAMPLE
+$ nix-env -iA nixpkgs.gnat nixpkgs.clang
+installing ‘gnat-wrapper-4.5.4’
+installing ‘clang-wrapper-3.9.1’
+building path(s) ‘/nix/store/9bb1ds5q2gacdp3q8asmyzh2w59in5bm-user-environment’
+Wide character in die at /nix/store/64jc9gd2rkbgdb4yjx3nrgc91bpjj5ky-buildenv.pl line 79.
+collision between ‘/nix/store/p9yy0z3w5cvv91kzqj4d9iicya4mskck-gnat-wrapper-4.5.4/bin/as’ and ‘/nix/store/mc92v912d55s5nm6f1z45dqbx5hnn0dx-clang-wrapper-3.9.1/bin/as’; use ‘nix-env --set-flag priority NUMBER PKGNAME’ to change the priority of one of the conflicting packages
+#+END_EXAMPLE
+
+Ah!  Both clang and gnat want to install /bin/as...  But here we have a
+suggestion to resolve the conflict using priorities.  If I could set that in my
+default.nix derivation that would be swell.
+
+Ah, [[http://lists.science.uu.nl/pipermail/nix-dev/2016-August/021371.html][found it]]:
+
+: (lib.recursiveUpdate gnat { meta.priority = 100; })
+
+(where is lib.recursiveUpdate documented?  Not on the nix or nixpkgs manual mind
+you.)  Also, the thread mentions that using nix-shell for these things is not
+recommended.  The use case for nix-shell is to be able to run, say, one version
+of GHC in one project, and another version for another project, by spawning a
+different nix-shell in each instance.  Yet, here I'm trying to put everything in
+the same shell, or even in the same profile.  Maybe the more correct approach
+would be to install the checker, run the integration tests for just this
+language, and repeat for each language.  But that means many invocations of
+~make integ~, and I'd rather have just one that tells me "yep, all pass".  So,
+workaround it is.
+
+This (supposedly) sets the priority for gnat to 100 (higher number = lower
+priority).  But by doing that, ~which cc~ in the nix-shell gives me the cc from
+gnat-wrapper, and I would expect the one from gfortran.  Meh.  It resolves the
+conflict anyway.
+
+But...:
+
+#+BEGIN_EXAMPLE
+Suspicious state from syntax checker ada-gnat: Flycheck checker ada-gnat returned non-zero exit code 4, but its output contained no errors: gcc -c -I/run/user/1000/flycheck26662rXr/ -gnatf -gnatef -gnatwa -gnat2012 -I/nix/store/nmfsxjx4f7lq16ai5l027kwm4ix2nc4n-gnat-4.5.4/lib/gcc/x86_64-unknown-linux-gnu/4.5.4/adainclude -I- -o /run/user/1000/flycheck26662eNl/hello.o /run/user/1000/flycheck26662rXr/hello.adb
+gnat1: invalid switch: -gnat2012
+gnatmake: "/run/user/1000/flycheck26662rXr/hello.adb" compilation error
+#+END_EXAMPLE
+
+And here I don't know whether that's due to an invalid test or an invalid setup
+with Nix.
+
+AAAAH.  Okay I give up.  For today.
