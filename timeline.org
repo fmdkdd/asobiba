@@ -7749,3 +7749,292 @@ And here I don't know whether that's due to an invalid test or an invalid setup
 with Nix.
 
 AAAAH.  Okay I give up.  For today.
+
+* [2017-02-20 lun.]
+** Nix for flycheck integration tests                          :nix:flycheck:
+Installing gcc-ada on Arch to see if that makes the test pass.  And it does.
+
+Trying a nix shell with only gnat installed, all tests fail because of missing
+-gnat2012.
+
+I think the culprit is an outdated gcc version in nix.  Here is what Arch
+reports:
+
+: $ gnat --version
+: GNAT 6.3.1 20170109
+: Copyright (C) 1996-2016, Free Software Foundation, Inc.
+
+And in nix-shell:
+
+: $ gnat --version
+: GNAT 4.5.4
+: Copyright 1996-2010, Free Software Foundation, Inc.
+
+Note the copyright years.  I suppose "gnat2012" refers to the year, so it's no
+surprise that it's absent from a gcc version dated from 2010.
+
+Found an [[https://github.com/NixOS/nixpkgs/commit/1a0a1619206f4a25d724bf04027980b45b15b16e#diff-036410e9211b4336186fc613f7200b12][incriminating commit]] from 2014, reverting to gcc 4.5 because more
+recent versions failed to build gnat.  And looking at the latest master it's
+still the same code.
+
+I'm a bit puzzled.  I thought NixOS would be at least as up to date as Debian,
+but Debian Jessy has gnat 4.9, and this one has the gnat2012 flag.
+
+So using Nix won't solve my problems if I still have to install some packages on
+my system.  Might as well have an Arch VM for testing latest releases, and a
+Debian VM for testing legacy versions (though there is already the Debian CI).
+
+Nixing nix.
+
+** Installing an Arch VM with Vagrant                          :vagrant:arch:
+Because I still want a reproducible environment.
+
+Installing vagrant.  Trying to install the vagrant-libvirt plugin since I
+already have libvirt installed.
+
+This fails, but [[https://wiki.archlinux.org/index.php/Vagrant][the wiki has a solution]].  Run the command in bash since
+fishshell will choke on the PATH substitution.
+
+Vagrant has a list of existing boxes, these seem to be pre-configured VMs.
+Since I don't want to install Arch on a VM myself, might as well use that.
+
+The wiki suggests [[https://wiki.archlinux.org/index.php/Vagrant][this Arch linux box]].  So:
+
+: mkdir vagrant
+: vagrant init terrywant/archlinux
+: vagrant up
+
+#+BEGIN_EXAMPLE
+The box you're attempting to add doesn't support the provider
+you requested. Please find an alternate box or use an alternate
+provider. Double-check your requested provider to verify you didn't
+simply misspell it.
+#+END_EXAMPLE
+
+Duh.  The box requests virtualbox.  So virtualbox it is.
+
+: pacman -S virtualbox
+: modprobe vboxdrv
+: vagrant up
+
+Downloading the image...
+
+: vagrant ssh
+
+Oh hey, I'm in!
+
+: $ gcc --version
+: gcc (GCC) 5.3.0
+
+Hmm, okay, what happens if I update this VM.  Does it stick?  [[https://www.vagrantup.com/docs/getting-started/teardown.html][Let's see]].
+
+So by default it will stick, but it depends on how I tear it down.
+
+- ~vagrant suspend~ will save a snapshot, so it should be faster to boot
+- ~vagrant halt~ will power off the VM
+- ~vagrant destroy~ will remove the VM completely from disk
+
+If destroy, the next ~vagrant up~ will bring up the VM and provision it.
+
+Provisioning is where I should put the pre-requisites to run the flycheck
+tests.  Ideally I want to:
+
+: vagrant up && vagrant ssh --command "make integ"
+
+For my local machine, I can suspend or halt.  But after boot the VM should
+update all its packages, and the flycheck dependencies to ensure we are always
+testing the latest version.
+
+Now to add all missing checkers and run the tests.
+
+Some checkers are Ruby gems or NPM packages... that means installing these
+package managers first and using them, and setting PATH correctly (grmbl grmbl).
+
+Coq is in AUR, not Arch.  Curious.  Also, it failed to compile because of low
+memory.  Let's up the RAM in the VM to 1024M... nope.  2048M?  Yep.
+
+Hmm, coq checks are still skipped with coqtop installed.  I see this line in the
+tests:
+
+: (skip-unless (load "coq" 'noerror 'nomessage))
+
+What is this supposed to do?  I suppose loading the binary and checking there
+are no errors.  But as far as I can see, ~load~ is for elisp files, not
+binaries.  And there is no ~coq~ elisp file anywhere in the tests.
+
+And that reminds that the VM I am setting up is testing the flycheck integration
+tests from the latest master on Github, not an arbitrary version.  Especially,
+it would be useful to be able to test a local version as well.  It seems vagrant
+syncs the directory with the Vagrant file by default.
+
+Oh and using ~pacman-key --refresh-keys~ as a first step is a bad idea.  I was
+having trouble running ~pacman -Syu~ because of outdated keys, but
+~--refresh-keys~ will download the latest keys directly from a keyserver, which
+might invalidate some keys prematurely.  It failed to validate the signature for
+dmd:
+
+#+BEGIN_EXAMPLE
+error: libphobos-devel: signature from "Dicebot <public@dicebot.lv>" is marginal trust
+:: File /var/cache/pacman/pkg/libphobos-devel-1:2.073.0-1-x86_64.pkg.tar.xz is corrupted (invalid or corrupted package (PGP signature)).
+Do you want to delete it? [Y/n]
+error: dmd: signature from "Dicebot <public@dicebot.lv>" is marginal trust
+:: File /var/cache/pacman/pkg/dmd-1:2.073.0-1-x86_64.pkg.tar.xz is corrupted (invalid or corrupted package (PGP signature)).
+#+END_EXAMPLE
+
+Best to install ~archlinux-keyring~ as a first step in Vagrant.
+
+To fix the issue on the VM, I [[https://wiki.archlinux.org/index.php/Pacman/Package_signing#Resetting_all_the_keys][cleaned the keyring]]:
+
+: sudo rm -rf /etc/pacman.d/gnupg
+
+Then:
+
+: sudo pacman-key --init
+: sudo pacman-key --populate
+: sudo pacman -S archlinux-keyring
+
+After that, dmd and libphobos installed without trouble.
+
+Hadolint is best installed using stack... yet another package manager.
+
+And stack appears to manage GHC installations itself.  Skipping for later.
+
+GJSlint is deprecated.  Might be a good idea to remove it, or switching to
+Closure compiler lints.
+
+JSCS has also merged with ESLint, so while we can get a version from npm, it
+won't be updated anymore.
+
+Amazing.  All JS tests fail.
+
+The lua checker has no tests.  I should perhaps go over each checkers and see if
+it has at least one test... though ideally that should be an automatic check.
+
+Perl and PHP both have their idiosyncratic package managers...  In fact, they
+have several, and I don't know which to pick.  Skipping for now.
+
+Hmm groovy installed jdk7, but processing is installing jdk8.  It seems groovy
+can work on top of java8, but probably the choice has been made automatically by
+pacman with ~--noconfirm~.  Might be best to install jdk8 upfront.
+
+Oh, interesting.  Puppet has version-specific tests: one for version 4, and one
+for below.
+
+rpmlint is weird.  It has no installation instructions, and the sourceforge
+website seems to be abandoned.  There is an updated github project page, but
+still no clue on how to install it other than clone the repository and symlink
+the ~rpmlint~ script.
+
+Rust from pacman is outdated.  Have to use rustup?  Using rustup as that is the
+"recommended" way of installing rust.
+
+SCSS and Sass appear to be the same thing, but we have checkers for both.
+
+systemd-analyze is skipped because I suspect we don't have systemd-mode.  It's
+absent from Cask, and I doubt it's default.
+
+verilator from AUR fails to build, but that seems to be an upstream bug, not a
+packaging issue.
+
+** Installing remaining checkers                                   :flycheck:
+That I've skipped because it was as "straighforward" as finding the package name
+and package manager and add it to the Vagrant file.
+
+*** Systemd
+Need to add to the Cask file:
+
+: (depends-on "systemd")
+
+Also, synced folders are great.  I moved my Vagrantfile and .vagrant folder to
+flycheck, and I can just:
+
+: cd /vagrant
+: make integ
+
+to test my local copy.
+
+*** Haskell                                                       :ghc:stack:
+Installing ghc passes 2 tests.  2 other need hlint.
+
+There are hlint in pacman: haskell-hlint and hlint.  Both same software, same
+version, same maintainer  Confusing.  Let's go with haskell-hlint since it's
+more informative and follows the python-* naming scheme.
+
+Stack needs GHC 8.0.2.  But pacman provides GHC 8.0.1.  Running
+
+: stack setup
+
+installs the version required by stack.
+
+On a related note, the VirtualBox image is 11G as of right now.  13G after stack
+has finished setting up...
+
+But, now, no tests are skipped (but one fail).
+
+*** Moving the VirtualBox folder to another partition            :virtualbox:
+Essentially, [[http://superuser.com/a/943588][this]].
+
+*** go complete-chain                                                    :go:
+This one is skipped.  But I don't have golint installed.
+
+That was it.  Adding golint passes the test.
+
+*** hadolint                                                       :hadolint:
+This one isn't packaged anywhere.  The recommended install is clone and use stack.
+
+There is a /fork/ of hadolint on Hackage.  Don't know why, don't really care to.
+
+Hadolint seem requires GHC 7.10 ... yet another GHC installation!
+
+Hmm, ~stack install~ copies stuff in ~/.local/bin.  Have to add that to PATH.
+
+After that, success.
+
+*** coq                                                                 :coq:
+Ah I see now that ~load~ actually searches in directories from ~load-path~.  So
+the checks:
+
+: (skip-unless (load "coq" 'noerror 'nomessage))
+
+only ensure that some coq package is correctly loaded.  Can't find coq on
+MELPA.  Can't find coq.el on the VM actually.  There are some coq-related files
+in /usr/share/emacs/site-lisp: coqdoc.el, gallina.el.
+
+According to [[https://coq.inria.fr/refman/Reference-Manual017.html#Emacs][the manual]], gallina.el contains coq-mode.  Duh, that's not the way
+you are supposed to name your elisp files.  But anyway.
+
+Also, it's not autoloaded.  Is anyone actually using this mode?  Or are they
+using proofgeneral directly?
+
+In any case, tweaking the Coq-specific lines in flycheck-test to look for the
+"gallina" file make the tests... fail.
+
+But they pass, and that was tomorrow's task.  Fixing the tests is for later.
+
+*** Headcount
+After these, make integ reports:
+
+: Ran 152 tests, 113 results as expected, 30 unexpected, 9 skipped
+
+The skipped tests are:
+
+#+BEGIN_EXAMPLE
+  SKIPPED  flycheck-define-checker/javascript-gjslint/complete-chain
+  SKIPPED  flycheck-define-checker/javascript-gjslint/default
+  SKIPPED  flycheck-define-checker/perl/default
+  SKIPPED  flycheck-define-checker/php/default
+  SKIPPED  flycheck-define-checker/puppet-parser/parser-error-puppet-3
+  SKIPPED  flycheck-define-checker/r-lintr/default
+  SKIPPED  flycheck-define-checker/rpm-rpmlint/default
+  SKIPPED  flycheck-define-checker/verilog-verilator/error
+  SKIPPED  flycheck-define-checker/verilog-verilator/warning
+#+END_EXAMPLE
+
+- gjslint is deprecated
+- verilator does not build
+- puppet-parser is expected (but we probably should report version checks
+  differently)
+
+That leaves perl, php, lint and rpmlint to figure out.
+
+Tomorrow.
