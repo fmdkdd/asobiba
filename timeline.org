@@ -8035,6 +8035,114 @@ The skipped tests are:
 - puppet-parser is expected (but we probably should report version checks
   differently)
 
-That leaves perl, php, lint and rpmlint to figure out.
+That leaves perl, php, lintr and rpmlint to figure out.
 
 Tomorrow.
+
+* [2017-02-21 mar.]
+** Remaining skipped tests                                         :flycheck:
+*** Perl                                                          :perl:cpan:
+I need perl critic.  I see that it's on CPAN.  Apparently I have a ~cpan~ script
+on the VM.  But it needs interactive configuration, that's bad for my
+Vagrantfile.  The recommended tool seems to be ~cpanm~, and this one is in
+pacman.
+
+: cpanm Perl::Critic
+
+Using sudo to install under /usr, as a $HOME install needs more setup.
+
+Except now I can't run perlcritic without sudo.
+
+: sudo chmod -R a+rX /usr/share/perl5 /usr/lib/perl5
+
+seems to fix it.  ~X~ is handy: it's +x only on directories, or files that
+already had at least one executable permission.
+
+*** Php                                                                 :php:
+Need : php, phpcs and phpmd.  Phpmd is already in pacman.  Phpcs is in PEAR.
+But I don't have PEAR installed.  It's in AUR.  Actually, there are several
+versions.
+
+Let's use php-pear.
+
+: sudo pear install PHP_CodeSniffer
+
+Oh, look, ~phpcs~ is on PATH!  But it can't find its libraries!  Have to edit
+/etc/php/php.ini to modify the include_path to include pear.  Why isn't that
+done by default when installing PEAR?
+
+Luckily, there is a /etc/php/conf.d/, so that saves me from using sed.
+
+After that, there is again a permission issue.  Fixed with:
+
+: sudo chmod -R a+rX /usr/share/pear/PHP
+
+After that, both tests fail.
+
+*** lintr                                                                 :r:
+Installing packages in batch requires creating a file: [[https://orfe.princeton.edu/help/r-packages][example]].
+
+That means heredoc in heredoc in my Vagrantfile:
+
+#+BEGIN_EXAMPLE
+    echo "Installing packages from CRAN..."
+    export R_LIBS_USER=~/R
+    cat <<-EOF > install-packages.R
+      dir.create(Sys.getenv("R_LIBS_USER"), showWarnings = FALSE, recursive = TRUE)
+      install.packages("lintr", Sys.getenv("R_LIBS_USER"), repos="http://cran.case.edu")
+EOF
+    R CMD BATCH install-packages.R
+#+END_EXAMPLE
+
+There's a gotcha with the dangling EOF.  Heredocs must not have whitespace in
+front of them ([[https://stackoverflow.com/a/2954835][see]]).
+
+That should do it.  The test fails, of course.
+
+*** rpmlint
+We meet again.  There is a rpmlint package on Pypi, but it's version 0.48.  The
+latest release on the github page is 1.9.
+
+Problem is, there is no one-line way of installing rpmlint.  There's an INSTALL
+file that just lists the dependencies.
+
+Cloning from master and symlinking ~rpmlint~, it fails loading the module
+~rpm~.  That's not in rpmlint, it's a dependency.  I assume it's this one
+from the INSTALL file:
+
+: rpm 4.4.2.2 or newer and its python bindings
+
+What is the name of the package?  Have to guess.
+
+Hmm, there is an rpmlint in AUR.  It's outdated (1.6), but I might get
+information from its dependencies and PKGBUILD.
+
+Okay I give up.  My internet is so slow it makes this search painful.  Tried to
+install rpm-org, but it does not provide me with rpm python bindings.  I see
+that there is a rpm-python package in Ubuntu, but not in Arch.
+
+Doesn't seem worth the trouble.
+
+*** Making sure it works from scratch
+So...
+
+: vagrant destroy
+: vagrant up
+
+Hopefully, everything checks out.  Heading to lunch, because this will take some time.
+
+It doesn't.  Making a small adjustment to PGP keys again.
+
+: pacman -Sy
+: pacman -S archlinux-keyring
+: pacman -Su
+
+First refresh packages, then install the latest keyring before any other
+package.  Then upgrade.
+
+After taking a while (1 hour?), it works without intervention.  And all tests
+run except gjslint, puppet3, verilator, and rpmlint.
+
+Oh, and lintr.  Somehow I forgot to set R_LIBS_USER permanently.
+
+Now, to fix the tests?
