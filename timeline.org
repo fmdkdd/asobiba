@@ -8146,3 +8146,50 @@ run except gjslint, puppet3, verilator, and rpmlint.
 Oh, and lintr.  Somehow I forgot to set R_LIBS_USER permanently.
 
 Now, to fix the tests?
+
+** Fixing flycheck integration tests                               :flycheck:
+Fixed asciidoc and c++.  Here is the remaining:
+
+#+BEGIN_EXAMPLE
+30 unexpected results:
+   FAILED  flycheck-define-checker/coq/error
+   FAILED  flycheck-define-checker/coq/syntax-error
+   FAILED  flycheck-define-checker/css-csslint/syntax-error
+   FAILED  flycheck-define-checker/go-build/directory-with-two-packages
+   FAILED  flycheck-define-checker/go-build/missing-package
+   FAILED  flycheck-define-checker/go-unconvert/default
+   FAILED  flycheck-define-checker/haskell-stack-ghc/literate
+   FAILED  flycheck-define-checker/javascript-eslint/complete-chain
+   FAILED  flycheck-define-checker/javascript-eslint/warning
+   FAILED  flycheck-define-checker/javascript-jscs/default
+   FAILED  flycheck-define-checker/javascript-jshint/complete-chain
+   FAILED  flycheck-define-checker/javascript-jshint/default
+   FAILED  flycheck-define-checker/javascript-jshint/syntax-error
+   FAILED  flycheck-define-checker/javascript-standard/error
+   FAILED  flycheck-define-checker/javascript-standard/semistandard
+   FAILED  flycheck-define-checker/markdown-mdl/default
+   FAILED  flycheck-define-checker/php/default
+   FAILED  flycheck-define-checker/php/syntax-error
+   FAILED  flycheck-define-checker/python-flake8/default
+   FAILED  flycheck-define-checker/python-flake8/syntax-error
+   FAILED  flycheck-define-checker/python-pylint/default
+   FAILED  flycheck-define-checker/python-pylint/no-symbolic-id
+   FAILED  flycheck-define-checker/python-pylint/syntax-error
+   FAILED  flycheck-define-checker/r-lintr/default
+   FAILED  flycheck-define-checker/rst-sphinx/default
+   FAILED  flycheck-define-checker/ruby-jruby/default
+   FAILED  flycheck-define-checker/ruby-rubocop/syntax-error
+   FAILED  flycheck-define-checker/ruby-rubocop/with-rubylint
+   FAILED  flycheck-define-checker/ruby-rubylint/syntax-error
+#+END_EXAMPLE
+
+Oups, forgot sqllint.
+
+Done!
+
+: Ran 152 tests, 144 results as expected, 2 unexpected, 6 skipped
+
+Still 2 failures, not sure how to fix them (might be an upstream bug, might be
+an obsolete test).
+
+That's 31 tests fixed.
