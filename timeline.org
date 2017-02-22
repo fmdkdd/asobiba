@@ -7394,7 +7394,8 @@ To at least gather interest, review, and toy with it.
 *** TODO Make PR for grouping Rust errors
 This is is more controversial.  Don't know how it will fit with flycheck.
 
-*** TODO Experiment with nix (guix) to run integration tests
+*** DONE Experiment with nix (guix) to run integration tests
+CLOSED: [2017-02-22 mer. 18:41]
 The idea is to install checkers in sandbox (so it's separate from my regular
 system), with multiple versions, to be able to run all the flycheck integration
 tests without too much hassle.
