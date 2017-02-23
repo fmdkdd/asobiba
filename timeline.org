@@ -7408,7 +7408,7 @@ checker.
 
 *** TODO Add checklists to flycheck maintaining guide
 For things that are not automated: run integration tests, squash commits, make
-sure a new feature is added to CHANGES and doc/
+sure a new feature is added to CHANGES and doc/ (esp. new checkers).
 
 And see: [[https://github.com/flycheck/flycheck/issues/928][#928]].
 
@@ -8194,3 +8194,26 @@ Still 2 failures, not sure how to fix them (might be an upstream bug, might be
 an obsolete test).
 
 That's 31 tests fixed.
+
+* [2017-02-23 jeu.]
+** Writing the developer's guide to flycheck                       :flycheck:
+First setting up building the doc on my machine.
+
+It's recommended to use ~virtualenv~.  Let's do that.
+
+: cd doc/
+: virtualenv venv
+: source venv/bin/activate.fish  # oh it recognized my shell!
+: make init
+: make html-auto
+
+Ok, I'm in.
+
+What do I want to put into it?
+
+- Give an idea of how flycheck works.  How it executes checkers, parse their
+  output, produce errors, refresh the error list, etc.  How a check is started
+  (automatically, manually); how errors are per-buffer.
+
+- Give recipes for writing a checker (using the rx parser, or a custom parser
+  for JSON output), or extending one (adding variables)
