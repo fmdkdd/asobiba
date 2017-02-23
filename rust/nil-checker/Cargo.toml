@@ -1,0 +1,6 @@
+[package]
+name = "nil-checker"
+version = "0.1.0"
+authors = ["fmdkdd <fmdkdd@gmail.com>"]
+
+[dependencies]
