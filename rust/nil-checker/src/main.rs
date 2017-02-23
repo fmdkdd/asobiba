@@ -3,11 +3,11 @@ use std::cmp;
 
 enum Node<'a> {
   Sexp(Vec<Node<'a>>),
-  Atom(AtomType<'a>),
+  Atom(Atom<'a>),
 }
 
 #[derive(Copy, Clone)]
-enum AtomType<'a> {
+enum Atom<'a> {
   Str(&'a str),
   Num(u32),
   Nil,
@@ -28,18 +28,18 @@ impl<'a> fmt::Display for Node<'a> {
   }
 }
 
-impl<'a> fmt::Display for AtomType<'a> {
+impl<'a> fmt::Display for Atom<'a> {
   fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      &AtomType::Str(ref str) => write!(formatter, "{}", str),
-      &AtomType::Num(ref n) => write!(formatter, "{}", n),
-      &AtomType::Nil => write!(formatter, "nil"),
+      &Atom::Str(ref str) => write!(formatter, "{}", str),
+      &Atom::Num(ref n) => write!(formatter, "{}", n),
+      &Atom::Nil => write!(formatter, "nil"),
     }
   }
 }
 
 fn parse(prog: &str) -> Node {
-  Node::Atom(AtomType::Num(42))
+  Node::Atom(Atom::Num(42))
 }
 
 #[derive(Debug)]
@@ -68,6 +68,7 @@ enum ConcreteType {
   Nil,
 }
 
+// _ <: MaybeNil
 fn subtype(a: &Type, b: &Type) -> bool {
   if let Type::Atom(ConcreteType::MaybeNil) = *b {
     true
@@ -76,19 +77,35 @@ fn subtype(a: &Type, b: &Type) -> bool {
   }
 }
 
-fn node_type<'a>(node: &Node) -> Result<Type, TypeError> {
+fn atom_type(atom: &Atom) -> Type {
+  match *atom {
+    Atom::Str("list") =>
+      Type::Fun(Box::new(Type::Atom(ConcreteType::MaybeNil)),
+                ConcreteType::NonNil),
+
+    Atom::Str("car") =>
+      Type::Fun(Box::new(Type::Atom(ConcreteType::NonNil)),
+                ConcreteType::MaybeNil),
+
+    Atom::Nil => Type::Atom(ConcreteType::Nil),
+
+    _ => Type::Atom(ConcreteType::NonNil),
+  }
+}
+
+fn check(node: &Node) -> Result<Type, TypeError> {
   match *node {
     Node::Sexp(ref nodes) => {
       let f = &nodes[0];
       let args = &nodes[1];
-      let tf = node_type(&f);
+      let tf = check(&f)?;
       // if arity(tf) != args.length() {
       //   Err(TypeError::ArityMismatch(format!("{} != {}", arity(tf), args.length))
       // }
 
-      match tf? {
+      match tf {
         Type::Fun(targ, tret) => {
-          let ta = node_type(&args)?;
+          let ta = check(&args)?;
           if *targ == ta || subtype(&ta, &targ) {
             Ok(Type::Atom(tret))
           } else {
@@ -102,35 +119,40 @@ fn node_type<'a>(node: &Node) -> Result<Type, TypeError> {
       }
     },
 
-    Node::Atom(AtomType::Str("list")) =>
-      Ok(Type::Fun(Box::new(Type::Atom(ConcreteType::MaybeNil)),
-                ConcreteType::NonNil)),
-
-    Node::Atom(AtomType::Str("car")) =>
-      Ok(Type::Fun(Box::new(Type::Atom(ConcreteType::NonNil)),
-                ConcreteType::MaybeNil)),
-
-    Node::Atom(AtomType::Nil) => Ok(Type::Atom(ConcreteType::Nil)),
-      _ => Ok(Type::Atom(ConcreteType::NonNil)),
+    Node::Atom(ref a) => Ok(atom_type(a))
   }
 }
 
 fn main() {
-  let p1 = Node::Sexp(vec![Node::Atom(AtomType::Str("car".into())),
-                           Node::Sexp(vec![Node::Atom(AtomType::Str("list".into())),
-                                           Node::Atom(AtomType::Num(1))])]);
-  println!("{}", p1);
-  println!("{:?}", node_type(&p1));
+  {
+    let p = Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
+                            Node::Sexp(vec![Node::Atom(Atom::Str("list".into())),
+                                            Node::Atom(Atom::Num(1))])]);
+    println!("{}", p);
+    println!("{:?}", check(&p));
+  }
 
-  let p2 = Node::Sexp(vec![Node::Atom(AtomType::Str("car".into())),
-                           Node::Atom(AtomType::Num(1))]);
+  {
+    let p = Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
+                            Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
+                                            Node::Atom(Atom::Num(1))])]);
+    println!("{}", p);
+    println!("{:?}", check(&p));
+  }
 
-  println!("{}", p2);
-  println!("{:?}", node_type(&p2));
+  {
+    let p = Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
+                            Node::Atom(Atom::Num(1))]);
 
-  let p3 = Node::Sexp(vec![Node::Atom(AtomType::Str("car".into())),
-                           Node::Atom(AtomType::Nil)]);
+    println!("{}", p);
+    println!("{:?}", check(&p));
+  }
 
-  println!("{}", p3);
-  println!("{:?}", node_type(&p3));
+  {
+    let p = Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
+                            Node::Atom(Atom::Nil)]);
+
+    println!("{}", p);
+    println!("{:?}", check(&p));
+  }
 }
