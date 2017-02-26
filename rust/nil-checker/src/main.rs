@@ -1,5 +1,6 @@
 use std::fmt;
 use std::cmp;
+use std::collections::BTreeMap;
 
 enum Node<'a> {
   Sexp(Vec<Node<'a>>),
@@ -48,9 +49,10 @@ enum TypeError {
   ArityMismatch(String),
   NotAFunction(String),
   ArgMismatch(String),
+  UndefinedName(String),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 enum Type {
   Fun(Box<Type>, ConcreteType),
   Atom(ConcreteType),
@@ -77,35 +79,21 @@ fn subtype(a: &Type, b: &Type) -> bool {
   }
 }
 
-fn atom_type(atom: &Atom) -> Type {
-  match *atom {
-    Atom::Str("list") =>
-      Type::Fun(Box::new(Type::Atom(ConcreteType::MaybeNil)),
-                ConcreteType::NonNil),
+type Environment<'a> = BTreeMap<&'a str, Type>;
 
-    Atom::Str("car") =>
-      Type::Fun(Box::new(Type::Atom(ConcreteType::NonNil)),
-                ConcreteType::MaybeNil),
-
-    Atom::Nil => Type::Atom(ConcreteType::Nil),
-
-    _ => Type::Atom(ConcreteType::NonNil),
-  }
-}
-
-fn check(node: &Node) -> Result<Type, TypeError> {
+fn type_of<'a>(node: &'a Node<'a>, ctxt: &'a Environment<'a>) -> Result<Type, TypeError> {
   match *node {
     Node::Sexp(ref nodes) => {
       let f = &nodes[0];
       let args = &nodes[1];
-      let tf = check(&f)?;
+      let tf = type_of(&f, &ctxt)?;
       // if arity(tf) != args.length() {
       //   Err(TypeError::ArityMismatch(format!("{} != {}", arity(tf), args.length))
       // }
 
       match tf {
         Type::Fun(targ, tret) => {
-          let ta = check(&args)?;
+          let ta = type_of(&args, &ctxt)?;
           if *targ == ta || subtype(&ta, &targ) {
             Ok(Type::Atom(tret))
           } else {
@@ -119,17 +107,32 @@ fn check(node: &Node) -> Result<Type, TypeError> {
       }
     },
 
-    Node::Atom(ref a) => Ok(atom_type(a))
+    Node::Atom(Atom::Str(ref a)) => {
+      if ctxt.contains_key(a) {
+        Ok(ctxt[a].clone())
+      } else {
+        Err(TypeError::UndefinedName(format!("undefined name, {}", *a)))
+      }
+    },
+
+    Node::Atom(Atom::Num(_)) => Ok(Type::Atom(ConcreteType::NonNil)),
+    Node::Atom(Atom::Nil) => Ok(Type::Atom(ConcreteType::Nil)),
   }
 }
 
 fn main() {
+  let mut env = BTreeMap::new();
+  env.insert("list", Type::Fun(Box::new(Type::Atom(ConcreteType::MaybeNil)),
+                               ConcreteType::NonNil));
+  env.insert("car", Type::Fun(Box::new(Type::Atom(ConcreteType::NonNil)),
+                              ConcreteType::MaybeNil));
+
   {
     let p = Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
                             Node::Sexp(vec![Node::Atom(Atom::Str("list".into())),
                                             Node::Atom(Atom::Num(1))])]);
     println!("{}", p);
-    println!("{:?}", check(&p));
+    println!("{:?}", type_of(&p, &env));
   }
 
   {
@@ -137,7 +140,7 @@ fn main() {
                             Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
                                             Node::Atom(Atom::Num(1))])]);
     println!("{}", p);
-    println!("{:?}", check(&p));
+    println!("{:?}", type_of(&p, &env));
   }
 
   {
@@ -145,7 +148,7 @@ fn main() {
                             Node::Atom(Atom::Num(1))]);
 
     println!("{}", p);
-    println!("{:?}", check(&p));
+    println!("{:?}", type_of(&p, &env));
   }
 
   {
@@ -153,6 +156,6 @@ fn main() {
                             Node::Atom(Atom::Nil)]);
 
     println!("{}", p);
-    println!("{:?}", check(&p));
+    println!("{:?}", type_of(&p, &env));
   }
 }
