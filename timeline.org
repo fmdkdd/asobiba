@@ -7391,8 +7391,11 @@ Free time will probably dwindle starting in March.  That's two weeks.
 CLOSED: [2017-02-15 mer. 14:28]
 To at least gather interest, review, and toy with it.
 
-*** TODO Make PR for grouping Rust errors
+*** DONE Make PR for grouping Rust errors
+CLOSED: [2017-02-27 lun. 18:46]
 This is is more controversial.  Don't know how it will fit with flycheck.
+
+Maybe later.
 
 *** DONE Experiment with nix (guix) to run integration tests
 CLOSED: [2017-02-22 mer. 18:41]
@@ -7402,7 +7405,8 @@ tests without too much hassle.
 
 Eventually, put that inside a VM for reproductibility.
 
-*** TODO Document flycheck internals
+*** DONE Document flycheck internals
+CLOSED: [2017-02-27 lun. 18:46]
 The intent is to have a point of entry on flycheck.org for adding or modifying a
 checker.
 
