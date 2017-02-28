@@ -7410,7 +7410,8 @@ CLOSED: [2017-02-27 lun. 18:46]
 The intent is to have a point of entry on flycheck.org for adding or modifying a
 checker.
 
-*** TODO Add checklists to flycheck maintaining guide
+*** DONE Add checklists to flycheck maintaining guide
+CLOSED: [2017-02-28 mar. 20:06]
 For things that are not automated: run integration tests, squash commits, make
 sure a new feature is added to CHANGES and doc/ (esp. new checkers).
 
