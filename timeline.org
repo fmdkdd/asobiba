@@ -8222,3 +8222,53 @@ What do I want to put into it?
 
 - Give recipes for writing a checker (using the rx parser, or a custom parser
   for JSON output), or extending one (adding variables)
+
+* [2017-02-28 mar.]
+** Nil-checker                                                  :elisp:types:
+Made a quick and dirty prototype for a basic nil-check for Elisp.  Emacs Lisp,
+like JavaScript, is rather lenient, but some calls still create errors.  Why not
+check them statically?
+
+The byte compiler already does some static checks: unused variables mainly.
+
+The nil-checker only has 3 concrete types: Nil, Non-Nil, and Maybe-Nil (top).
+Then there are arrow types for functions.
+
+With a base type context of:
+
+: car : NonNil -> MaybeNil
+: list : MaybeNil -> NonNil
+
+I got this to typecheck:
+
+: (car (list 1)) : MaybeNil
+
+but not that:
+
+: (car nil) : TypeError
+
+This also fails:
+
+: (car (car 1)) : TypeError
+
+but you also have weird ones:
+
+: (car 1) : MaybeNil
+
+So, as a proof of concept it works, but it's not terribly useful for Elisp right
+now since the type system allows things that crash ~(car 1)~, and forbids things
+that are fine ~(car nil)~ (though that one is arguable).
+
+I think my idea was that having types like List, Symbol, Number, was not enough,
+since most of the bug I deal with are instances of not checking for nil values.
+If a List can be nil, that eliminates one category of errors, but not all of
+them.
+
+I've looked around for existing examples.  [[https://stackoverflow.com/questions/3323549/is-a-statically-typed-full-lisp-variant-possible][This SO answer]] suggests [[http://docs.racket-lang.org/ts-guide/types.html][TypedRacket]].
+That might be the most directly applicable type system indeed.  In particular,
+[[http://docs.racket-lang.org/ts-guide/occurrence-typing.html][occurrence typing]] is clearly needed to make the type system palatable.  [[http://www.ccs.neu.edu/racket/pubs/icfp10-thf.pdf][This
+paper]] seems like a good start.
+
+I was thinking that Flow could also be interesting to look at.  [[https://github.com/facebook/flow/issues/867][They don't seem]]
+to have any documentation on the inner workings of the type systems though.
+The main idea is apparently taken from François Pottier's thesis.
