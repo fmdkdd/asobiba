@@ -7146,7 +7146,8 @@ Then, onto RLS support for the bleeding edge.
 
 *** DONE Merge flycheck-rust detection of targets for the full conventional layout
 CLOSED: [2017-02-15 mer. 14:28]
-*** TODO Add RLS checker (or flycheck support in lsp-mode)
+*** DONE Add RLS checker (or flycheck support in lsp-mode)
+CLOSED: [2017-03-01 mer. 17:26]
 
 ** Exploring Flycheck                                              :flycheck:
 Last time I looked at how a run of Flycheck went when no checker was found.  Now
@@ -8272,3 +8273,43 @@ paper]] seems like a good start.
 I was thinking that Flow could also be interesting to look at.  [[https://github.com/facebook/flow/issues/867][They don't seem]]
 to have any documentation on the inner workings of the type systems though.
 The main idea is apparently taken from François Pottier's thesis.
+
+* [2017-03-01 mer.]
+** Making that lsp-mode + Flycheck PR                          :rls:flycheck:
+Just moving everything to lsp-mode, since the RLS is alpha and there's no point
+putting the checker in Flycheck at this time.
+
+Also, simplified the process: instead of waiting for Flycheck to start the
+syntax check automatically on its own and look into the collected errors
+~lsp--diagnostics~, we call ~flycheck-buffer~ after diagnostics are collected,
+and the generic checker signals immediately the list of flycheck errors to the
+callback.
+
+Having issues to try it out... hash-table-p is nil in process-filter of
+lsp-mode.  Something fishy.
+
+Updated lsp-mode and rustls.  Instructions for running rustls have changed.
+
+Adding:
+
+: (setenv "LD_LIBRARY_PATH" "~/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib")
+: rustup component add rust-analysis
+
+Is that better?
+
+: error in process filter: vector: Wrong type argument: hash-table-p, nil
+: error in process filter: Wrong type argument: hash-table-p, nil
+
+Nope.  What was I saying about type systems yesterday?  :(
+
+Let's Edebug this.  This fails in creating the lsp-diagnostic.  Apparently,
+rustls moved the "start" field to "range".
+
+Hmm, now that I think of it, I've tested it with the RLS, but it should work the
+same with any server following the protocol.  The diagnostic format should be
+part of the protocol, so...  I could remove references to rust.
+
+Or maybe not, since ~:modes~ is a required property of Flycheck checkers, right?
+And it should be a major mode, so it can't be used with lsp-mode.
+
+Well, improvements; later.
