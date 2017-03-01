@@ -7237,10 +7237,14 @@ take care of it.
 ** Preparing the flycheck-rust PR                                  :flycheck:
 In parallel, to merge the changes as soon as the first is reviewed.
 
-*** TODO Fix the order of errors in the minibuffer
+*** DONE Fix the order of errors in the minibuffer
+CLOSED: [2017-03-01 mer. 17:52]
 This is annoying: the order of errors from rustc is meaningful, but they are
 given in the wrong order in the minibuffer for some reason.  The error list
 lists them in the proper order, but the minibuffer order is reversed.
+
+[2017-03-01 mer.] matters less with flycheck-inline, but finding out why it's
+happening would still be valuable.
 
 * [2017-02-10 ven.]
 ** Drawing on top of an Emacs buffer                         :flycheck:emacs:
