@@ -8317,3 +8317,55 @@ Or maybe not, since ~:modes~ is a required property of Flycheck checkers, right?
 And it should be a major mode, so it can't be used with lsp-mode.
 
 Well, improvements; later.
+
+* [2017-03-10 ven.]
+** Picking up GameBoy sound emulation                                   :gbs:
+Watched [[https://www.youtube.com/watch?v=HyzD8pNlpwI][The Ultimate GameBoy talk]], and was reminded that GBS progress is
+stalling.
+
+Even if my CPU is not accurate yet, I would like to write the APU.  For
+emulating GBS, I need the CPU to work reasonably well, since it drives the APU.
+But I can write the whole APU and test it separately without writing the CPU;
+treat it like writing to an API.
+
+The main thing I haven't solved is timing.  How long should a note be?  For
+emulating the LCD, I guess you can wait for VBLANK to update the screen, even
+though that's not necessarily correct, it gets you 60fps which is at least
+unnoticeable.
+
+For Boyo, I think the sound was also updated 60 times per second, though I
+remember basing the emulation around a 256Hz timer.
+
+So what's the right way to approach it?  If, say, I set the pulse channel length
+counter to 1sec, and frequency to 220Hz, and start the emulation.  I know the
+program should play a 220Hz pulse wave for 1 second and then stop.  I know what
+the samples of that sound look like.  But how are the samples actually
+generated, procedurally?
+
+For instance, if emulating at 50Hz, that means one frame = 20ms.
+
+The pulse wave period is: 1 / 220Hz = 4.5454ms, so in one frame I have 20 /
+4.545 = 4.4 pulse periods (the ratio 220/50).
+
+So, now I have to fill my 20ms buffer with 4.4 periods of pulse wave samples.
+How many samples?  At 48KHz, I need 48,000 / 50 = 960 samples per frame.
+
+A 50/50 pulse wave period is ____----, so I know I have to alternate between low
+and high signals 8.8 times per frame, or every 800 / 8.8 = 109.09.. sample.
+
+One way to fill the 800 samples is then to write -1 109 times, +1 109 times, 4
+times and a half.  If you don't account for the decimal, that ends up to a
+period of 218 samples, or 48,000 / 218 = 220.18Hz; close but not just.
+
+I can also use the remainder:
+
+960 - 109.09.. = 850.9090..   -> -1
+850.90.. - 109.09.. = 760     -> +1
+...
+
+That way, I end up exactly filling my 960 samples at 220Hz, with a
+leftover for the next frame.
+
+Though iterating over 960 samples seems a bit inefficient in the long run.
+
+Researching...
