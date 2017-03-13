@@ -8369,3 +8369,88 @@ leftover for the next frame.
 Though iterating over 960 samples seems a bit inefficient in the long run.
 
 Researching...
+
+* [2017-03-13 lun.]
+** Square wave synthesis                                                :gbs:
+Reading Musimathics vol. 2, I see that the canonical way of synthesizing audio
+waves is to use Fourier summations.
+
+A square wave for example, is the infinite sum of odd harmonics:
+
+: \sum sin((2k+1)2\pi{}t) / (2k+1)
+
+where k varies from 0 to +\infin.
+
+Of course we don't have to compute infinite sums; higher values for k will
+contribute less and less to the total, so we can ignore them once we stop
+hearing a difference.
+
+Using this series should generate what is called a /band-limited/ square wave.
+The geometrical square wave that is all +1 and -1 is /non-band-limited/ and
+contains infinitely high frequencies that could cause aliasing.
+
+Let's try to generate the band-limited version and the non-band-limited in order
+to compare them.  First I will try to hear the difference, then I will run them
+through a Fourier transform to see if there are any aliased frequencies in the
+spectrum.
+
+Then I will do the same with a SunVox square wave, and maybe one from a DMG.
+
+Well, there is an audible difference between geometric and Fourier sum.  The
+geometric seems clearer at first, although a bit grainy; but by summing the
+first 20 terms of the Fourier series, the output has is quite similar and
+without any grain.
+
+Though, pushing to 50 or even 100 terms, the grain starts to appear again.
+
+Looking at the spectra now.  The geometric square has the advantage of working
+at any frequency: it has infinite harmonics.  For the Fourier square, you have
+to keep computing terms until they hit the Nyquist barrier, otherwise the wave
+sounds muffled.
+
+Tweaking the generator to push up to the Nyquist barrier...  Now I don't have to
+compare several versions of Fourier sums, especially as adding more terms than
+necessary introduces artifacts.
+
+The geometric square is still grainier; maybe that's what aliasing sounds like:
+tiny dots of high frequencies.  The Fourier square sounds smoother, without this
+grain.
+
+The SunVox plain generator square also has this grain.  You can clearly see from
+the waveform and spectrum that the plain generator is geometric, whereas the
+analog generator in SunVox is closer to a Fourier sum, but probably using a
+different algorithm that the naive one I'm using.
+
+The DMG square is closest to the Fourier square, except the overall waveform is
+slightly bent, as if it was generated from a sawtooth:
+
+[[file:data/dmg-waveform.png]]
+
+Compare to the more orthogonal Fourier:
+
+[[file:data/fourier-waveform.png]]
+
+In both cases, we can see overshoots at the transitions (Gibbs' horns), but the
+DMG pulse is clearly /more/ distorted.
+
+The spectra are also different.  Here is the spectrum of the geometric square:
+
+[[file:data/geometric-spectrum.png]]
+
+All odd harmonics, with decreasing amplitude.  Clear cut.
+
+Compare to the spectrum of the Fourier square (the Y-axis scale is sadly not the same):
+
+[[file:data/fourier-spectrum.png]]
+
+Still odd harmonics, but with some overlap in the lower frequencies.
+
+And now, the DMG spectrum (yet another Y-axis scale):
+
+[[file:data/dmg-spectrum.png]]
+
+Overlaps everywhere, and much more prevalent at low frequencies.
+
+According to [[https://en.wikipedia.org/wiki/Pulse_wave][wikipedia]], we can create a square wave by subtracting a sawtooth
+wave from a phase-shifted version of itself.  Maybe that's how it is done on the
+DMG.  Let's try it.
