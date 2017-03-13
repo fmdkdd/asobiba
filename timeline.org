@@ -8454,3 +8454,40 @@ Overlaps everywhere, and much more prevalent at low frequencies.
 According to [[https://en.wikipedia.org/wiki/Pulse_wave][wikipedia]], we can create a square wave by subtracting a sawtooth
 wave from a phase-shifted version of itself.  Maybe that's how it is done on the
 DMG.  Let's try it.
+
+Well, no, it doesn't change a thing.  In fact, it's totally equivalent, since we
+are subtracting values we add.
+
+Maybe what the waveform needs is a slight modulation of amplitude based on a
+sawtooth wave with the same frequency.
+
+Managed to have a very similar waveform with:
+
+#+BEGIN_SRC rust
+  let square = fourier_square(rate, length);
+  let saw = fourier_sawtooth(rate, length, 0.0);
+
+  let ratio = 0.125;
+
+  square.iter().zip(saw.iter())
+    .map(|(a, b)| {
+      if *b > 0.0 { (a - (b * ratio)) / (1.0 + ratio) }
+      else        { (a + (b * ratio)) / (1.0 + ratio) }
+    }).collect()
+#+END_SRC
+
+[[file:data/square-sawtooth-waveform.png]]
+
+The spectrum is still relatively clean:
+
+[[file:data/square-sawtooth-spectrum.png]]
+
+Much less overlap than the DMG pulse.
+
+But, apart from the waveform, the timbres all sound pretty similar to me.  The
+plain Fourier square is just a bit louder, but I can't hear any other
+difference.
+
+So I guess band-limited synthesis is best for GBS.  Not sure if I should look
+into faster algorithms, since I can generate 6 1-sec samples in 140ms right
+now.  That's enough for running it in real time.
