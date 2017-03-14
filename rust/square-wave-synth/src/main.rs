@@ -101,6 +101,21 @@ fn square_sawtooth_amp(rate: f32, length: f32) -> Vec<f32> {
     }).collect()
 }
 
+// Geometric sawtooth wave alternates between min and max amplitudes
+fn geometric_sawtooth(rate: f32, length: f32) -> Vec<f32> {
+  // How many samples do we need?
+  let samples = length * (SAMPLE_RATE as f32);
+
+  // How many periods per sample?
+  let ratio = rate / (SAMPLE_RATE as f32);
+
+  (0..(samples as u32)).map(|s| {
+    // t in [0,1] is a time index into a wave period
+    let t = ratio * (s as f32) % 1.0;
+    t * 2.0 - 1.0
+  }).collect()
+}
+
 fn main() {
   // Prepare the WAV writer
   let spec = hound::WavSpec {
@@ -135,6 +150,18 @@ fn main() {
   // Square wave with amplitude modulated by a sawtooth
   writer = hound::WavWriter::create("fourier-square-sawtooth-amp.wav", spec).unwrap();
   for s in square_sawtooth_amp(rate, length) {
+    writer.write_sample((s * amp * max) as i16).unwrap();
+  }
+
+  // Geometric sawtooth
+  writer = hound::WavWriter::create("geometric-sawtooth.wav", spec).unwrap();
+  for s in geometric_sawtooth(rate, length) {
+    writer.write_sample((s * amp * max) as i16).unwrap();
+  }
+
+  // Fourier sawtooth
+  writer = hound::WavWriter::create("fourier-sawtooth.wav", spec).unwrap();
+  for s in fourier_sawtooth(rate, length, 0.0) {
     writer.write_sample((s * amp * max) as i16).unwrap();
   }
 }
