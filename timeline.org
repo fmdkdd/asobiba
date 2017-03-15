@@ -8526,3 +8526,8 @@ Here is an example of changing the frequency from 440Hz to 880Hz:
 [[file:data/freq-switch.png]]
 
 No hiccups.
+
+The time parameter can't be increased infinitely.  We are operating on finite
+machines here.  Luckily, notes played by the DMG are not infinite either; they
+are regulated by the length counter.  We can use the length counter as time
+value.
