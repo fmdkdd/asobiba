@@ -8491,3 +8491,22 @@ difference.
 So I guess band-limited synthesis is best for GBS.  Not sure if I should look
 into faster algorithms, since I can generate 6 1-sec samples in 140ms right
 now.  That's enough for running it in real time.
+
+* [2017-03-15 mer.]
+** Square wave synthesis in GBS                                         :gbs:
+Now that I know I should use a Fourier sum to generate the square wave, let's
+apply that to the sound channel of GBS.
+
+First try: generate samples for 20ms at a time and concatenate them.  Result:
+
+[[file:data/synth-fail.png]]
+
+It sounds as awful as it looks.  The problem here is that each 20ms block of
+samples totally ignores what samples were there previously.  We are trying to
+emulate a continuous signal, but there's no continuity.
+
+Second attempt: can I create an iterator over an infinite stream of samples, and
+modify the value it refers to on the fly?
+
+I guess not, because that's unsafe for data races.
+
