@@ -8510,3 +8510,19 @@ modify the value it refers to on the fly?
 
 I guess not, because that's unsafe for data races.
 
+Third attempt: since we are generating a wave alongside time, we need to keep a
+continuous time counter.  That's what the length counter is for, presumably.
+
+What's the finest granularity to emulate?  Per-sample.  So instead of generating
+a wave for 20ms at a time, we generate one sample.  The generating function
+receives the running time as input.
+
+With that, we can compute a sample, change the frequency, compute another
+sample, etc.  So we can presumably do frequency sweeps at a very fine
+resolution.
+
+Here is an example of changing the frequency from 440Hz to 880Hz:
+
+[[file:data/freq-switch.png]]
+
+No hiccups.
