@@ -8531,3 +8531,44 @@ The time parameter can't be increased infinitely.  We are operating on finite
 machines here.  Luckily, notes played by the DMG are not infinite either; they
 are regulated by the length counter.  We can use the length counter as time
 value.
+
+Okay, so the concept seems working.  I can adjust frequency and length, emulate
+as many samples as I want.  Now, to follow the specs of the DMG PAPU.
+
+** PAPU specs have wonky parameters                                     :gbs:
+Take the length register for example.  According to the docs, it's a 5bit value
+that's clocked at 256Hz.  So the length in seconds is:
+
+: length in seconds = (64 - [length]) * (1/256)
+
+where [length] is the register value.  Since [length] is in [0,63], the length
+is between 0.004 and 0.25 seconds.  If you want a 1sec note, you have to reload
+the length counter while it's playing.
+
+That's a bit too low-level.
+
+So, I will just write a square synth with a friendly interface (length and
+frequency in seconds, as real numbers), and write the plumbing for the DMG
+interface separately.  That way, I can test the synth without going through the
+contrived formulas.
+
+** Timing troubles, again
+I guess I haven't though things totally through.  Envelope control is fine, it's
+just a linear decrease of volume (more a staircase in the case of the DMG, since
+it only has 16 steps of volume).
+
+Been trying to implement a frequency sweep, but I have these clicks:
+
+[[file:data/sweep-fail.png]]
+
+I think the problem is that, since my signals are on the same global time, I'm
+switching from a pure 440Hz to a pure 441Hz in the middle of a period.
+
+Maybe, if I hold the switch to the end of the current period...  Otherwise, we
+should shorten the current period according to the new frequency.  But in order
+to do that, I think the computation should be done differently than I'm doing
+right now.
+
+Hmm waiting for the end of the period doesn't work either, since I'm not
+guaranteed that samples fall exactly on a period's end.  That calls for a
+different approach.
