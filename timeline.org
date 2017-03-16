@@ -8572,3 +8572,34 @@ right now.
 Hmm waiting for the end of the period doesn't work either, since I'm not
 guaranteed that samples fall exactly on a period's end.  That calls for a
 different approach.
+
+* [2017-03-16 jeu.]
+** Reading on how PAPU emulation should work                            :gbs:
+These threads shed some light:
+
+https://www.reddit.com/r/EmuDev/comments/5gkwi5/gb_apu_sound_emulation/
+http://forums.nesdev.com/viewtopic.php?f=3&t=13749
+http://forums.nesdev.com/viewtopic.php?f=3&t=13767
+
+Specifically, the participants suggest to emulate the APU at the frequency of
+the CPU or higher.  Some say one CPU cycle should correspond to one APU cycle,
+some say they emulate the APU at 100Hz in a separate thread.
+
+The important point is to decorrelate the APU emulate rate from the final
+sampling rate of the generated audio.  So, the APU can generate samples at the
+frequency of the CPU, but the final audio can stay at 44100Hz.  Obviously, you
+then have too many samples, and have to discard them.  There are various ways to
+do that, but the threads suggest just to drop them regularly.
+
+In GBS, if I'm solely concerned with generating a WAV from a GBS file, I can run
+the emulator as fast as I can, pump out samples, and not worry about any kind of
+synchronization, buffer overflows or underruns.
+
+One thing that surprised me reading these threads, is that while I think I
+understand that the role of the APU is to generate samples in the form [0,
+max_volume], they never touch on how these APU samples are turned into proper
+PCM samples.  Surely, you don't want these APU samples fed directly to your
+output, otherwise you will get nasty aliasing.
+
+In other words, no one talked about emulating the DAC of the DMG.  Gotta
+research more on that front.
