@@ -8603,3 +8603,19 @@ output, otherwise you will get nasty aliasing.
 
 In other words, no one talked about emulating the DAC of the DMG.  Gotta
 research more on that front.
+
+* [2017-03-17 ven.]
+** Cargo check has landed in Rust stable                     :cargo:flycheck:
+Can Flycheck benefit from it?  Should we switch?  Does it check all targets?
+
+It seems we can still pass a specific target, so it should behave like ~cargo
+rustc~.
+
+Argh, but it doesn't check code inside #[cfg(test)].  So that's no use.  [[https://github.com/rust-lang/cargo/issues/3431][There's
+a PR]], but that will have to wait.
+
+Also, we will lose the ability to pass custom arguments to rustc.  And, from
+running the integration tests, we also lose the linking information given in the
+notes-test (though that one is presumably minor).
+
+So, no cargo check for the time being.
