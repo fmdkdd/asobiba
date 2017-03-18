@@ -8619,3 +8619,156 @@ running the integration tests, we also lose the linking information given in the
 notes-test (though that one is presumably minor).
 
 So, no cargo check for the time being.
+
+* [2017-03-18 sam.]
+** Comparing GME behavior for GBS emulation                             :gbs:
+Really can't get something decent working from the docs alone (should I've
+guessed... been down this road before).  So that leaves me two options: lifting
+code from working emulators, or getting a trace from emulators and using that as
+spec.
+
+I've tried the first option for Boyo.  It's not as fun, since you end up mostly
+copying the code.
+
+I'll try the second option now.
+
+Higan doesn't eat GBS files directly.  Might be easier to modify libgme.
+
+Apparently, it's no longer maintained by Blargg.  [[https://bitbucket.org/mpyne/game-music-emu][Here's]] the current repo.
+Cloning...  Working.  Now, to INSTRUMENT.
+
+Hmm, there was a promising line:
+
+: gb_cpu_log( "new", pc - 1, op, data, instr [1] );
+
+But seems the code for the function is not there anymore.  Maybe in Git history?
+Shoot.  The history only goes back to 0.5.2.
+
+Well, I only need to print the registers anyway.
+
+First discovery: GME simulates a CALL to run the INIT subroutine.  That way, you
+just have to monitor the stack pointer to know when the subroutine is done.
+
+GME uses 0xF00D as the address to return to after INIT.  Strangely though, the
+RAM has the 0xFF opcode at this location in GME, and I don't.
+
+Since 0xFF is RST 38H, I'm jumping to 0x0038.  But the GBS documentation
+mentions that you should offset the base of the RST vectors to the load
+address.  So instead of jumping to 0x0038, you jump to load_addr + 0x38.
+
+Ah, but actually, GME will stop emulating on a 0xFF that's exactly at 0xF00D.
+That's how it gets out.
+
+Duh, next discrepancy is on 0xFE: CP imm.  We have:
+
+: 655a fe 01 AF:0000 BC:0000 DE:0000 HL:64ef SP:cff5
+: < 655c 28 46 AF:0070 BC:0000 DE:0000 HL:64ef SP:cff5
+: > 655c 28 46 AF:0000 BC:0000 DE:0000 HL:64ef SP:cff5
+
+I set the NHC flags and GME doesn't.  Except GME seems wrong here, since CP will
+always set the N flag.  Wait.  Am I printing the flags correctly?  Haha, no.
+
+Next:
+
+: 69ae 3d cb AF:0300 BC:0300 DE:dffa HL:6530 SP:cff1
+: < 69af cb 27 AF:0240 BC:0300 DE:dffa HL:6530 SP:cff1
+: > 69af cb 27 AF:0260 BC:0300 DE:dffa HL:6530 SP:cff1
+
+3d is DEC A, and GME sets flags.H and I don't.  Except... there is no half carry
+here.  3 - 1 = 2.
+
+GME formula is:
+
+: ((data & 15) + 0x31) & 0x20
+
+(2 & 15) = 2
+2 + 0x31 = 0x33
+0x33 & 0x20 = 0x20
+H is set
+
+Hmm hmm.  If data is 0x0F, then:
+
+0x0F & 15 = 0x0F
+0x0F + 0x31 = 0x40
+0x40 & 0x20 = 0
+H is clear
+
+So H is cleared if data is 0x0F, and set otherwise (since 0x0F is the only value
+that will overflow 0x3_ into 0x40).
+
+And I'm doing:
+
+: self.f_setb(HY, (data & 0x0F) == 0x0F)
+
+So H is set only if data is 0x0F and clear otherwise.  That's the reverse, and
+it seems more sensible.
+
+Let's see what Higan says.
+
+: r.f.h = (r[x] & 0x0f) == 0x0f;
+
+Grmbl.
+
+Mooneye:
+
+: HALF_CARRY.test(value & 0xf == 0) |
+
+value is the before the subtraction, so 2/3 in favor.
+
+I'll inverse the behavior for the time being to see if there are other
+discrepancies.
+
+: 6d5c f6 80 AF:c000 BC:0023 DE:0000 HL:dfca SP:cff1
+: < 6d5e e2 7d AF:4000 BC:0023 DE:0000 HL:dfca SP:cff1
+: > 6d5e e2 7d AF:c000 BC:0023 DE:0000 HL:dfca SP:cff1
+
+F6 is OR d8.  Hmm, bad copy paste on my end.  OR was doing xor.
+
+
+: 65a3 c9 cd AF:0300 BC:0000 DE:0000 HL:64ef SP:cffd
+: < f00e ff 00 AF:0300 BC:0000 DE:0000 HL:64ef SP:cfff
+: > f00d ff ff AF:0300 BC:0000 DE:0000 HL:64ef SP:cfff
+
+After C9 (RET), I'm back at 0xF00E and GME is at 0xF00D.  Hmm.  Looks like I
+saved PC one byte too far.
+
+That's because I actually take the RST 38H jump after the INIT subroutine, but
+GME doesn't.
+
+At this point, I don't quite understand how GME deals with this idle_addr.
+Sometimes it stays for two loops at 0xF00D, sometimes for one loop.
+
+But, I can git diff the rest.
+
+
+:  6d4c 7e e1 AF:0000 BC:0011 DE:8074 HL:df9f SP:cfef
+: -6d4d e1 cb AF:0100 BC:0011 DE:8074 HL:df9f SP:cfef
+: +6d4d e1 cb AF:0000 BC:0011 DE:8074 HL:df9f SP:cfef
+
+7E is LD A,(HL).  I have 1 at DF9F, GME has 0.  Maybe something to do with RAM
+initialization.
+
+Other than that, there doesn't seem to be any discrepancies left.
+
+But, it doesn't sound good at all.  All noise.
+
+I suspect I'm missing some timing stuff.  The GBS doc mentions timing.  At the
+very least, it seems that for most GBS files, you should call the play address
+at 60Hz.
+
+Haha!  Victory!  I've got the first channel replicating the familiar melody.  It
+sounds bad, but the melody is there, so I must be on the right track.
+
+How I understood the timing:
+
+The PLAY subroutine sets up notes, and you should emulate it until it RET.
+While emulating it, you also want to emulate the APU.  Currently I'm clocking
+the APU for every CPU cycle.
+
+After PLAY returns, you want to continue emulating only the APU until the next
+V-blank.  Here, I'm going with a period of 70224 cycles (59.73Hz).
+
+Once the period is over, we can call PLAY again and start over.
+
+After emulating 10 seconds with a very rough APU implementation (duty cycle,
+frequency and length), the melody is there.
