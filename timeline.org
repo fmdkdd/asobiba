@@ -8772,3 +8772,10 @@ Once the period is over, we can call PLAY again and start over.
 
 After emulating 10 seconds with a very rough APU implementation (duty cycle,
 frequency and length), the melody is there.
+
+* [2017-03-19 dim.]
+** Extracting GBS as its own project                                :gbs:git:
+It's time to leave the nest.  Now that it works and the basic architecture seems
+in place, it gets its own repository!
+
+The procedure is [[https://help.github.com/articles/splitting-a-subfolder-out-into-a-new-repository/%0A][helpfully documented]] on Github.
