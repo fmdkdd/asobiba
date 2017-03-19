@@ -1,0 +1,10 @@
+[package]
+name = "fourier-sound"
+version = "0.1.0"
+authors = ["fmdkdd <fmdkdd@gmail.com>"]
+
+[features]
+debug = []
+
+[dependencies]
+hound = "3.0"

@@ -1,0 +1,14 @@
+[root]
+name = "fourier-sound"
+version = "0.1.0"
+dependencies = [
+ "hound 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "hound"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[metadata]
+"checksum hound 3.0.0 (registry+https://github.com/rust-lang/crates.io-index)" = "cbcce089471b4c7f51201675a3b85d932cffa2c6d3b913d35d20f3c7f3994530"

@@ -1,7 +1,6 @@
 extern crate hound;
-extern crate gbs;
 
-use gbs::sound;
+mod sound;
 
 fn main() {
   // Emulate
@@ -23,7 +22,7 @@ fn main() {
   sq1.set_length(1.0);
   sq1.set_frequency(440.0);
   sq1.set_volume_init(1.0, 10.0);
-  for i in 0..5u32 {
+  for _ in 0..5u32 {
     sq1.set_frequency(440.0 + 1.0);
     samples.append(&mut sq1.get_samples_for(0.1));
     sq1.set_frequency(440.0 - 1.0);
@@ -34,7 +33,7 @@ fn main() {
   // Write to WAV
   let spec = hound::WavSpec {
     channels: 1,
-    sample_rate: gbs::sound::SAMPLE_RATE as u32,
+    sample_rate: sound::SAMPLE_RATE as u32,
     bits_per_sample: 16,
     sample_format: hound::SampleFormat::Int,
   };
