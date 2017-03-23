@@ -8801,4 +8801,32 @@ Stopping after error is just a matter of adding a test in
 ~flycheck-finish-current-syntax-check~.  Seems to work, but I don't know if that
 catches everything.
 
-Question: can there be multiple checkers per stage?
+Argh, wait, no.  It breaks 21 spec tests.  How come?
+
+These tests use
+
+: (flycheck-test-with-nav-buffer 'error
+
+Which loads an Elisp buffer with a file containing a warning and an error.  The
+tests then check if point is on the correct error by indexing into
+~flycheck-current-errors~.  Except, with this change, ~flycheck-current-errors~
+is modified since the warning comes from a lint checker and the error from a
+syntax checker, so the lint checker is never run.
+
+What is stranger is that I don't understand how the tests pass in the first
+place.  Hmm.
+
+Ah okay, it's only "over-error" tests that fail.  It's because these tests limit
+the navigation to some error level, and thus bypass the warning.
+
+So I can change the example so that emacs-lisp checker is the one to generate a
+warning.  But this mean we might not test the functionality of multiple checkers
+any more.  Need to make sure there are tests that catch that.
+
+There, fixed.
+
+Question: can there be multiple checkers per stage?  Doesn't necessarily make
+sense to call two syntax checkers.  That's why I guess most of them are mutually
+exclusive with ~conflicts-with~.
+
+Well, looks like ~conflicts-with~ is the only way to control this.
