@@ -8779,3 +8779,26 @@ It's time to leave the nest.  Now that it works and the basic architecture seems
 in place, it gets its own repository!
 
 The procedure is [[https://help.github.com/articles/splitting-a-subfolder-out-into-a-new-repository/%0A][helpfully documented]] on Github.
+
+* [2017-03-23 jeu.]
+** Finishing flycheck checker stages revamp                        :flycheck:
+Seems it's mostly done, save for:
+
+- stopping the chain if an error is present
+- user documentation
+
+And all these steps were helpfully laid out by lunaryorn.
+
+In addition, I should rebase on master.
+
+One thing I'm not sure about is whether integration tests for complete chains
+have to be changed.
+
+Rebase done.  Had to take care of new checkers that were merged in the meantime,
+otherwise smooth sailing.
+
+Stopping after error is just a matter of adding a test in
+~flycheck-finish-current-syntax-check~.  Seems to work, but I don't know if that
+catches everything.
+
+Question: can there be multiple checkers per stage?
