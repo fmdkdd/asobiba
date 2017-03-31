@@ -7422,7 +7422,8 @@ sure a new feature is added to CHANGES and doc/ (esp. new checkers).
 
 And see: [[https://github.com/flycheck/flycheck/issues/928][#928]].
 
-*** TODO Pick up next-checker PR
+*** DONE Pick up next-checker PR
+CLOSED: [2017-03-28 mar. 12:43]
 Seemed important, and might be doable now that I have more Flycheck chops.
 
 * [2017-02-15 mer.]
