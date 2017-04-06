@@ -8877,3 +8877,61 @@ is the warning.  Or perhaps not.  I've got some weird flickering going on.
 And: neither ~cargo test~ nor ~cargo check~ will run code in ~#[test]~ inside
 examples.  Hmm, actually, that ones doesn't make sense.  Why would you put test
 code in your examples?  Or even your binaries?
+
+** Setting up sound in an HP EliteBook 840 G1                   :alsa:ubuntu:
+Audio was not working on this machine.  And alsamixer was showing multiple
+cards: Intel and ATI cards.  Unmuting channels didn't do anything.
+
+dmesg showed errors related to the snd_hda_intel module and vga_switcheroo.
+
+And,
+
+: aplay -l
+
+hang without showing any output.
+
+This EliteBook laptop does not seem to have any model number marked anywhere.
+
+: sudo dmidecode | grep -A5 '^System Information'
+: System Information
+:  Manufacturer: Hewlett-Packard
+:  Product Name: HP EliteBook 840 G1
+
+Good to know.  Then, head up to [[https://wiki.archlinux.org/index.php/HP_EliteBook_840_G1][the wiki]].
+
+There you will find that audio needs some special options.  I'm not recompiling
+my kernel to get HDMI audio.  But, putting
+
+: options snd-hda-intel enable=1,1,0
+
+in /etc/modprobe.d/snd-hda-intel.conf might have helped.
+
+After that, I think the dmesg error disappeared.  At least, the ATI card
+vanished from alsamixer.  aplay -l did not hang anymore, and showed just two
+cards:
+
+#+BEGIN_EXAMPLE
+card 0: HDMI [HDA Intel HDMI], device 3: HDMI 0 [HDMI 0]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+card 0: HDMI [HDA Intel HDMI], device 7: HDMI 1 [HDMI 1]
+  Subdevices: 1/1
+  Subdevice #0: subdevice #0
+card 1: PCH [HDA Intel PCH], device 0: 92HD91BXX Analog [92HD91BXX Analog]
+  Subdevices: 0/1
+  Subdevice #0: subdevice #0
+#+END_EXAMPLE
+
+In alsamixer, unmuting the channels for the PCH card made the sound work.
+
+Last bit: my i3 keybinding for muting/unmuting were set to toggle the "Master"
+control.  Somewhat understandably, muting Master also muted the Speaker
+control.  But, confusingly, unmuting Master left Speaker muted, rendering the
+mute toggle useless.
+
+The fix was found [[http://askubuntu.com/questions/339104/mute-key-mutes-master-and-headphone-speaker-alsa-channels-but-unmutes-only-ma][here]]:
+
+: amixer -D pulse sset Master toggle
+
+use the "pulse" device to mute/unmute the sound.  Since this is an Ubuntu
+install, I have pulse installed and running.  Might as well use it.
