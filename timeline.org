@@ -8831,3 +8831,49 @@ sense to call two syntax checkers.  That's why I guess most of them are mutually
 exclusive with ~conflicts-with~.
 
 Well, looks like ~conflicts-with~ is the only way to control this.
+
+* [2017-04-06 jeu.]
+** Additional test support for rust-cargo                     :rust:flycheck:
+So you can have [dev-dependencies] in your Cargo.toml file, which are
+crate dependencies that should only be included in your compilation when you are
+running tests, examples or benchmarks.
+
+Problem: flycheck uses ~cargo rustc~, which totally ignores these dependencies.
+The dev dependencies are added to rustc by ~cargo test~, ~cargo bench~ and
+~cargo example~.
+
+I can get the errors to work by doing:
+
+: cargo rustc -- -Zno-trans
+: cargo test --no-run
+
+Problem: that's two commands.  So I use another checker to run the second
+command, and use next-checker.  But, even with ~no-run~, ~cargo test~ /does/
+build the tests.  So it's not as fast as it could, and you have to ~cargo clean~
+before running the tests.
+
+Besides, since you also have ~cargo bench~, I don't want to make 2 extra
+checkers just for this case.
+
+Better wait for ~cargo check~ to improve and check tests.
+
+On the other hand, for two different runs to trigger in Flycheck, you need to
+have changed your file.  So ~cargo test~ will run anew.
+
+If we use ~cargo test~ to run the tests directly, then we don't need to call
+~cargo rustc~ anymore, and can call ~cargo check~ directly.
+
+Hmm, seems ~cargo test~ gives me the same errors than ~cargo check~ does, plus
+it checks the code inside ~#[test]~.
+
+Can I replace ~check~ by ~test~ when we should run tests?  And avoid the new checker?
+
+Seems to work, except that both ~cargo test~ and ~cargo check~ will produce
+warnings only the first time they are run, so for testing you have to clean
+between tests.  And at runtime, say you edit a buffer, there are warnings, you
+exit.  You run Emacs again: no warnings.  Make a change, edit the buffer: there
+is the warning.  Or perhaps not.  I've got some weird flickering going on.
+
+And: neither ~cargo test~ nor ~cargo check~ will run code in ~#[test]~ inside
+examples.  Hmm, actually, that ones doesn't make sense.  Why would you put test
+code in your examples?  Or even your binaries?
