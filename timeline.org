@@ -8935,3 +8935,52 @@ The fix was found [[http://askubuntu.com/questions/339104/mute-key-mutes-master-
 
 use the "pulse" device to mute/unmute the sound.  Since this is an Ubuntu
 install, I have pulse installed and running.  Might as well use it.
+
+* [2017-04-09 dim.]
+** Reading Architecture of Open Source Applications             :types:elisp:
+http://aosabook.org/en/index.html
+
+Especially, the LLVM and GHC chapters.  Tidbits:
+
+LLVM can be re-used piecewise.  Especially, you could write your own frontend to
+generate LLVM IR, use LLVM to optimize the IR, then write your own backend to
+emit whatever you want from this.
+
+For instance, I guess one could write an Elisp frontend and benefit from the
+LLVM optimizer, then write a backend that outputs Elisp bytecode.
+Or even, native code that would be linked as an Emacs module.
+
+From the GHC chapter:
+
+"Notes" are a low-cost way of enhancing documentation in the code.  Instead of
+making large, unwieldy comments next to the code, they just reference a note:
+
+#+BEGIN_QUOTE
+ data Type
+   = FunTy Type Type -- See Note [Equality-constrained types]
+#+END_QUOTE
+
+Then the note appears elsewhere in the code:
+
+#+BEGIN_QUOTE
+  Note [Equality-constrained types]
+  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  The type   forall ab. (a ~ [b]) => blah
+  is encoded like this:
+
+     ForAllTy (a:*) $ ForAllTy (b:*) $
+     FunTy (TyConApp (~) [a, [b]]) $
+     blah
+#+END_QUOTE
+
+And you can use standard tools to find the note definition and places where it
+is used.
+
+Also, they separate type checking into two phases: first, emit type constraints
+from going through the code.  Then, solve these constraints.  The advantage of
+this approach is that emitting constraint is rather straightforward code, so
+it's easy to add constructs to the language.
+
+The constraint solving is the heart of the type checker, but you don't have to
+change it as often if you follow this approach.  They attribute this separation
+scheme to "the French shool", which I guess means OCaml.
