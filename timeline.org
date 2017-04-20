@@ -8984,3 +8984,121 @@ it's easy to add constructs to the language.
 The constraint solving is the heart of the type checker, but you don't have to
 change it as often if you follow this approach.  They attribute this separation
 scheme to "the French shool", which I guess means OCaml.
+
+* [2017-04-20 jeu.]
+** Synchronizing the sound in Boyo                                     :boyo:
+Currently, the sound in Boyo works with a callback which fetches new samples
+regularly from the application and sends them to the sound device for playback.
+
+I've measured the times between each callback, and they are very consistent: the
+callback asks for 4096 samples precisely every 92.87ms, which is exactly 4096 /
+44100, the size of the buffer / the sample rate.
+
+The buffer given to the callback is taken from an internal buffer that is filled
+as we emulate.  When the callback arrives, we take 4096 samples off the internal
+buffer, and send them to playback.
+
+The problem is that our internal buffer is filling faster than it is pumped out.
+So, the longer you let the emulator run, the larger the buffer becomes, and
+there is an increasing larger delay between your actions and the audio feedback.
+
+Currently, the emulator is timed by requestAnimationFrame, which should call us
+back at exactly 60Hz, but might take more time depending on what goes on inside
+or outside the browser (when compiling a Rust program on the side, I saw the
+frame rate drop to 40Hz; also, running Boyo inside Chromium I can't get more
+than 30Hz).
+
+Here are some measures for each frame:
+
+| Real time | Cycles | GB time |
+|-----------+--------+---------|
+| 16,1154   |  70680 | 16,8514 |
+| 17,0825   |  70680 | 16,8514 |
+| 17,0694   |  70680 | 16,8514 |
+| 16,1492   |  70680 | 16,8514 |
+| 17,8447   |  70680 | 16,8514 |
+| 15,3163   |  70680 | 16,8514 |
+| 17,0915   |  70680 | 16,8514 |
+| 16,0937   |  70680 | 16,8514 |
+| 17,0941   |  70680 | 16,8514 |
+| 17,0772   |  70680 | 16,8514 |
+| 16,1234   |  70680 | 16,8514 |
+| 17,0956   |  70680 | 16,8514 |
+| 16,1073   |  70676 | 16,8505 |
+| 17,1078   |  70675 | 16,8502 |
+| 16,0871   |  70680 | 16,8514 |
+| 17,1007   |  70680 | 16,8514 |
+| 16,1063   |  70680 | 16,8514 |
+| 17,0725   |  70680 | 16,8514 |
+
+Real time is the real time elapsed since the previous frame.  It measures the
+frequency of the calls to gb.frame by requestAnimationFrame.
+
+Cycles is the number of GB CPU cycles emulated during this time.  GB time is the
+emulated time elapsed from the GB points of view, computed from the number of
+cycles and the GB CPU frequency (4194304Hz).
+
+Observations: the real time is hitting 60Hz but only on average.  Frame to
+frame, we have wild variations.
+
+On the other hand, the number of cycles is rather stable, and hence the GB time
+is as well.  We are emulating the CPU, the APU and the PPU until a v-blank
+happens, which is decided by Video.step.  This is usually 16.8514ms (but
+sometimes a bit less), which corresponds to roughly 59.34Hz.
+
+So, in perfect conditions, we should be calling gb.frame at 59.34Hz to avoid
+overfilling the buffer.  So even in perfect conditions, using
+requestAnimationFrame to drive the emulation is not a good idea.
+
+I've looked at this emu: https://github.com/jbergknoff/nes/ which seems clean
+enough to me.  They run the whole emulated system in a WebWorker, which
+interacts with the page only with a few messages:
+
+- ready (when the Worker is fully setup)
+- screen (when a GB vblank occurs)
+- audio (when a frame's worth of audio has been accumulated)
+- log (for debugging, since the worker can't use console.log)
+
+The HTML page runs a requestAnimationFrame at 60Hz, which calls the worker to
+run for the amount of time elapsed since the last call.
+
+The worker then decides how long to run based on the number of audio samples it
+should output given this time delta.  Importantly, they use loops like this:
+
+#+BEGIN_SRC js
+while (PPUCycleCounter > NES.CyclesPerPixel) {
+  PPU.Tick();
+  PPUCycleCounter -= NES.CYclesPerPixel;
+}
+#+END_SRC
+
+to ensure that leftover cycles are not dropped, and taken care in subsequent
+calls.
+
+Now of course we can have frame drops.  Using this worker scheme, the worker.run
+method would try to catch up based on how long it has been since last frame
+(say, 33ms) and double the work.
+
+I think I can do the same thing, without a worker to begin with, by modifying
+gb.frame to run not until vblank, but until we have created enough samples for
+the time elapsed since the last frame.
+
+[hours later]
+
+Ahah!  Success!  Some audio buffer underruns at start, and from time to time,
+but no overruns even after letting it run for a few minutes.
+
+I didn't have to change too many things, mainly running gb.frame to run until we
+have caught up with the cycles that have elapsed since the last frame.
+
+Now that I think of it, we have two callbacks asking for pieces of the emu: the
+audio callback that's asking for audio samples, and the requestAnimationFrame
+callback that we use to drive the emulation.
+
+Might be better to just use the audio one, emulate enough cycles to fill the
+buffer, and continue.  That way, we wouldn't get into underruns, since we would
+always fill the buffer with the right number of samples.  However, the default
+buffer size of 4096 would translate into a callback every 93ms, so that would
+increase the visual and input latency.  Maybe if I can set the buffer to 1024,
+that would give us 23ms to emulate, which still loses frames, but shouldn't be
+that noticeable.
