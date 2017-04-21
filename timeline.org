@@ -9102,3 +9102,23 @@ buffer size of 4096 would translate into a callback every 93ms, so that would
 increase the visual and input latency.  Maybe if I can set the buffer to 1024,
 that would give us 23ms to emulate, which still loses frames, but shouldn't be
 that noticeable.
+
+* [2017-04-21 ven.]
+** Emacs org-mode doesn't eval                                    :emacs:org:
+C-c C-c is stubborn: evaluation of this code block is disabled, it keeps telling
+me.  Even for elisp blocks, which should be enabled by default.
+
+Turns out, it's [[https://github.com/syl20bnr/spacemacs/issues/7641][a bug]].  The correct procedure is to remove all elc files for
+org-contrib:
+
+: find elpa/org-plus-contrib-* -name '*.elc' -delete
+
+Then it works.  But better to recompile using:
+
+: (byte-recompile-directory (file-name-directory (buffer-file-name)) 0)
+
+Since passing the prefix arg with SPC-u did not seem to work.
+
+Arrgh, then a simple Dot example fails with "void symbol: result-params".  This
+symbol is nowhere to be found in the source.. puzzling.  Okay, let's invoke dot
+manually then.
