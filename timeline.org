@@ -9122,3 +9122,117 @@ Since passing the prefix arg with SPC-u did not seem to work.
 Arrgh, then a simple Dot example fails with "void symbol: result-params".  This
 symbol is nowhere to be found in the source.. puzzling.  Okay, let's invoke dot
 manually then.
+
+* [2017-04-23 dim.]
+** Boyo abysmal performance in Chrome                               :boyo:js:
+In Firefox, it's mostly smooth as butter.  Steady 60FPS on Tetris.
+
+Chrome can't keep up, and freezes, hard.  I've added logic to measure the time
+spent each frame, and pause the emulation if it looks like we emulate fast
+enough.  Here's how it looks for Chromium 58:
+
+#+BEGIN_EXAMPLE
+- Frame stats
+Real time since last frame: 0.000ms
+Cycles to emulate: 0
+Cycles emulated: 0
+GB time emulated: 0.000ms
+Time spent: 0.000ms
+- Frame stats
+Real time since last frame: 16.67ms
+Cycles to emulate: 69902.27046394348
+Cycles emulated: 69904
+GB time emulated: 16.67ms
+Time spent: 34.85ms
+- Frame stats
+Real time since last frame: 34.28ms
+Cycles to emulate: 143780.74112033844
+Cycles emulated: 143780
+GB time emulated: 34.28ms
+Time spent: 39.72ms
+Audio buffer underrun: -1850 samples
+- Frame stats
+Real time since last frame: 33.33ms
+Cycles to emulate: 139804.54092788696
+Cycles emulated: 139808
+GB time emulated: 33.33ms
+Time spent: 35.15ms
+- Frame stats
+Real time since last frame: 33.46ms
+Cycles to emulate: 140328.82892799377
+Cycles emulated: 140328
+GB time emulated: 33.46ms
+Time spent: 39.22ms
+- Frame stats
+Real time since last frame: 50.01ms
+Cycles to emulate: 209744.56012821198
+Cycles emulated: 209744
+GB time emulated: 50.01ms
+Time spent: 50.05ms
+=> Can't keep up emulation, pausing emulator
+frame @ gb.js:157
+#+END_EXAMPLE
+
+First frame is all good: nothing happens.
+
+Second frame is called after 16.67ms, looking good.  We must emulate 16.67ms
+worth of GB time, but here's the first snag: we spend 34.85ms doing it.  That
+means the emulation speed is not fast enough to accurately emulate the system in
+realtime!
+
+Third frame is called late, since we spent too much time in the previous one.
+This time the JIT might already have kicked in, since the delta between GB time
+and time spent in emulation is smaller.  But we are still too short.
+
+After the fifth consecutive frame too late, we drop it.
+
+Here's what I get in Firefox 53 for the first frames:
+
+#+BEGIN_EXAMPLE
+- Frame stats
+Real time since last frame: 0.000ms
+Cycles to emulate: 0.000000
+Cycles emulated: 0
+GB time emulated: 0.000ms
+Time spent: 0.000ms
+- Frame stats
+Real time since last frame: 33.20ms
+Cycles to emulate: 139258.547405
+Cycles emulated: 139264
+GB time emulated: 33.20ms
+Time spent: 58.12ms
+- Frame stats
+Real time since last frame: 216.4ms
+Cycles to emulate: 907444.217709
+Cycles emulated: 907444
+GB time emulated: 216.4ms
+Time spent: 169.4ms
+- Frame stats
+Real time since last frame: 166.9ms
+Cycles to emulate: 699957.040382
+Cycles emulated: 699952
+GB time emulated: 166.9ms
+Time spent: 63.89ms
+- Frame stats
+Real time since last frame: 225.4ms
+Cycles to emulate: 945582.390641
+Cycles emulated: 945584
+GB time emulated: 225.4ms
+Time spent: 80.06ms
+#+END_EXAMPLE
+
+First frame, nothing happens.
+
+Second frame is called after 33ms... err, that's bad, but might be due to the
+overhead of the logging.  Firefox is not particularly snappy when the console is
+open.  Anyway, we take too long emulating this one.
+
+Third frame: took a long time to be called, lot of emulation to be done.  But
+already the ratio is positive: 169ms to emulate 216ms worth of GB time.
+
+And it keeps decreasing.
+
+Maybe we should let the JITs warmup a bit by running full speed behind the scenes.
+
+Well, I'm not sure I've done this right, but that doesn't seem to have had any
+effect in any case.
