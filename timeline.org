@@ -9236,3 +9236,100 @@ Maybe we should let the JITs warmup a bit by running full speed behind the scene
 
 Well, I'm not sure I've done this right, but that doesn't seem to have had any
 effect in any case.
+
+* [2017-04-30 dim.]
+** Synchronizing Boyo to the sound callback only                       :boyo:
+Instead of having two callbacks: one for emulating based on the time elapsed
+since last frame, and one to fill the audio buffer, we could have just one.
+Since the audio callback is a "pull" callback (it's waiting for an exact number
+of samples), and the video callback is "push" (we emulate and push frames to the
+screen without being asked), we have to use the audio callback.
+
+The theory is this: when the audio callback is called, it asks for, say, 4096
+samples.  At a 44100 sample rate, that's:
+
+4096 / 44100 = 92.87ms
+
+93ms worth of GB time to emulate, which is:
+
+4096 / 44100 * 4194304 = 389566.19 cycles
+
+If we emulate exactly 389567 cycles, we will get enough samples to completely
+fill the buffer, and we shouldn't run into buffer underruns.
+
+However, that means we catch up the emulator every 93ms.  We emulate the CPU,
+then the video and audio units.  In that timeframe, the video will push 5 frames
+to the canvas in rapid succession.  At 3GBPS, 93ms should be emulated in 30ms,
+so we would have 5 frames in 30ms, then a pause for 93ms, then 5 frames in
+30ms...  We will have an extremely choppy framerate (and input reading would be
+choppy as well).
+
+If we use a smaller audio buffer, like 512, that's:
+
+512 / 44100 = 11.6ms
+
+Is this small enough?  Not really:
+
+
+#+BEGIN_EXAMPLE
+         11.6ms       23.2ms      34.8ms      46.4ms
+-----------|----*-------|---------*-|-----------|---*--
+           +----        +--^-       +--^-       +----
+                          26ms        37ms
+
+|: audio callback
++: start emulation
+^: render video frame
+*: ideal frame push
+#+END_EXAMPLE
+
+Again, choppy frames.  The only thing we avoid is to push two video frames in
+the same emulation frame, since our interval is smaller than 60Hz.  But our
+video framerate is still inconsistent.
+
+256?
+
+256 / 44100 = 5.8ms
+
+#+BEGIN_EXAMPLE
+    5.8   11.6   17.4   23.2    29   34.8   40.6  46.4   52.2    58
+-----|------|----*-|------|------|---*-|------|-----|---*--|------|--
+     +--    +--    +-^    +--    +--   +-^    +--   +--    +-^    +--
+                    19ms                36ms                54ms
+#+END_EXAMPLE
+
+Still not quite in sync, but the difference with an ideal 59.34Hz is not that
+far off; at least at the start.  Since the frequencies are not multiple of each
+other, there will be a drift over time.
+
+The problem is, we can't have multiples since the audio buffer sizes are limited
+to powers of two.  And we have:
+
+16.85ms * 44100 = 743.085 samples
+
+The nearest approximation is 3 * 256 = 768; we can see that in the example above
+that an ideal video frame happens nearly every three audio frame.  But we end up
+with an effective:
+
+44100 / 768 = 57.42Hz
+
+Not accurate.  Close enough?  Without a true multiple, there might be times
+where we push out a video frame too soon.
+
+Another issue is that I fear that 5.8ms is a hard target to hit reliably in the
+navigator.
+
+Trying it out, the audio doesn't seem glitchy.  With a 512 samples buffer, the
+emulator seems able to keep up.  However, the emulation is too fast.  Need to
+measure in order to understand.
+
+But there may be another solution to avoid underruns.  The problem is that,
+sometimes, we don't emulate enough samples just by being driven by the video
+callback.  Then, when we detect an underrun, we could just emulate the GB to get
+the missing audio samples.  The underruns I notice in Firefox are between 10 and
+500 samples.  That's around 11ms max.
+
+The problem with this approach is that if we take too long to get the samples,
+the audio device might have played them already, and we still get an underrun.
+
+There's no substitute to running very fast.
