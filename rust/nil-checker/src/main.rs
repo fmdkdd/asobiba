@@ -1,5 +1,4 @@
 use std::fmt;
-use std::cmp;
 use std::collections::BTreeMap;
 
 enum Node<'a> {
@@ -18,9 +17,9 @@ impl<'a> fmt::Display for Node<'a> {
   fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
     match self {
       &Node::Sexp(ref nodes) => {
-        write!(formatter, "(");
+        write!(formatter, "(")?;
         for n in nodes {
-          write!(formatter, "{} ", n);
+          write!(formatter, "{} ", n)?;
         }
         write!(formatter, ")")
       },
@@ -39,13 +38,13 @@ impl<'a> fmt::Display for Atom<'a> {
   }
 }
 
-fn parse(prog: &str) -> Node {
-  Node::Atom(Atom::Num(42))
-}
+// fn parse(prog: &str) -> Node {
+//   Node::Atom(Atom::Num(42))
+// }
 
 #[derive(Debug)]
 enum TypeError {
-  Err(String),
+  // Err(String),
   ArityMismatch(String),
   NotAFunction(String),
   ArgMismatch(String),
@@ -54,14 +53,14 @@ enum TypeError {
 
 #[derive(PartialEq, Debug, Clone)]
 enum Type {
-  Fun(Box<Type>, ConcreteType),
+  Fun(Vec<Type>, ConcreteType),
   Atom(ConcreteType),
 }
 
-enum ParamType {
-  Var,
-  T,
-}
+// enum ParamType {
+//   Var,
+//   T,
+// }
 
 #[derive(PartialEq, Debug, Copy, Clone)]
 enum ConcreteType {
@@ -71,7 +70,7 @@ enum ConcreteType {
 }
 
 // _ <: MaybeNil
-fn subtype(a: &Type, b: &Type) -> bool {
+fn subtype(_: &Type, b: &Type) -> bool {
   if let Type::Atom(ConcreteType::MaybeNil) = *b {
     true
   } else {
@@ -85,22 +84,40 @@ fn type_of<'a>(node: &'a Node<'a>, ctxt: &'a Environment<'a>) -> Result<Type, Ty
   match *node {
     Node::Sexp(ref nodes) => {
       let f = &nodes[0];
-      let args = &nodes[1];
+      let args = &nodes[1..];
       let tf = type_of(&f, &ctxt)?;
-      // if arity(tf) != args.length() {
-      //   Err(TypeError::ArityMismatch(format!("{} != {}", arity(tf), args.length))
-      // }
 
       match tf {
-        Type::Fun(targ, tret) => {
-          let ta = type_of(&args, &ctxt)?;
-          if *targ == ta || subtype(&ta, &targ) {
-            Ok(Type::Atom(tret))
-          } else {
-            Err(TypeError::ArgMismatch(
-              format!("incorrect arg type, expected {:?}, got {:?}",
-                      targ, ta)))
+        Type::Fun(targs, tret) => {
+          // Check arity of formal parameters versus actual parameters
+          if targs.len() != args.len() {
+            return Err(TypeError::ArityMismatch(format!("{} expects {} != {}", f, targs.len(), args.len())))
           }
+
+          // Check that all actual parameters match the type of the formal
+          // parameters
+          let mut ctx = ctxt.clone();
+          for (targ, arg) in targs.iter().zip(args) {
+            let ta = type_of(&arg, &ctx)?;
+            if *targ != ta && !subtype(&ta, &targ) {
+              return Err(TypeError::ArgMismatch(
+                format!("incorrect arg type, {} expected {:?}, got {:?}",
+                        f, targ, ta)))
+            }
+
+            // `and` and `and3` are special in that subsequent uses of the
+            // argument ensures it is non-nil
+            if let Node::Atom(Atom::Str(f_name)) = *f {
+              if f_name == "and3" || f_name == "and" {
+                if let Node::Atom(Atom::Str(arg_name)) = *arg {
+                  ctx.insert(arg_name, Type::Atom(ConcreteType::NonNil));
+                }
+              }
+            }
+
+          }
+
+          return Ok(Type::Atom(tret))
         },
 
         _ => Err(TypeError::NotAFunction("calling a non-function".into())),
@@ -121,41 +138,97 @@ fn type_of<'a>(node: &'a Node<'a>, ctxt: &'a Environment<'a>) -> Result<Type, Ty
 }
 
 fn main() {
+  use Node::*;
+  use Atom::*;
+
   let mut env = BTreeMap::new();
-  env.insert("list", Type::Fun(Box::new(Type::Atom(ConcreteType::MaybeNil)),
+  env.insert("list", Type::Fun(vec![Type::Atom(ConcreteType::MaybeNil)],
                                ConcreteType::NonNil));
-  env.insert("car", Type::Fun(Box::new(Type::Atom(ConcreteType::NonNil)),
+  env.insert("car", Type::Fun(vec![Type::Atom(ConcreteType::NonNil)],
                               ConcreteType::MaybeNil));
 
   {
-    let p = Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
-                            Node::Sexp(vec![Node::Atom(Atom::Str("list".into())),
-                                            Node::Atom(Atom::Num(1))])]);
+    let p = Node::Sexp(vec![Atom(Str("car".into())),
+                            Sexp(vec![Atom(Str("list".into())),
+                                      Atom(Num(1))])]);
     println!("{}", p);
     println!("{:?}", type_of(&p, &env));
   }
 
   {
-    let p = Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
-                            Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
-                                            Node::Atom(Atom::Num(1))])]);
+    let p = Node::Sexp(vec![Atom(Str("car".into())),
+                            Sexp(vec![Atom(Str("car".into())),
+                                      Atom(Num(1))])]);
     println!("{}", p);
     println!("{:?}", type_of(&p, &env));
   }
 
   {
-    let p = Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
-                            Node::Atom(Atom::Num(1))]);
+    let p = Node::Sexp(vec![Atom(Str("car".into())),
+                            Atom(Num(1))]);
 
     println!("{}", p);
     println!("{:?}", type_of(&p, &env));
   }
 
   {
-    let p = Node::Sexp(vec![Node::Atom(Atom::Str("car".into())),
-                            Node::Atom(Atom::Nil)]);
+    let p = Node::Sexp(vec![Atom(Str("car".into())),
+                            Atom(Nil)]);
 
     println!("{}", p);
     println!("{:?}", type_of(&p, &env));
+  }
+
+  {
+    env.insert("file-name", Type::Atom(ConcreteType::MaybeNil));
+    env.insert("buffer-file-name", Type::Atom(ConcreteType::MaybeNil));
+    env.insert("flycheck-same-files-p", Type::Fun(vec![Type::Atom(ConcreteType::NonNil),
+                                                       Type::Atom(ConcreteType::NonNil),],
+                                                  ConcreteType::NonNil));
+    env.insert("or", Type::Fun(vec![Type::Atom(ConcreteType::MaybeNil),
+                                    Type::Atom(ConcreteType::MaybeNil),],
+                               ConcreteType::MaybeNil));
+    env.insert("and", Type::Fun(vec![Type::Atom(ConcreteType::MaybeNil),
+                                     Type::Atom(ConcreteType::MaybeNil),],
+                                ConcreteType::MaybeNil));
+    env.insert("and3", Type::Fun(vec![Type::Atom(ConcreteType::MaybeNil),
+                                      Type::Atom(ConcreteType::MaybeNil),
+                                      Type::Atom(ConcreteType::MaybeNil),],
+                                 ConcreteType::MaybeNil));
+    env.insert("not", Type::Fun(vec![Type::Atom(ConcreteType::MaybeNil),],
+                                ConcreteType::MaybeNil));
+
+    // Does not type check, as expected
+    let p = Node::Sexp(vec![Atom(Str("or".into())),
+                            Sexp(vec![Atom(Str("and".into())),
+                                      Sexp(vec![Atom(Str("not".into())),
+                                                Atom(Str("file-name".into()))]),
+                                      Sexp(vec![Atom(Str("not".into())),
+                                                Atom(Str("buffer-file-name".into()))])]),
+                            Sexp(vec![Atom(Str("flycheck-same-files-p".into())),
+                                      Atom(Str("file-name".into())),
+                                      Atom(Str("buffer-file-name".into()))])]);
+
+    println!("{}", p);
+    println!("{:?}", type_of(&p, &env));
+
+
+    // This is safe, since `and` ensures both args are non-nil.  But we need to
+    // instruct the type checker that and3 has this behavior
+    let p2 = Node::Sexp(vec![Atom(Str("or".into())),
+                             Sexp(vec![Atom(Str("and".into())),
+                                       Sexp(vec![Atom(Str("not".into())),
+                                                 Atom(Str("file-name".into()))]),
+                                       Sexp(vec![Atom(Str("not".into())),
+                                                 Atom(Str("buffer-file-name".into()))])]),
+                             Sexp(vec![Atom(Str("and3")),
+                                       Atom(Str("buffer-file-name")),
+                                       Atom(Str("file-name")),
+                                       Sexp(vec![Atom(Str("flycheck-same-files-p".into())),
+                                                 Atom(Str("file-name".into())),
+                                                 Atom(Str("buffer-file-name".into()))])])]);
+
+    println!("{}", p2);
+    println!("{:?}", type_of(&p2, &env));
   }
 }
