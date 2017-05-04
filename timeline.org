@@ -9333,3 +9333,150 @@ The problem with this approach is that if we take too long to get the samples,
 the audio device might have played them already, and we still get an underrun.
 
 There's no substitute to running very fast.
+
+* [2017-04-27 jeu.]
+** Improving Boyo                                                      :boyo:
+I've implemented the sweep channel, at last.  I remember that I did not
+understand how it to implement it for the initial audio work on Boyo.  But
+sticking to Blargg's doc and double checking with the GB programming manual, it
+wasn't that complex.
+
+Chrome performance is still trash.
+
+Some lingering issues:
+
+1. Switching to new ROM does not work as reliably as reloading the web page.  We
+   are probably not resetting everything as we should.
+
+   Probably related: Pokemon Red does not boot after F5, but if I first load a
+   demo rom, then Pokemon, it works alright.
+
+2. F5, switch to another tab, come back to Boyo: the emulator starts even though
+   we haven't loaded any ROM.
+
+3. Selecting the same ROM in the drop list does not restart emulation
+
+Okay I've fixed #2 and added a Pause/Resume button.  Now fixed #3 by adding a
+Reset button which serves the same purpose as reloading the same ROM, since the
+change event cannot fire if we select the same item.  We could workaround it
+with mouseup, but it's messy.
+
+Now #1 is fixed.  Most reset functions of the modules were in fact empty.  I
+just needed to zero all RAM and visual artifacts disappeared.
+
+I've added a measure for GBPS, GameBoy per second.  Since we measure how much GB
+time we emulated, and how much real time it took us to emulate it, we can
+extrapolate:
+
+: gb_time / emu_time = how many GB we could emulate per second at the current speed
+
+This is a more telling measure than FPS, since if GBPS > 1, we know we have room
+for computing, and how much.  If GBPS <= 1, we barely can keep up emulating, and
+we have to stop.
+
+Using mrdoob/stats, this was easy to add.  This was what we were already using
+for the FPS counter, which I never cared much about.  But in fact, you can add
+custom panels!  The version we included used a bunch of spans to draw the stats,
+which I would assume is slower than canvas.  But I've updated it to the latest
+version, and it does use canvas now.
+
+Okay so in Firefox I get solid 3GBPS in Tetris, on the title screen and in-game.
+On Zelda, it's more around 1.4.  Kirby is around 2.5.
+
+So, some games are more stressing than others; might keep this in mind when
+trying to optimize.
+
+Also, even when staying well above 1GBPS, I still get audio buffer underruns.
+That means they are not due to a temporary drop in emulation speed, but rather
+to a bad synchronization between the audio buffer callback and the animation
+frame callback.
+
+* [2017-05-04 jeu.]
+** Chrome performance and Boyo                                  :chrome:boyo:
+Here are a few resources on the topic of V8 optimizations:
+
+https://developers.google.com/web/tools/chrome-devtools/evaluate-performance/
+https://github.com/thlorenz/v8-perf/blob/master/compiler.md
+https://github.com/petkaantonov/bluebird/wiki/Optimization-killers
+https://github.com/vhf/v8-bailout-reasons
+
+So, according to the third link, functions with ~get~ cannot be optimized.
+In previous Chrome versions there used to be a warning sign next
+to an unoptimized function in the profiler, giving you the reason for
+the optimizer bailout.  However, either the compiler can optimize everything, or
+I cannot find these warnings anymore in the dev tools.
+
+Let's see.  If I add eval, with and a try/catch, I'm pretty sure the compiler is
+unable to optimize them right?
+
+Hmm, no warnings.  So either the compiler has gotten quite smart, or my Chromium
+build is funky.  Let's try, /sigh/, Chrome.
+
+Same thing: no bailout indication.  No hit on the Chromium bug tracker.  I'm in
+the dark here.
+
+According to the profiler, we spend most of the time in Video.scan_background.
+I'll try to rewrite the video part using a straightforward JS function object,
+and get rid of the get/set which might be optimization killers.
+
+Aaah, looking down in the call tree, I spot a small "[deopt]", with a bailout
+reason on hover.  They removed the warning flags.  So these bailouts are still
+working.  Maybe V8 can now optimize more constructs.
+
+[hours later]
+
+Okay, so I rewrote the video using a function object.  I also removed the
+indirection in the memory reading: we used to call functions for every read and
+write that dispatched to the correct module.  I've changed it to a dumb switch,
+which still dispatches to each module; that's one indirection fewer.
+
+From what I can see, getters/setters where definitely performance killers in
+V8.  Now I get 2.4GBPS in Tetris, up from 0.5.  That means it's playable!
+
+Firefox seems to have benefited, if only from the change to the memory r/w.
+
+Although, the video is a bit broken at the moment.  Objects are invisible.
+Debugging that after a rewrite is a pain...
+
+Though I managed to fix a bug: writing to LY should reset the counter, not set
+it to an arbitrary value.  This was used mostly in demos, where manipulating the
+counter is a known way to make neat effects.
+
+[one hour later]
+
+I rewrote the video module, again.  This time, I just removed the getter/setter
+and left the rest intact.  I get decent Chrome performance now (2.4GBPS without
+audio).  So the get/set really are perf killers.  The objects are back.
+However, the palette of object is all wrong...  It can be fixed by selecting the
+palette again from the menu.
+
+Oh right, I forgot to update the cached palettes when writing new values.
+Fixed.
+
+All good now.
+
+Okay so after cleaning up, in-game Tetris I get between 2 and 3GBPS with
+Firefox, and 2.3GBPS with Chrome.  Chrome performance is much much more stable
+than Firefox.  Firefox has much higher variation from frame to frame.
+
+All ROMs are not equal however.  Zelda and demos are more demanding.
+
+Donkey Kong Land for instance stutters below 1GBPS in-game.  It spends much time
+in scan_pixel:
+
+#+BEGIN_SRC js
+scan_pixel: function(x, y, color) {
+
+  var index = (y * 160 + x) * 4;
+  buffer.data[index] = color[0];
+  buffer.data[index + 1] = color[1];
+  buffer.data[index + 2] = color[2];
+  buffer.data[index + 3] = color[3];
+},
+#+END_SRC
+
+I tried to use buffer.data.set(index, color).  But then I get errors, since
+apparently the index can both be: 1) larger than the ImageData, and 2) negative.
+
+Surely this confuses the compiler, and we can't get fast code for updating this
+array.  Need to look into how the bogus indices happen.
