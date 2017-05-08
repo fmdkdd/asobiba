@@ -9480,3 +9480,53 @@ apparently the index can both be: 1) larger than the ImageData, and 2) negative.
 
 Surely this confuses the compiler, and we can't get fast code for updating this
 array.  Need to look into how the bogus indices happen.
+
+* [2017-05-08 lun.]
+** Further Boyo optimizations                                          :boyo:
+I tried to remove all get/set in the code.  That did not result in any
+noticeable performance increase.  If anything, the performance seemed less
+stable overall without them, and for a small increase in code size.  So I will
+leave it at that.
+
+** Trying out Rust to WebAssembly                                 :rust:wasm:
+Here is [[https://hackernoon.com/compiling-rust-to-webassembly-guide-411066a69fde][a guide]].  The steps are not complicated with rustup:
+
+: rustup target add wasm32-unknown-emscripten
+
+I also need Emscripten:
+
+: sudo pacman -S emscripten
+
+Using ArchLinux, 1.37 is in the repo, so I don't have to compile it myself.
+
+Then, to use it:
+
+: rustc --target wasm32-unknown-emscripten hello.rs -o hello.html
+
+A 3 lines Rust file is turned into >1M of WASM and HTML.
+
+Opening the HTML file in the browser, you are greeted with an Emscripten shell.
+It works.
+
+Now for the slightly more involved stuff.  Trying to build my Karplus-Strong example:
+
+: cargo build --target wasm32-unknown-emscripten
+
+#+BEGIN_EXAMPLE
+          asm2wasm: ~/.emscripten_ports/binaryen/binaryen-version_30/src/asm2wasm.h:1476: void wasm::Asm2WasmBuilder::processAsm(cashew::Ref): Assertion `WasmValidator().validate(wasm)' failed.
+          Traceback (most recent call last):
+            File "/usr/lib/emscripten/emcc.py", line 2383, in <module>
+              run()
+            File "/usr/lib/emscripten/emcc.py", line 2162, in run
+              subprocess.check_call(cmd)
+            File "/usr/lib/python2.7/subprocess.py", line 186, in check_call
+              raise CalledProcessError(retcode, cmd)
+
+error: aborting due to previous error
+#+END_EXAMPLE
+
+Cool.  So, it converts asm to wasm, and in the process, some constructs are not
+supported or badly generated.
+
+I don't wish to delve on this right now.  The setup process is easy enough, but
+the tool itself is still rough.
