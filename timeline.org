@@ -9696,3 +9696,194 @@ interpreter.  A smaller interpreter might be more efficient, cache-wise.
 
 I would be interested in seeing perf comparisons of a micro-opcode interp
 approach versus an opcode interp.
+
+* [2017-05-11 jeu.]
+** A new chip: the YM2612                                            :genesis:
+Now that Boyo is in an acceptable shape, it's time to step up.  Next chip: the
+YM2612, the audio chip that's in the Genesis (though Megadrive is the better
+name.)
+
+First things first, cloning the emulator that Merwan started, and trying to
+compile it.  And putting the Streets of Rage OST in the background.
+
+There are no makefiles, only visual studio project files.  Can I convert from
+them?
+
+Apparently, [[http://stackoverflow.com/questions/6649606/how-to-support-both-vcxproj-to-cmake-on-a-project][yes]].  But do I want or need CMake?  Just plain makefiles should do
+it.  [[http://stackoverflow.com/questions/870533/where-can-i-find-a-tool-to-convert-a-vs-solution-to-a-gcc-makefile][Wine has something]] for plain Makefiles.  Let's try that first.
+
+Hmm ok, winemaker creates a Makefile for creating exe.
+
+Let's go by hand then.
+
+Oh my, it's full of warnings!  And unfortunately, some error as well.
+
+: operands.c:374:142: error: void value not ignored as it ought to be
+: ISTER(extension) (BIT(extension, 15) ? o->instruction->context->address_registers : o->instruction->context->data_registers)[FRAGMENT(e
+
+Macro errors, yum!
+
+Apparently, gcc and clang cannot handle this correctly, even though it seems
+correct at first glance.  One fix is to pull the [FRAGMENT(...)] index into both
+branches of the ternary operator.
+
+: #define INDEX_REGISTER(extension) ((BIT((extension), 15) ? o->instruction->context->address_registers[FRAGMENT((extension), 14, 12)] : o->instruction->context->data_registers[FRAGMENT((extension), 14, 12)]))
+
+Another error:
+
+: m68k.c:161:9: error: non-void function 'm68k_step' should return a value [-Wreturn-type]
+:        return;
+
+That one is easy.  Strange that it compiles under MSVC though.
+
+Anyway, three Makefile later, it compiles.  Maybe I need a ROM now.  Merwan told
+me that Tetris was working.  Tetris?  On Megadrive?  What kind of heresy is
+this?  There's only Columns... but alas, Columns does not show anything
+interesting.
+
+On the other hand... Tetris, ladies and gentlemen:
+
+[[file:data/genesis-tetris.png]]
+
+I guess we have debugging views directly into VRAM, palettes, and such.  Neat to
+see every thing lighting up.
+
+The emulator is hugging my CPU to death... good thing it's not in JavaScript.
+Maybe if I toggle off the writes to the console.  It's currently dumping every
+opcode.
+
+Startup time is better with the debug output behind an #ifdef.  Still 100% CPU
+time while running, and the game don't appear to run faster than they
+should... maybe slower in fact.
+
+Oh wait, I didn't turn optimizations on.  Hmm, not much of a difference with
+-O3. Monopoly and Tetris seem fine, but Bloodlines look slow.
+
+Okayyy.  Now, I would like to put the base of sound emulation.  Would be great
+if the SEGA logo could sing.
+
+Reading docs:
+http://md.squee.co/YM2612
+http://www.smspower.org/maxim/Documents/YM2612
+
+(most of the info in these two overlap)
+
+Okay so poking register $22 should start to play sounds.  Let's see if we can
+get the CPU to write to this location.
+
+Hmm, where's register $22?  The doc says you need to write at $A04000-A04001,
+but that's only one byte, not one page.
+
+I see that there are single-byte read/writes and "wide", two-bytes, read/writes.
+The video module uses it.  Maybe one byte can be used to specify the register?
+
+Hmm, nothing is written at these addresses by the working ROMs.  Let's check the
+whole $A04100 range to be sure.  Still nothing.
+
+Oh wait, Sonic 1 writes there!
+
+#+BEGIN_EXAMPLE
+sound write: a04000 2b
+sound write: a04001 80   ; enable DAC
+sound write: a04000 27
+sound write: a04001 00   ; reset timers
+sound write: a04000 28
+sound write: a04001 02   ; mute channel 3
+sound write: a04000 28
+sound write: a04001 06   ; mute channel 6
+sound write: a04000 28
+sound write: a04001 01   ; mute channel 2
+sound write: a04000 28
+sound write: a04001 05   ; mute channel 5
+sound write: a04000 28
+sound write: a04001 00   ; mute channel 1
+sound write: a04000 28
+sound write: a04001 04   ; mute channel 4
+sound write: a04000 40
+sound write: a04001 7f   ; set max total level for ch1/op1
+sound write: a04002 40
+sound write: a04003 7f   ; set max total level for ch3/op1
+sound write: a04000 44
+sound write: a04001 7f   ; etc...
+sound write: a04002 44
+sound write: a04003 7f
+sound write: a04000 48
+sound write: a04001 7f
+sound write: a04002 48
+sound write: a04003 7f
+sound write: a04000 4c
+sound write: a04001 7f
+sound write: a04002 4c
+sound write: a04003 7f
+sound write: a04000 41
+sound write: a04001 7f
+sound write: a04002 41
+sound write: a04003 7f
+sound write: a04000 45
+sound write: a04001 7f
+sound write: a04002 45
+sound write: a04003 7f
+sound write: a04000 49
+sound write: a04001 7f
+sound write: a04002 49
+sound write: a04003 7f
+sound write: a04000 4d
+sound write: a04001 7f
+sound write: a04002 4d
+sound write: a04003 7f
+sound write: a04000 42
+sound write: a04001 7f
+sound write: a04002 42
+sound write: a04003 7f
+sound write: a04000 46
+sound write: a04001 7f
+sound write: a04002 46
+sound write: a04003 7f
+sound write: a04000 4a
+sound write: a04001 7f
+sound write: a04002 4a
+sound write: a04003 7f
+sound write: a04000 4e
+sound write: a04001 7f
+sound write: a04002 4e
+sound write: a04003 7f
+#+END_EXAMPLE
+
+Okay so there definitely is a pattern there: writes come in pair, to $A04000
+then $A04001.  The first write appears to select the register: $2B would be the
+DAC enable, which is consistent with the write to the bit 7 that follows.
+
+I've annotated by following the reference document at:
+http://www.smspower.org/maxim/Documents/YM2612
+
+Oh hey, this doc actually explained the write to A04000/A04001 for writing to
+part 1 registers; I missed that.
+
+Hmm so this looks like resetting the audio to sane values.  Unfortunately,
+letting Sonic run, I see not write to $28 which set the operators on, so it
+seems we have no ROM actually playing sound... using the M68k!
+
+The various docs mention the Genesis has two CPUs (I wasn't aware of that!), and
+the Z80 is the CPU used for sound... so most games would use this CPU for
+driving the YM2612!
+
+And alas, the Z80 is unimplemented for now... I guess I know what's the next
+step then.  Good thing that the Z80 is pretty close to the GB CPU.
+
+I could even write the audio part in Rust and interface with the rest of the
+emu... tempting, but that would certainly complicate the build.
+
+More importantly, I need to find documentation on the operators themselves,
+since they are at the heart of the YM2612.
+
+[[http://gendev.spritesmind.net/forum/viewtopic.php?f=24&t=386&start=150][This thread]] seems to be rich with information, but it's 56 pages long at the
+moment (and going!).  [[http://gendev.spritesmind.net/forum/viewtopic.php?f=24&t=386&start=150][This post]] tries to index the nuggets.  Overall, this forum
+seems like a good source.
+
+And then, of course, source code of accurate emulators.  Like [[https://bitbucket.org/exodusemulator/exodus/src/ceac297d914fc0d5f2b10225dbb89d56be4ebbe5/Devices/YM2612/YM2612.cpp?at=default&fileviewer=file-view-default][Exodus]].
+
+Hmm wait, I don't see any magical code that creates a guitar sound or brass, or
+organ in that code.  I'm thinking the operators are what the doc says: functions
+which modify their input given a frequency and envelope.  They can feed into
+each other, depending on the setup (the "algorithm").  That's what FM is all
+about.  Maybe I can try something in Sunvox later to confirm this theory...
