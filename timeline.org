@@ -9887,3 +9887,83 @@ organ in that code.  I'm thinking the operators are what the doc says: functions
 which modify their input given a frequency and envelope.  They can feed into
 each other, depending on the setup (the "algorithm").  That's what FM is all
 about.  Maybe I can try something in Sunvox later to confirm this theory...
+
+* [2017-05-18 jeu.]
+** Emulating the Z80                                                :genesis:
+Useful docs:
+
+[[https://raw.githubusercontent.com/Emu-Docs/Emu-Docs/master/Shared%2520Components/CPU%2520Z80/z80-1-command-set.txt][Opcode table]]
+[[https://raw.githubusercontent.com/Emu-Docs/Emu-Docs/master/Shared%2520Components/CPU%2520Z80/z80-1-command-set.txt][Summary with cycle count]]
+[[https://raw.githubusercontent.com/Emu-Docs/Emu-Docs/master/Shared%2520Components/CPU%2520Z80/z80-1-command-set.txt][Most exhaustive document]]
+
+Now, already I'm confused by the different cycle counts in the documents.  Maybe
+they refer to Z80 used in different systems?
+
+In any case, I didn't want to write out all the instructions as I did for the GB
+CPU.  Generating the instructions, like Merwan did for Boyo, is probably the
+less painful.
+
+However I want to generate very plain C code with a large C switch-case.
+
+I've started writing a code generator (in Rust, eh).  I managed to do all the LD
+instructions from the first opcode table.  Like the GB CPU, the Z80 has opcode
+prefixes, but more than the GB.
+
+The hard part of writing the generator is to find out the minimal set of
+micro-operations that you need in order to define all the opcodes faithfully.
+What I need is to find the eigenvectors, but I'm struggling a bit by hand.
+
+Looking at the reference:
+
+#+BEGIN_EXAMPLE
+|LD r,r      |r:=r                |......| 1 | 4 |                      |
+|LD r,(HL)   |r:=(HL)             |      | 1 | 7 |                      |
+|LD r,n      |r:=n                |      | 2 | 7 |                      |
+|LD r,(ii+n) |r:=(ii+n)           |      | 3 |19 |                      |
+|LD (HL),r   |(HL):=r             |      | 1 | 7 |                      |
+|LD (ii+n),r |(ii+n):=r           |      | 3 |19 |                      |
+|LD (HL),n   |(HL):=n             |      | 2 |10 |                      |
+|LD (ii+n),n |(ii+n):=n           |      | 4 |19 |                      |
+|LD A,(BC)   |A:=(BC)             |      | 1 | 7 |                      |
+|LD A,(DE)   |A:=(DE)             |      | 1 | 7 |                      |
+|LD A,(nn)   |A:=(nn)             |      | 3 |13 |                      |
+|LD (BC),A   |(BC):=A             |      | 1 | 7 |                      |
+|LD (DE),A   |(DE):=A             |      | 1 | 7 |                      |
+|LD (nn),A   |(nn):=A             |      | 3 |13 |                      |
+|LD A,I      |A:=I                |.***00| 2 | 9 |PV=IFF                |
+|LD A,R      |A:=R                |      | 2 | 9 |PV=IFF                |
+|LD I,A      |I:=A                |......| 2 | 9 |                      |
+|LD R,A      |R:=A                |      | 2 | 9 |                      |
+|LD rr,nn    |rr:=nn              |      | 3 |10 |                      |
+|LD ii,nn    |ii:=nn              |      | 4 |14 |                      |
+|LD HL,(nn)  |HL:=(nn)            |      | 3 |16 |                      |
+|LD rr,(nn)  |rr:=(nn)            |      | 4 |20 |                      |
+|LD ii,(nn)  |ii:=(nn)            |      | 4 |20 |                      |
+|LD (nn),HL  |(nn):=HL            |      | 3 |16 |                      |
+|LD (nn),rr  |(nn):=rr            |      | 4 |20 |                      |
+|LD (nn),ii  |(nn):=ii            |      | 4 |20 |                      |
+|LD SP,HL    |SP:=HL              |      | 1 | 6 |                      |
+|LD SP,ii    |SP:=ii              |      | 1 |10 |                      |
+#+END_EXAMPLE
+
+For the GB CPU, I basically had one Rust function for every LD variant.  LD
+functions are very simple, so the code was easy to copy/paste and adapt, but
+it's still rather dumb code to write and read.
+
+At the moment in the code generator, I only have one LD function:
+
+#+BEGIN_SRC rust
+fn LD(p1: Param, p2: Param) -> Block {
+  block![
+    Val(p2),
+    Assign(p1)
+  ]
+}
+#+END_SRC
+
+Most of the orthogonality comes from the parameters, like in Boyo.  Of course I
+have yet to implement all the variants above, and we can already that there are
+variants that touch the flags.  So I might end up with two functions or more.
+
+Ideally, I should get one function per group in the table.  There are even
+groups that can be collapsed together: like ADD/SUB, XOR/OR/AND, etc.
