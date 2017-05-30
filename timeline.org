@@ -9967,3 +9967,67 @@ variants that touch the flags.  So I might end up with two functions or more.
 
 Ideally, I should get one function per group in the table.  There are even
 groups that can be collapsed together: like ADD/SUB, XOR/OR/AND, etc.
+
+* [2017-05-30 mar.]
+** Static and dynamic binary translation                        :genesis:gbs:
+Seems like a good idea to tremendously speed up the emulation.  Instead of an
+interpreter loop with a jump table, we can generate assembler from each byte in
+the ROM, load that code directly as an executable page, and run it.
+
+You have to convert the addresses so that you are jumping into host RAM, and not
+GB RAM.  The conversion cannot be done statically, since we do not know all the
+addresses beforehand.
+
+One trick suggested by I. is to allocate a block of, say, 8 bytes for each byte
+in the GB ROM.  This block will hold the converted instructions, since we cannot
+do a 1-to-1 conversion in most cases.
+
+Addresses then need to be scaled:
+
+: host_address = base + GB_address * block_size
+
+There is in fact already addressed modes for this conversion: base indexed
+addressing.
+
+After we generate the assembly, we can pass it to nasm to generate a (ELF-less)
+x64 binary.  This can be then loaded by the runtime emulator, to run the CPU as
+fast as possible.
+
+I might try this on a CHIP8 first, since it's much faster to get going.
+
+I know of [[http://andrewkelley.me/post/jamulator.html][one previous attempt]] of static recompilation, but they concluded JITs
+were more useful as they had to bake an opcode interpreter into the static
+binary to get around assembly tricks like jumps in the middle of opcodes.
+
+I'm not sure how the binary translation outlined above gets around such assembly
+tricks.  If a trick uses the fact that an opcode has two operands, and the first
+operand happens to be another opcode which takes one operand, these 3 bytes
+effectively act as two different instructions.
+
+If we do a binary translation of opcodes, only the first one will be
+translated into host assembly.  The second packed instruction will only be
+treated as operands to the first.
+
+When we jump into the translated assembly, we will jump in the middle of the
+translated instruction, but the effect might be totally different than what was
+intended.
+
+Unless we generate instructions for every /byte/ of the ROM, and not just every
+opcode.  That changes the address calculation, but at least we are sure to end
+up with the correct code.  Except now, we might generate way too much assembly.
+
+The [[https://news.ycombinator.com/item?id=5838326][two HN]] [[https://news.ycombinator.com/item?id=11309907][threads]] have interesting discussion on the topic of feasibility of
+static recompilation.  Essentially, assembly tricks, interrupts and dynamic code
+modification are easier to deal with dynamic recompilation.  I didn't see any
+definitive proof that static recompilation was impossible in practice, just more
+complex.  The efficiency gains are also potentially higher with dynamic
+recompilation, since you can gather more precise information.
+
+The second thread has a link to a "tracing decompiler" for CHIP8, which keeps
+track, for each opcode, of the "reaching set", or potential jump destinations,
+and potential register access.  Since it's a static analysis, these sets may
+larger than what's used at runtime, but that's a start.
+
+Overall, vastly interesting topic.  Not sure that static binary translation is
+viable for the GB.  Might test with CHIP8 to start with and see how much can be
+gained, and at what price.
