@@ -10257,6 +10257,10 @@ Plug back into the linux box, mount.  Now I can just mv the music that I want to
 a folder on the thing, rather than having to use iPod-specific software which
 deals with the convoluted iPod library.
 
+Only downside is that USB mode from Rockbox does not work on 3rd gen... so I
+need to reset and boot into the original firmware whenever I want to update the
+collection.  Minor hassle.
+
 However, I have a few files with non-ASCII names, and I don't think I can use
 anything other than FAT32, so rsync complains.
 
