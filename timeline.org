@@ -10147,3 +10147,132 @@ machine cycle, memory read is another, etc.).
 There's also a convenient list of addressing modes, so it should help generating
 opcodes.  Individual instructions are helpfully documented.  According to
 spritesmind, it also contains errors, so... double check.
+
+** Replacing the hard-drive on my 3rd gen iPod                    :ipod:arch:
+The 40Gb hard drive was randomly failing, and generally being slow.
+
+I read that you could replace them with SD cards or compact flash cards, so I
+was curious.
+
+Unfortunately, most of the resources I found were for more recent iPod (4 and
+up).  There's a website that even sells custom hardware for that, but not for
+3rd gens.
+
+I scrounged the web and found a few pictures of someone modifying his 3rd gen
+with a compact flash card and ordered the same piece from China.  I also ordered
+a 64gb compact flash, since anything above was too expansive.
+
+When the adapter arrived a few weeks later, I started opening the iPod.  That's
+certainly the trickiest part since it's shut tightly.  I managed to gnaw at it
+with small screwdrivers... not without leaving a few marks.
+
+Anyway, the adapter was not the right one.  It had a ZIF connector, and my iPod
+had a small IDE-like connection.  I ordered the right piece, and waited again.
+
+Couple of weeks later, I went back to the open iPod (did not dare to close it
+since it would mean potentially scratching it again to open it...).  Still not
+the right piece.  I had ordered a female 44-pin IDE, but I needed some small
+IDE.
+
+Finally I ordered a "Compact Flash to 1.8 Inch Toshiba HDD Adapter", and waited
+again.
+
+Third time's the charm: this was the right piece.  Except it had a little
+protrusion preventing it from plugging completely to the iPod.  I have a file on
+my Swiss army knife, so it was a matter of a couple minutes.
+
+Now that the hardware part was done, I left the case open and jumped to the
+software part.
+
+Plugging and turning on the iPod, at first I got a folder icon with an
+exclamation point.  Something was wrong with the drive.  Huho.  I grepped the
+Internet; turns out I had not connected the HDD connector bridge to the main
+board.  But now the iPod was stuck on this screen.
+
+I tried various suggested chords, holding for a few seconds, nothing worked.  In
+the end I just unplugged the battery from the board, taking care to not short
+anything.
+
+After that I made sure to connect the HDD to the board, then plugged the iPod to
+the computer.
+
+Tada!  It recognized the device.  Now I wanted to install [[https://www.rockbox.org][Rockbox]], a custom
+firmware which can handle FLAC and other formats, much more than the original
+firmware.
+
+I installed the RockBoxUtility through pacman (rbutil).  It could not recognize
+the iPod partition table.
+
+Okay, you need to restore the iPod first.  The [[https://www.rockbox.org/wiki/IpodManualRestore][suggested way]] to do that on Linux
+is to ~dd~ the original MBR and firmware to the device.  The trouble with that
+is that the original MBR is for a 40Gb iPod, not a 64Gb device...  I tried to
+~dd~ the MBR and resize the partition using GParted, but it ended up screwing
+the partition table; RockBox would still not have it.
+
+I ended up loading iTunes on a Windows PC to try to restore it from there.
+iTunes would not recognize the iPod.  Panic.
+
+Windows did recognize the device, and suggested I format.  Okay, let's try
+that.  FAT32 please.
+
+Error.  Windows could not format the device.  Sweat.
+
+Okay, plugged back the iPod into my linux box, erased the MBR, and formatted the
+whole disk to FAT32.  This worked.
+
+Now back to windows.  Oh hey!  iTunes detected a corrupted iPod.  Would you like
+to restore it?  Yes please.
+
+I let it do its thing.  Then I eject and unplug the iPod.  Hmm, nothing.
+Plugged it back in, still corrupted.  Okay, let's try that again.  This time
+it's faster.  Eject, unplug.  Nothing.  Maybe I need to restart?
+
+Hold Play....
+
+Apple logo comes on, with a progress bar.  I'm guessing it's flashing the
+firmware or something.
+
+Menu comes up.  I run for the settings->about page... 64Gb!  Success!
+
+Now back to the linux box, I mount the partition (there are two partition on the
+device now: a 34Mb one and another FAT with the rest of the disk; I mount the
+second), and run RockBoxUtility (sudo, to make sure it has access).
+
+I select iPod 3rd gen and the IPOD mount point, then Install.
+
+It starts downloading stuff and installing.  It spends a lot of time downloading
+the rockbox software...
+
+I go do something else for 30min.  Stuck at 42%.  Okay let's try that again.
+Install.
+
+Now it zips through the download, everything installs.  Great!
+
+Let's try that: unplug, reset (hold Menu + Play for a few seconds).  Apple
+logo... and Rockbox menu.
+
+I tinker with a few settings (LCD contrast was up the wazoo).
+
+Plug back into the linux box, mount.  Now I can just mv the music that I want to
+a folder on the thing, rather than having to use iPod-specific software which
+deals with the convoluted iPod library.
+
+However, I have a few files with non-ASCII names, and I don't think I can use
+anything other than FAT32, so rsync complains.
+
+Loading up MusicBrainz, I toggle the Windows compatibility option, then update
+the library.
+
+Unplug, reset, update the database... oh hey, it works!  I even have a tiny
+black and white preview of the cover.  You can nearly recognize them if you
+squint hard.
+
+I let it run for a few tracks.  Seems to work.
+
+Shutdown.  Secure the compact flash with duct tape, make sure everything is
+plugged correctly.  Close the iPod down.
+
+Much lighter!  And no more disk read errors.  I only wish I could have put
+something larger, like 128Gb.  Not looking forward to opening it again...
+hopefully the battery and compact flash will last for a few years.  I've had it
+since ... 13 years!  Works better than ever.
