@@ -10031,3 +10031,119 @@ larger than what's used at runtime, but that's a start.
 Overall, vastly interesting topic.  Not sure that static binary translation is
 viable for the GB.  Might test with CHIP8 to start with and see how much can be
 gained, and at what price.
+
+* [2017-06-01 jeu.]
+** Another genesis day                                              :genesis:
+Another rebase.  Excited to find out how much the work has improved while I was
+sleeping!
+
+Rebase, make...
+
+: ./renderer.h:25:17: error: field has incomplete type 'enum Planes'
+
+Hmm. make clean?  Nope, still there.  Where is the enum defined?  vdp.h it
+seems.  Why don't we include vdp.h directly?  I understand that declaring the
+enum could work, but it's actually never defined anywhere, since the definition
+in vdp.h is a typedef on an anonymous enum.
+
+Including vdp.h in renderer.h fixes it.
+
+Cleaning up the Makefile so we can have debug/release builds side-by-side.
+
+Taking care of the more interesting warnings:
+
+: m68k/conditions.h:5:37: warning: declaration of 'struct M68k' will not be visible outside of this function [-Wvisibility]
+: typedef bool(*ConditionFunc)(struct M68k*);
+
+Again, a forward declaration thing?  Including m68k fixes it... I can see that
+the code deliberately does not include the relevant headers, but I'm not sure
+why.
+
+Fixed a few minor warnings of bitwise operator precedence and missing newlines.
+
+The release build is rather fast, even too fast to be playable.  TMNT for
+instance you can get into Stage 1 and then... get beat up to death.  The joypad
+being reversed does not help.
+
+Most games I try show something: exciting!  Columns even is nearly playable!
+
+Now, what games are waiting for the Z80?  Maybe we can mock it.  It would also
+be helpful to have a debugger... for now maybe just looking at dumps of the
+debug build is enough.
+
+Sonic seems to hang after the SEGA logo.  Here is the loop:
+
+#+BEGIN_EXAMPLE
+0X72750   BCC
+0X72746   MOVE.b ($0000a04000).l, D2
+0X7274C   BTST.l #$0007, D2
+#+END_EXAMPLE
+
+It's reading a value from the YM2612 and testing it against 7.  According to the
+doc, reading should return:
+
+#+BEGIN_QUOTE
+READ DATA: Reading from any of the four locations gives:
+
+D7   D6 D5 D4 D3 D2 D1          D0
+Busy                Overflow A  Overflow B
+
+Busy: 1 if busy, 0 if ready for new data
+Overflow: 1 if the timer has counted up and overflowed. See register 27H.
+#+END_QUOTE
+
+So it's testing for the overflows?  Let's try returning 0x7: never busy, and
+timer always overflowing.
+
+Haha!
+
+[[file:data/sonic-title.png]]
+
+And then... it stops:
+
+[[file:data/sonic-stage-hangs.png]]
+
+The loop:
+
+#+BEGIN_EXAMPLE
+0X71B5A   BTST.b #$0000, ($0000a11100).l
+0X71B62   BCC
+#+END_EXAMPLE
+
+Now expecting the Z80 to be stopped?
+
+#+BEGIN_QUOTE
+Reading this bit will return 0 if the bus can be accessed by the 68000,
+ or 1 if the Z80 is still busy.
+#+END_QUOTE
+
+Ok ok.  We are not busy.  Return 0.
+
+I get into the first stage, and then:
+
+[[file:data/sonic-dies.png]]
+
+Sonic dies of time over.  Probably the time is kept by a timer somewhere that's
+unimplemented and returns 0.
+
+Took the time to flesh out the z80 implementation a bit, so we can easily expand
+later.  BUSREQ according to spec; it's a bit confusing because the two lines on
+the Z80 BUSREQ and BUSACK are active low, but you have to write 1 to request the
+bus from the M68...
+
+Anyway, toggling the bus state happens on the next clock of the Z80, so that's
+why we have it in z80_step.
+
+Not sure what Addams Family is doing... seems to wait for the Z80 bus, but even
+though it should be released, it still loops.  Now I might need a debugger to
+see the registers; or more information in the DEBUG dumps (the BCC and BRA have
+no operands right now).
+
+Reading the Z80 User Manual; seems pretty comprehensive.  There's an explanation
+for the time cycles / machine cycles: time cycles are cycles from the clock
+input, and machine cycles correspond to internal operations (opcode fetch is one
+machine cycle, memory read is another, etc.).
+
+There's also a convenient list of addressing modes, so it should help generating
+opcodes.  Individual instructions are helpfully documented.  According to
+spritesmind, it also contains errors, so... double check.
