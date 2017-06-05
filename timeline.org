@@ -10280,3 +10280,80 @@ Much lighter!  And no more disk read errors.  I only wish I could have put
 something larger, like 128Gb.  Not looking forward to opening it again...
 hopefully the battery and compact flash will last for a few years.  I've had it
 since ... 13 years!  Works better than ever.
+
+* [2017-06-05 lun.]
+** Catching up on emulation resources                          :boyo:genesis:
+One of the difficulties with starting up writing emulators is the lack of
+documentation.  Systems themselves are badly documented: their documentation is
+scattered around, in various state of accuracy.  But I found little resources on
+general information for /writing/ emulators.
+
+Like, how do you go about writing a CPU interpreter, how to deal with
+interrupts, how do you start with graphics and audio...
+
+[[https://github.com/avivace/awesome-gbdev][This list]] is a great start for GB resources.  Since the GB (along with the NES)
+is a favorite target for emulator writers, you can also find plenty of tutorials
+or post-mortem for those.  That list has a few of them.
+
+[[http://www.codeslinger.co.uk/][This website]] in particular has information about emulating different systems.
+The author starts by referring [[http://www.codeslinger.co.uk/files/emu.pdf][a report on writing emulators]], "Study of the
+techniques for emulation programming" by Victor Moya del Barrio.
+
+It's from 2001, and the English can be approximate, but most of the content is
+still relevant.  Of course, there are considerations that might have changed a
+bit since then.  For instance, they discard parallel emulators as too complex
+for little benefit, seeing as the target consumer hardware then was mostly
+single-processor based.
+
+But it covers stuff like dynamic binary translation that I'm curious about, so
+it's a start.
+
+*** Intra-system timing
+Quick note about emulating the CPU versus emulating the other hardware.  In
+Boyo, we went with emulating one CPU instruction, then run the audio and the
+video for the amount of CPU cycles elapsed.
+
+That's because in one instruction, the CPU can write to IO, and in another it
+can write another value, erasing the previous one.  So you have to emulate the
+hardware to simulate the fact that, in the original system, all these units work
+in parallel.
+
+That's trading performance for accuracy, since you are switching contexts and
+probably ruining the code cache.
+
+Also, in Boyo (and GBS) writing to IO ports like the trigger audio function will
+immediately resets things like the envelope etc.  So we are technically
+emulating part of the audio system while the CPU is running.
+
+It doesn't make a huge difference since we stop after one CPU instruction.
+However, it might not be accurate, since the APU could poll the IO values at the
+end of its cycle rather than right as they are written to.
+
+At the scale we are talking about (one instruction ~= 10 cycles = 2.4ns for a
+4Mhz CPU), it certainly wouldn't have a perceptible effect.  Unless, other units
+in the systems take advantage of such timing for specific effects.
+
+*** Computing flags with lookup-tables
+They suggest pre-computing all the flag results in a lookup-table.  That
+eliminates the tests usually needed for them at runtime.
+
+For 8bit values, you just need to run through all the 256 potential values, and
+compute the flags you can.
+
+But for the GB CPU at least, the most complex flags compare the operands and the
+result.  So you'd need a double-entry table...  Or maybe you can just use the
+high bits of each nibble for the carry flags, reducing the table size
+considerably.
+
+Maybe modern branch prediction does not need such tricks.  But, unless the
+performance on modern CPUs is /worse/ with lookup-tables, it's still something
+to consider, as it would probably up the perf for other CPUs.
+
+*** Static and dynamic binary translations
+I think the document glosses over a lot of details here.  There is an algorithm
+for dynamic binary translation, but it's really more like pseudocode.  The gory
+details are unfortunately left out, like: how to build blocks, what kind of
+optimizations to do, how to bail out of translated code when written to...
+
+It does an okay job at giving an overview of these topics, and includes some
+references to dig further, but that's it.  So, not a gold mine in this respect.
