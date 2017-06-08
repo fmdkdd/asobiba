@@ -10428,3 +10428,116 @@ Too bad the page cuts off after that.  It was promising!
 
 There are still unanswered questions: how do you deal with interrupts?  Do you
 check for them after executing a block?
+
+*** Testing the emulator
+Apart from manual testing of ROMs and debugging, which the author acknowledges
+as time-consuming, they suggest writing small test ROMs for targeting specific
+tricky behaviors.  That saves you from having to load a whole game ROM, and
+replay inputs to get a to a specific point.
+
+That's what Blargg's test ROMs for the GB are, basically.  Now, are there any
+equivalent ROMs for the Genesis?  (Not that Blargg's test matter for getting the
+emulator running, mind you)
+
+** Genesis tests                                                    :genesis:
+Found [[https://bitbucket.org/eke/genesis-plus-gx/downloads/md_test.zip][some tests]] for Genesis Plus GX, courtesy of [[https://www.reddit.com/r/emulation/comments/2orsgi/android_gensmd_emulator_accuracy_testing_result/][this post]].  Most of these seem
+to target the VDP, and unfortunately, the archive doesn't include any expected
+results :(
+
+[[https://imgur.com/a/VzyXR][This album]] contains the results for some emulators, so that's a start.  [[http://segaretro.org/Sprite_Masking_and_Overflow_Test_ROM][This test]]
+is Blargg-like in the sense that it runs the tests automatically and report on
+the screen whether they passed or not.
+
+For posterity, here is where we stand right now:
+
+[[file:data/sprite-masking-test-results.png]]
+
+(Also, I have to kill the process to get out of the test)
+
+There's a 'memtest_68k' that looks interesting.  Unfortunately, running it
+SIGSEGV!
+
+Maybe we are going outside the CPU RAM and never checking it.  GDB tells me we
+are in instructions_logic/or, failing at the first line:
+
+#+BEGIN_SRC c
+int or (Instruction* i)
+{
+    uint32_t result = FETCH_EA_AND_GET(i->src) | FETCH_EA_AND_GET(i->dst);
+#+END_SRC
+
+Crucially:
+
+: (gdb) p i->dst
+: $3 = (struct Operand *) 0x0
+
+Okay, so i->dst wasn't initialized.  Since the FETCH_EA macro is:
+
+: #define FETCH_EA_AND_GET(operand) ((operand)->last_ea = (operand)->fetch_ea_func(operand), (operand)->get_value_func((operand)))
+
+dereferencing NULL leads to SIGSEGV.
+
+What was the instruction?
+
+: p m->instruction_register
+: 63
+
+: p m68k_decode(m, m->instruction_address)->mnemonics
+: ORI.b #$0000, D0
+
+That's an immediate OR, but we end up executing an OR for two effective
+addresses.  Something wrong in the generation?
+
+: (gdb) p *i
+: $16 = {name = 0x412a6a "ORI", context = 0x619080, func = 0x40de20 <or>, src = 0x61c780, dst = 0x0, size = Byte,
+: base_cycles = 0 '\000', {condition = 0x0}}
+
+Seems we generated an ORI, and the ~or~ function is the one used for ORI as
+well, so all's good.
+
+However, DST should probably point to D0 or something.  The generating
+instruction reads:
+
+: i->dst = operand_make(FRAGMENT(opcode, 5, 0), i);
+
+And operand_make has a switch with a default to return NULL.  So we are probably
+not matching anything and defaulting.
+
+Actually, there are a bunch of opcodes defaulting in this switch.  But it seems
+this is expected by instruction_generate, since it checks whether the
+instruction is valid.  Although, in gen_ori:
+
+: if (instruction_is_valid(i, true, true))
+
+we don't do anything if the instruction is invalid?  There is another check in
+m68k_make:
+
+: if (!instruction_is_valid(instr, false, false))
+
+But it doesn't check src and dst fields.  Even it if did, at this point, it
+would just leave the opcode_table empty for this particular opcode, and that
+wouldn't solve the problem.
+
+Let's follow what happens:
+
+: (gdb) break instruction_generate if opcode==63
+: (gdb) bt
+: #0  operand_make (pattern=63, instr=0x61c740) at m68k/operands.c:10
+: #1  0x000000000040d53c in gen_boolean_instruction_immediate (opcode=63, m=0x619080, name=0x412a6a "ORI", func=0x40de20 <or>)
+:     at m68k/instructions_logic.c:39
+: #2  0x000000000040e0d7 in gen_ori (opcode=63, m=0x619080) at m68k/instructions_logic.c:173
+: #3  0x0000000000403dcc in pattern_generate (pattern=..., opcode=63, context=0x619080) at m68k/instruction.c:131
+: #4  0x0000000000403e6a in instruction_generate (context=0x619080, opcode=63) at m68k/instruction.c:142
+
+So we taking the NULL branch after matching the `case 0x38` line in
+operand_make.
+
+63  = 111111b
+38h = 111000b
+ 7h = 000111b
+
+so, 63 & 7 = 111b = 7.  I would expect the switch to do an
+operand_make_data_register, since the decoder gives us D0 as destination.
+
+At this point I don't know the M68k enough, and what is the correspondence
+between opcodes and mnemonics.  I'll leave the fix to the pro.
