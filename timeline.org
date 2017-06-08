@@ -10282,7 +10282,7 @@ hopefully the battery and compact flash will last for a few years.  I've had it
 since ... 13 years!  Works better than ever.
 
 * [2017-06-05 lun.]
-** Catching up on emulation resources                          :boyo:genesis:
+** Catching up on emulation resources                             :emulators:
 One of the difficulties with starting up writing emulators is the lack of
 documentation.  Systems themselves are badly documented: their documentation is
 scattered around, in various state of accuracy.  But I found little resources on
@@ -10357,3 +10357,74 @@ optimizations to do, how to bail out of translated code when written to...
 
 It does an okay job at giving an overview of these topics, and includes some
 references to dig further, but that's it.  So, not a gold mine in this respect.
+
+* [2017-06-08 jeu.]
+** Finished reading the book about techniques for emulation       :emulators:
+Additional comments follow.
+
+*** Emulating video hardware
+The document does a good job as overview of different video hardware: 2D tiling
+engines versus 3D instruction pipelines.  It goes more in depth for 2D systems,
+since the author wrote a Master System emulator.
+
+One highlight is the suggestion of emulating the guest video hardware with the
+host hardware.  This can be done for 3D, and is tied to high-level emulation
+(HLE): instead of emulating the guest 3D hardware, you just capture the graphics
+instruction, and convert them to equivalent instructions for the host 3D
+hardware.  When the hardware is close, it works, it saves you from emulating the
+guest hardware on the host CPU.
+
+For 2D engines, however, there usually are no close parallel for the host
+machines.  But it got me thinking.  The video hardware of the GB merely blits
+tiles and sprites textures to a framebuffer.  We could treat the VRAM as texture
+for a modern GPU and let our GPU handle the blitting itself, freeing the CPU
+from having to loop over pixels and putting them in an off-screen buffer.
+
+*** Emulating sound hardware
+The GB has what is called a "programmable sound generator" (PSG) in the Master
+System/Genesis parlance.  Square waves, noise channels; generated tones, sound
+is very crude.  FM synthesis is more sophisticated and based on frequency
+modulation of sine waves.  The Master System and Genesis both have a PSG chip
+and a FM chip.
+
+Again, we can emulate the guest sound hardware directly on the host CPU, or we
+can use the host sound hardware.  The document talk about SoundBlaster 16 cards
+(memories...) with FM capabilities.  I wonder what capabilities are present in
+modern integrated sound chips.
+
+*** The Genesis is backward-compatible with the Master System
+The Master System is based on a Z80, a tile-based 2D VDP and a YM2413 FM chip.
+The Genesis has a Z80 as well, its VDP is tile-based, with an larger palette,
+larger sprites, more tile window, and the sound chip is a YM2612.
+
+So, emulating the Master System, you already have a good idea of how to tackle
+the Genesis.  Conversely, if you build a Genesis emulator, you nearly have a
+Master System one for free.
+
+Too bad Merwan didn't follow through with Mr. System (especially with such a
+great name!).
+
+*** Dynamic binary translation
+Was left hungry for more information about this topic after reading the
+document.  I found more information on the MAME wiki.  These [[http://wiki.mamedev.org/index.php/Core_Concepts][two]] [[http://wiki.mamedev.org/index.php/Dynamic_Recompiler_Author%2527s_Guide][pages]] do a good
+job.  The second one, under "front-end analysis" especially explains how they
+build blocks out of the guest program:
+
+#+BEGIN_QUOTE
+- A code window is a predefined PC-relative lower and upper bound within which
+  the analysis will take place. An example window from the MIPS3 case has a
+  minimum of -128 and a maximum of 512. This means that as soon as any path
+  through the code goes more than 128 bytes before the starting PC, or more than
+  512 bytes beyond the starting PC, it effectively stops the analysis.
+- A code block is the collection of instructions that result from walking
+  through the code from the starting PC until all known paths terminate (either
+  explicitly or by branching outside of the window)
+- A code sequence is a subset of a code block where all instructions from
+  beginning to end are guaranteed to execute sequentially, with no branches into
+  the middle
+#+END_QUOTE
+
+Too bad the page cuts off after that.  It was promising!
+
+There are still unanswered questions: how do you deal with interrupts?  Do you
+check for them after executing a block?
