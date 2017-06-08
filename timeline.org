@@ -10638,3 +10638,12 @@ interacting with imGui is:
     else if (action == GLFW_RELEASE)
         io->KeysDown[key] = false;
 #+END_EXAMPLE
+
+** Genesis documentation                                             :megado:
+Some useful reference document, before I forget where I got them:
+
+- [[http://www.nxp.com/assets/documents/data/en/reference-manuals/MC68000UM.pdf][M68k manual from the constructor]]
+- [[http://www.nemesis.hacking-cult.org/MegaDrive/Documentation/GenesisSoftwareManual.pdf][Genesis official (and confidential) manual]]
+- [[http://nemesis.hacking-cult.org/MegaDrive/Documentation/YM2608J.PDF][YM2608 manual in Japanese]].  Not the YM2612, but pretty close.
+- [[http://www.myquest.nl/z80undocumented/z80cpu_um.pdf][Z80 official manual]]
+- [[http://www.myquest.nl/z80undocumented/z80-documented-v0.91.pdf][Sean Young's doc on the Z80]]
