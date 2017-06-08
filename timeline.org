@@ -10541,3 +10541,100 @@ operand_make_data_register, since the decoder gives us D0 as destination.
 
 At this point I don't know the M68k enough, and what is the correspondence
 between opcodes and mnemonics.  I'll leave the fix to the pro.
+
+** Updating the Makefiles for GLFW and ImGui                         :megado:
+We ditched SDL for OpenGL/GLFW in order to use ImGui.  Let's adapt the
+Makefile.  The deps are from git submodules, so:
+
+: git clone megado
+: git submodule init
+: git submodule update
+
+: fatal: reference is not a tree: 4f6bdcd9db1632d2b5b5090483f3491f3d5b9ced
+: Unable to checkout '4f6bdcd9db1632d2b5b5090483f3491f3d5b9ced' in submodule path 'deps/cimgui'
+
+-_-
+
+Apparently, [[https://stackoverflow.com/a/13425990][I need to slap someone]].  But I don't actually understand how to fix
+this.  Hmm, looks like the deps/cimgui submodule was pointing to 4f6bd, but this
+commit was somehow unavailable, because it was the commit used for the PR, but
+it disappeared after merging?
+
+Whatever, doing:
+
+: git submodule sync
+
+Updated the ref to the latest master, and I had to commit the change locally
+before running:
+
+: rm -rf deps/cimgui
+: git submodule --init --recursive
+
+At this point it doesn't complain anymore, and I have access to the files in
+deps/cimgui.
+
+Now, the Makefile.
+
+Okay, I need glew and glfw.  I don't want to bother compiling the ones in deps/
+for now, so I'll just get them from the system:
+
+: sudo apt install libglew-dev libglfw3-dev
+
+Using `pkg-config glew glfw3` for the makefile...
+
+: genesis/renderer.c:770:25: error: use of undeclared identifier 'GLFW_TRUE'
+
+-_-
+
+Okay, the work machine is an Ubuntu 16.04, and glfw3 is 3.1 there, and that
+define is 3.2.  Grmbl.
+
+Building the ones in deps then.
+
+For GLFW:
+
+: mkdir build
+: cd build
+: cmake -DBUILD_SHARED_LIBS=ON ../
+: make
+
+For GLEW:
+
+: cd auto
+: make
+: cd ../build
+: cmake ./cmake
+: make
+
+For cimgui:
+
+: cd cimgui
+: make
+
+After that, adding the include and libs to the Makefile... and to
+LD_LIBRARY_PATH when run...
+
+Yeah it works!  The debug build is slow though...  let's try release.  Hmm, not
+as unbridledly fast as before.  But solid.  Love all the windows, and the
+debugger!
+
+[[file:data/megado-debugger.png]]
+
+Unfortunately, seems none of my keys are recognized.  Neither by the games or
+imGui.  Hmm, seems the keys are recognized on RELEASE, but not on PRESS...
+
+Ah:
+
+: handle_inputs(r, key, modifiers);
+
+It's ~action~ we want to pass.  Okay, fixed it.  Now the game recognizes input.
+However, it doesn't seem that imGui does recognize the P/Space shortcuts for the
+debugger.  Maybe it's not working yet, the only code relevant for keys
+interacting with imGui is:
+
+#+BEGIN_EXAMPLE
+    if (action == GLFW_PRESS)
+        io->KeysDown[key] = true;
+    else if (action == GLFW_RELEASE)
+        io->KeysDown[key] = false;
+#+END_EXAMPLE
