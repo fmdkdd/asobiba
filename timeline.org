@@ -10647,3 +10647,10 @@ Some useful reference document, before I forget where I got them:
 - [[http://nemesis.hacking-cult.org/MegaDrive/Documentation/YM2608J.PDF][YM2608 manual in Japanese]].  Not the YM2612, but pretty close.
 - [[http://www.myquest.nl/z80undocumented/z80cpu_um.pdf][Z80 official manual]]
 - [[http://www.myquest.nl/z80undocumented/z80-documented-v0.91.pdf][Sean Young's doc on the Z80]]
+
+** Sonic doesn't die of timeover!                                    :megado:
+If you hold right when the stage begins, Sonic flies through the level, and the
+timer counts up.
+
+But he quickly dies anyway of running into the decor.  I'm guessing something
+wrong the way collision are calculated.
