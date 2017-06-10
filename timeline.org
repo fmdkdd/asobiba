@@ -10656,7 +10656,7 @@ But he quickly dies anyway of running into the decor.  I'm guessing something
 wrong the way collision are calculated.
 
 * [2017-06-10 sam.]
-** Toggling off vsync with Intel integrated graphics                   :arch:
+** Toggling off vsync with Intel integrated graphics           :arch:chipers:
 I ran into that issue on my desktop machine.  Was testing out chipers, and was
 getting constant 60FPS even without any sleeping...
 
@@ -10673,4 +10673,18 @@ disable it at the driver level, [[https://wiki.archlinux.org/index.php/Intel_gra
 
 That's it.  Re-running the application, swapping buffers does not sleep anymore.
 
+Hmm, passing ~env vblank_mode=0~ on the program also works.
+
 Glutin doesn't support turning vsync off, [[https://github.com/tomaka/glutin/issues/228][apparently]].
+
+** Changing ImGui histogram colors using imgui-rs             :imgui:chipers:
+Since I had two histograms, I wanted them to have separate colors.  Found a way
+to change the colors used to draw the histogram:
+
+: imgui.style_mut().colors[ImGuiCol::PlotHistogram as usize] = ImVec4::new(232.0, 0.0, 123.0, 255.0);
+
+This requires to have ~imgui_sys~ as a crate, since ImGuiCol is not re-exported
+by imgui-rs.
+
+But, we can't change the color while drawing the imgui frame since we have
+already borrowed imgui mutably.
