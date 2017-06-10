@@ -10654,3 +10654,23 @@ timer counts up.
 
 But he quickly dies anyway of running into the decor.  I'm guessing something
 wrong the way collision are calculated.
+
+* [2017-06-10 sam.]
+** Toggling off vsync with Intel integrated graphics                   :arch:
+I ran into that issue on my desktop machine.  Was testing out chipers, and was
+getting constant 60FPS even without any sleeping...
+
+I don't know if there's a way to turn it off from the application, but to
+disable it at the driver level, [[https://wiki.archlinux.org/index.php/Intel_graphics#Disable_Vertical_Synchronization_.28VSYNC.29][this is it]].  Write the following to ~/.drirc:
+
+#+BEGIN_EXAMPLE
+<device screen="0" driver="dri2">
+	<application name="Default">
+		<option name="vblank_mode" value="0"/>
+	</application>
+</device>
+#+END_EXAMPLE
+
+That's it.  Re-running the application, swapping buffers does not sleep anymore.
+
+Glutin doesn't support turning vsync off, [[https://github.com/tomaka/glutin/issues/228][apparently]].
