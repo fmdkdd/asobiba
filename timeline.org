@@ -10688,3 +10688,153 @@ by imgui-rs.
 
 But, we can't change the color while drawing the imgui frame since we have
 already borrowed imgui mutably.
+
+* [2017-06-11 dim.]
+** Profiling Rust programs                                          :chipers:
+Found a few post for profiling rust programs:
+
+- https://llogiq.github.io/2015/07/15/profiling.html
+- https://athemathmo.github.io/2016/09/14/tools-for-profiling-rust.html
+- http://blog.adamperry.me/rust/2016/07/24/profiling-rust-perf-flamegraph/
+
+First of all, I need to hammer the CPU.  Chipers is not really hard on the CPU
+with the default frequency of 600Hz.  At this rate, I get around 40kCPS in
+KALEID when letting it draw.
+
+Now, if I bump the frequency of the CPU to 24MHz, I get around 3CPS.
+
+I tried perf on that:
+
+: perf record -g target/release/chipers -dc 24000000 ../chip8/c8games/KALEID.c8
+
+Then
+
+: perf report
+
+I'm a bit surprised by the results though.  We spend most of the time in
+chipers::main, so far so good... looks like everything is inlined, since I don't
+have any stack beyond the main.  The surprising bit is that it seems the hottest
+instruction is this line:
+
+: let opcode = (ram.read(pc as usize) as u16) << 8 | (ram.read((pc + 1) as usize) as u16);
+
+Hmm, valgrind trashes the performance of the program so hard that it's not
+possible to test at 24MHz:
+
+: valgrind --tool=callgrind target/release/chipers -c 24000000 ../chip8/c8games/KALEID.c8
+
+At 600Hz, the video code is the bottleneck.
+
+oprofile, like perf, does not instrument the whole code so I can go to 24MHz.
+opannotate reports the same line as being hotter than the rest.
+
+More reading, found additional resources:
+
+- https://www.reddit.com/r/rust/comments/5zbx87/problem_using_perf_for_profiling_under_linux/
+- https://jbendig.github.io/fix-rs/2017/01/24/how-to-optimize-rust-programs-on-linux/
+
+I tested perf on the debug binary without any optimizations, and there I found
+the expected functions in the flamegraph.  So the compiler inlines mostly
+everything.
+
+So the hot code seems to be:
+
+#+BEGIN_EXAMPLE
+ 18.43 │        movzwl %dx,%eax
+       │      _ZN7chipers5chip86memory8{{impl}}9read_16leE():
+       │          let h = self.mem[addr] as u16;
+  2.47 │        mov    %edx,%esi
+       │        shr    $0x10,%esi
+  0.43 │        movzwl %dx,%ecx
+  0.91 │        cmp    $0xfff,%ecx
+       │      ↓ ja     7327
+       │          let l = self.mem[addr + 1] as u16;
+  2.15 │        lea    0x1(%rax),%rcx
+       │      _ZN4core5slice8{{impl}}9index<u8>E():
+       │        cmp    $0x1000,%rcx
+       │      ↓ jae    733b
+       │      _ZN7chipers5chip83cpu8{{impl}}110clock<chipers::chip8::memory::WatchedRAM,chipers::glscreen::GLScreen,chipers::chip8::key▒
+  1.98 │        mov    -0x19030(%rbp),%r12d
+       │      _ZN7chipers5chip86memory8{{impl}}9read_16leE():
+       │          let h = self.mem[addr] as u16;
+  0.50 │        shr    $0x10,%r12d
+  0.38 │        movzbl -0x9018(%rbp,%rax,1),%r14d
+       │      _ZN7chipers5chip83cpu8{{impl}}109exec<chipers::chip8::memory::WatchedRAM,chipers::glscreen::GLScreen,chipers::chip8::keyb▒
+       │          let y = ((opcode & 0x00F0) >> 4) as usize;
+  6.19 │        movzbl -0x9017(%rbp,%rax,1),%r13d
+#+END_EXAMPLE
+
+That ~movzwl~... a great deal of our samples fall on this instruction.  If I
+understand it correctly, it's for casting of self.pc as usize.  If I use an
+usize from the start, does it disappear?
+
+Made the change... and yes, after that, the instruction has disappeared.  I was
+under the impression ~as~ casts in Rust could be optimized away... but no.
+Picking sizes matters.
+
+I went from 3.0 to 4.4CPS with that small change.  Impressive!
+
+To double check, let's see what ~perf stat~ gives.  Before the change:
+
+: $ perf stat -d target/release/chipers -dc 24000000 ../chip8/c8games/KALEID.c8
+
+#+BEGIN_EXAMPLE
+      15210.351520      task-clock:u (msec)       #    0.992 CPUs utilized
+                 0      context-switches:u        #    0.000 K/sec
+                 0      cpu-migrations:u          #    0.000 K/sec
+             1,503      page-faults:u             #    0.099 K/sec
+    29,958,447,556      cycles:u                  #    1.970 GHz
+    53,751,931,997      instructions:u            #    1.79  insn per cycle
+    10,150,569,190      branches:u                #  667.346 M/sec
+         3,428,708      branch-misses:u           #    0.03% of all branches
+    12,720,928,547      L1-dcache-loads:u         #  836.334 M/sec
+         9,055,738      L1-dcache-load-misses:u   #    0.07% of all L1-dcache hits
+        15,963,466      LLC-loads:u               #    1.050 M/sec
+        13,704,755      LLC-load-misses:u         #   85.85% of all LL-cache hits
+
+      15.336652249 seconds time elapsed
+#+END_EXAMPLE
+
+After:
+
+#+BEGIN_EXAMPLE
+      17968.899257      task-clock:u (msec)       #    0.992 CPUs utilized
+                 0      context-switches:u        #    0.000 K/sec
+                 0      cpu-migrations:u          #    0.000 K/sec
+             1,499      page-faults:u             #    0.083 K/sec
+    31,469,036,717      cycles:u                  #    1.751 GHz
+    61,300,710,896      instructions:u            #    1.95  insn per cycle
+    12,385,181,235      branches:u                #  689.257 M/sec
+         4,265,538      branch-misses:u           #    0.03% of all branches
+    14,849,904,692      L1-dcache-loads:u         #  826.423 M/sec
+        10,311,192      L1-dcache-load-misses:u   #    0.07% of all L1-dcache hits
+         2,532,866      LLC-loads:u               #    0.141 M/sec
+            91,932      LLC-load-misses:u         #    3.63% of all LL-cache hits
+
+      18.114880383 seconds time elapsed
+#+END_EXAMPLE
+
+O_O
+
+From 1.79 to 1.95 instruction per cycle, that's good.  The cause might be the
+LL-cache misses going down from 85.85% to 3.63%!
+
+So the ~movzwl~ was causing us to miss the cache somehow?  That's why it ended
+up in so much samples.  Cache misses are indeed deadly.
+
+Other tidbits: switching to the plain RAM instead of the WatchedRAM gives
+another 0.2CPS boost.  Removing debug info from the release build does not seem
+to impact perf.  Probably binary size?  Nope, 28Mb in each case.
+
+28Mb??  Wow, the megado binary is just 104Kb.
+
+Hmm, [[ https://mail.mozilla.org/pipermail/rust-dev/2014-July/010731.html][Rust defaults to static linking]].  Okay, that makes sense.  Makes the binary
+portable.
+
+Here are [[https://lifthrasiir.github.io/rustlog/why-is-a-rust-executable-large.html][some tips on reducing size]].
+
+First of all, using ~strip~ to /actually/ remove the debugging symbols get us
+down to 2.4Mb (still no impact on runtime perf though).
+
+Add LTO... it's 5Mb after LTO, and 2.4Mb stripped.  Acceptable for a portable
+binary I guess.
