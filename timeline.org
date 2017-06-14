@@ -10838,3 +10838,77 @@ down to 2.4Mb (still no impact on runtime perf though).
 
 Add LTO... it's 5Mb after LTO, and 2.4Mb stripped.  Acceptable for a portable
 binary I guess.
+
+* [2017-06-14 mer.]
+** Looking at the disassembly of my opcode dispatch loop       :chipers:rust:
+First hurdle was /getting/ the disassembled code, and then /finding/ the
+relevant place.
+
+I recalled perf was able to intersperse the assembly with the source code.  Even
+if it's not a 100% match because of optimizations and inlining, it's still
+helpful as I am not fluent in x86.
+
+Anyway, did I need to run perf to obtain that?  Looked around for
+debuggers... but in the end, `objdump` fits the bill:
+
+: objdump -Sd target/release/chipers
+
+Gives me the output used by perf.  Not sure if the `-d` is necessary there or
+implied by `-S`.  Anyway.
+
+After that, wading through the 28Mb ASM file is made easier by the fact that it
+contains even the comments in my code.
+
+So here is what my switch dispatch looks like:
+
+#+BEGIN_SRC asm
+    match opcode & 0xF000 {
+   3c991:	25 00 f0 00 ff       	and    $0xff00f000,%eax
+      0x0000 => match opcode & 0x00FF {
+   3c996:	0f bf c8             	movswl %ax,%ecx
+   3c999:	0f b7 c0             	movzwl %ax,%eax
+   3c99c:	81 f9 ff ef ff ff    	cmp    $0xffffefff,%ecx
+   3c9a2:	7e 2f                	jle    3c9d3 <_ZN7chipers4main17h0d0151857b9b6578E+0x3c23>
+   3c9a4:	81 f9 ff 3f 00 00    	cmp    $0x3fff,%ecx
+   3c9aa:	7f 6d                	jg     3ca19 <_ZN7chipers4main17h0d0151857b9b6578E+0x3c69>
+   3c9ac:	81 f9 ff 1f 00 00    	cmp    $0x1fff,%ecx
+   3c9b2:	0f 8f 18 01 00 00    	jg     3cad0 <_ZN7chipers4main17h0d0151857b9b6578E+0x3d20>
+   3c9b8:	3d 00 f0 00 00       	cmp    $0xf000,%eax
+   3c9bd:	0f 84 93 06 00 00    	je     3d056 <_ZN7chipers4main17h0d0151857b9b6578E+0x42a6>
+   3c9c3:	3d 00 10 00 00       	cmp    $0x1000,%eax
+   3c9c8:	0f 84 a8 08 00 00    	je     3d276 <_ZN7chipers4main17h0d0151857b9b6578E+0x44c6>
+   3c9ce:	e9 61 07 00 00       	jmpq   3d134 <_ZN7chipers4main17h0d0151857b9b6578E+0x4384>
+   3c9d3:	81 f9 ff af ff ff    	cmp    $0xffffafff,%ecx
+   3c9d9:	7e 7b                	jle    3ca56 <_ZN7chipers4main17h0d0151857b9b6578E+0x3ca6>
+   3c9db:	81 f9 ff cf ff ff    	cmp    $0xffffcfff,%ecx
+   3c9e1:	0f 8f 9c 00 00 00    	jg     3ca83 <_ZN7chipers4main17h0d0151857b9b6578E+0x3cd3>
+   3c9e7:	3d 00 b0 00 00       	cmp    $0xb000,%eax
+   3c9ec:	0f 84 2a 01 00 00    	je     3cb1c <_ZN7chipers4main17h0d0151857b9b6578E+0x3d6c>
+   3c9f2:	3d 00 c0 00 00       	cmp    $0xc000,%eax
+   3c9f7:	0f 85 37 07 00 00    	jne    3d134 <_ZN7chipers4main17h0d0151857b9b6578E+0x4384>
+#+END_SRC
+
+Doesn't look like a particularly efficient jump table to me.  There are multiple
+tests that branch out to other parts.
+
+The mangled names are not the most readable.  And following jumps through
+assembly is... not fun.  Aren't there any tools that can give me a decent
+control graph?  Or at least, allow me to follow jumps and back?
+
+Seems like radare2 is basically the only tool that has plenty of features, runs
+on Linux /and/ doesn't cost a leg.  Call graphs [[https://monosource.gitbooks.io/radare2-explorations/content/intro/visual_graphs.html][seem supported]].
+
+Trying it out... but it takes a great deal of time to analyze the binary.  Then,
+I don't know what keys I hit, but it didn't seem to like it...
+Okay, got it.
+
+: r2 target/release/chipers
+: $ af @ 0x3c999
+: $ 0x3c999
+: $ VVV
+
+[wait]
+
+[[file:data/chipers-asm-call-graph.png]]
+
+Okay, so maybe the straight ASM is more helpful in the end...
