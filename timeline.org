@@ -11071,3 +11071,77 @@ This is exactly what happens at the start.  Then it does something else entirely
 It seems I haven't implemented the busreq/reset stuff correctly, as the last two
 RESET BUSREQ attests: it's letting the Z80 run, but then requests the bus again,
 which should stop the Z80.
+
+Further investigation: one MOV is not triggering a write_b:
+
+: 0X43C94   MOVE.b #$1, ($A11100).l
+
+Argh, stupid mistake on my part by masking the address with 0xA04003 in write_b
+to write to the ym2612...
+
+Also, the register window /is/ working.  I wasn't aware that data registers were
+32bit wide, and was looking at the top byte which was often zero...  No way to
+resize this window!
+
+It seems Addams Family is reading 0x1000 in the Z80 and expecting values from
+there...  According to the manual, that's in the static RAM area of the Z80.
+
+Hmm, but the game starts by writing to the RAM, so that's a good sign:
+
+#+BEGIN_EXAMPLE
+BUSREQ 1
+RESET 1
+BUSACK 0
+BUSACK 0
+ZWRITE 1 1
+ZWRITE 2 d9
+ZWRITE 3 1f
+ZWRITE 4 11
+ZWRITE 5 27
+ZWRITE 6 0
+ZWRITE 7 21
+ZWRITE 8 26
+ZWRITE 9 0
+ZWRITE a f9
+ZWRITE b 77
+ZWRITE c ed
+ZWRITE d b0
+ZWRITE e dd
+ZWRITE f e1
+ZWRITE 10 fd
+ZWRITE 11 e1
+ZWRITE 12 ed
+ZWRITE 13 47
+ZWRITE 14 ed
+ZWRITE 15 4f
+ZWRITE 16 d1
+ZWRITE 17 e1
+ZWRITE 18 f1
+ZWRITE 19 8
+ZWRITE 1a d9
+ZWRITE 1b c1
+ZWRITE 1c d1
+ZWRITE 1d e1
+ZWRITE 1e f1
+ZWRITE 1f f9
+ZWRITE 20 f3
+ZWRITE 21 ed
+ZWRITE 22 56
+ZWRITE 23 36
+ZWRITE 24 e9
+ZWRITE 25 e9
+#+END_EXAMPLE
+
+Doesn't write to 0x1000 though.
+
+
+However, Since the Z80 PC starts at 0, that means the game is writing a program
+to the Z80!  These are opcodes that should be executed after the Z80 is reset.
+Maybe even a program that deals with sound.  Or one that ends up writing
+something to 0x1000.
+
+Fleshed out the Z80 implementation a bit with an opcode table.  Just with a nop
+function for now, but the rest will come.
+
+At this point there's not much more I can do for this ROM until more Z80
+instructions are implemented.
