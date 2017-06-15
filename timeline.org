@@ -10912,3 +10912,67 @@ Okay, got it.
 [[file:data/chipers-asm-call-graph.png]]
 
 Okay, so maybe the straight ASM is more helpful in the end...
+
+* [2017-06-15 jeu.]
+** More assembly exploration                                   :chipers:rust:
+Showed the assembly to I., we tried to understand what was going on.  Looks like
+the compiler doesn't make a jump table because there are too few valid opcodes
+out of the possible values.
+
+I tried refactoring the code using a single match instruction.  It's not
+correct, and it doesn't even cut the number of tests and jumps.  Looks like the
+compiler derived a tree in order to make O(n) comparisons to get to the correct
+opcode.  It would be interesting to go back and see this tree.
+
+I. suggested we write a proof of concept of dispatching on an opcode table, to
+see what kind of code it generated.  Something simple:
+
+#+BEGIN_SRC rust
+use std::env;
+
+struct Ctxt {
+  pc: u16,
+  mem: [u8; 0x1000],
+}
+
+fn nop(ctxt: &mut Ctxt) { println!("nop"); }
+fn add(ctxt: &mut Ctxt) { println!("add"); }
+fn sub(ctxt: &mut Ctxt) { println!("sub"); }
+
+fn main() {
+  let args : Vec<_> = env::args().collect();
+  let opcode = args[0].parse::<u16>().unwrap();
+  let mut op_table : [fn(&mut Ctxt); 0x10000] = [nop; 0x10000];
+
+  let mut c = Ctxt { pc: 0, mem: [0; 0x1000] };
+
+  op_table[12] = add;
+  op_table[31] = sub;
+
+  op_table[(opcode as usize)](&mut c)
+}
+#+END_SRC
+
+Here is the relevant assembly part:
+
+: objdump -Sd -M intel-mnemonic opcode-table > opcode-table.asm
+
+[Switched to the less noisy intel ASM syntax]
+
+#+BEGIN_SRC asm
+  op_table[(opcode as usize)](&mut c)
+    5f7f:	4a 8b 84 e5 08 df f7 	mov    rax,QWORD PTR [rbp+r12*8-0x820f8]
+    5f86:	ff
+    5f87:	48 8d bd 08 df ff ff 	lea    rdi,[rbp-0x20f8]
+    5f8e:	ff d0                	call   rax
+#+END_SRC
+
+The ~mov~ takes the opcode value (r12), multiplies it by 8 (for 64bit
+alignment), and adds some offset.  Then it calls that address.
+
+So, instead of a bunch of tests, you dispatch straight to the opcode function.
+
+For passing arguments, we can use context object as the examples above shows.
+Decoding of the opcode should be done inside each function, by calling the
+decoding function which should be inlined, so the compiler discards any code
+that deals with arguments we don't need.
