@@ -10976,3 +10976,98 @@ For passing arguments, we can use context object as the examples above shows.
 Decoding of the opcode should be done inside each function, by calling the
 decoding function which should be inlined, so the compiler discards any code
 that deals with arguments we don't need.
+
+** Stepping through Sonic assembly                                   :megado:
+Seems stuck in a loop after some changes I made to the Z80.
+
+The loop:
+
+#+BEGIN_EXAMPLE
+  250  BTST.b D0, (A1)          01 11
+  252  BNE.b $FC [350]          66 FC
+#+END_EXAMPLE
+
+D0 and A1 are all zeroes.
+
+The disassembler is drunk, as I don't know where that 350 value is coming
+from... The displacement to BNE is can only be 8bit, and it's signed, so it can
+hardly go higher than 126...
+
+Stepping the BTST, the next line changes to:
+
+: 252 BNE.b $11 [265]       66 FC
+
+o_-
+
+Let's trust the raw memory values (assuming they are right):
+
+: 01 11  ->  BTST D0, (A1)
+: 66 FC  ->  BNE  $FC
+
+$FC is -4 when taken as a signed displacement.  That ends up back to 250 after
+we have read past the opcode at 252.
+
+So the loop is the correct behavior, but the debugger is wrong.
+
+Hmm, seems the register display of the debugger is also wrong.  By plugging into
+the btst function to display the value of A1, I get A11100.
+
+So if it's reading A11100... it's probably my changes to the Z80.
+
+Hmm, seems Sonic expects the Z80 /not/ to be running at the start.  Some docs
+says the Z80 has the bus on reset, but the Genesis manual says otherwise.
+
+Turning the Z80 off at the start fixes Sonic.
+
+Let me double check that BTST still... seems good according to the doc I found.
+The number of cycles is zero, but that shouldn't impact games too much for now.
+
+Now, Addams Family is also polling the Z80.  Here is a log of how it interacts:
+
+#+BEGIN_EXAMPLE
+BUSREQ.w 100
+RESET.w 100
+BUSACK 0
+BUSACK 0
+RESET.w 0
+BUSREQ.w 0
+RESET.w 100
+--
+RESET.w 0
+BUSREQ.w 100
+RESET.w 0
+RESET.w 100
+RESET.w 0
+BUSREQ.w 0
+RESET.w 100
+BUSREQ.w 100
+BUSACK 1
+BUSACK 1
+BUSACK 1
+BUSACK 1
+...
+#+END_EXAMPLE
+
+Okay so first of all, we missed the word writes to BUSREQ/RESET because we
+needed to add the code in write_w.
+
+That said, this interaction is funky.  It's as if the game is trying different
+access patterns to see how the Z80 responds.
+
+The Genesis manual suggests this access pattern:
+
+#+BEGIN_EXAMPLE
+BUSREQ 100
+RESET 100
+[mov data to Z80 RAM]
+RESET 0
+BUSREQ 0
+RESET 100
+#+END_EXAMPLE
+
+This is exactly what happens at the start.  Then it does something else entirely
+(though I don't have timing between operations in this output).
+
+It seems I haven't implemented the busreq/reset stuff correctly, as the last two
+RESET BUSREQ attests: it's letting the Z80 run, but then requests the bus again,
+which should stop the Z80.
