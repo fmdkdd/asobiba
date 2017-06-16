@@ -11145,3 +11145,136 @@ function for now, but the rest will come.
 
 At this point there's not much more I can do for this ROM until more Z80
 instructions are implemented.
+
+* [2017-06-16 ven.]
+** That weird switch optimization                              :chipers:rust:
+I want to know what's going on there.
+
+: objdump --no-show-raw-insn -SCM intel-mnemonic target/release/chipers
+
+-M because intel syntax is less noisy,
+-C is able to demangle rust symbols,
+-S for interspersing source code (rough indication)
+--no-show-raw-insn removes the instruction bytes
+
+#+BEGIN_SRC asm
+   3c920:	mov    rsi,QWORD PTR [rbp-0x19060] ; rsi = self.pc;
+    self.reads[addr] += 1;
+   3c927:	cmp    rsi,0x1000                  ; bounds check
+   3c92e:	jae    400eb <chipers::main+0x733b>; "
+   3c934:	inc    QWORD PTR [rbp+rsi*8-0x19010] ; self.reads[addr] += 1
+      | (ram.read(self.pc + 1) as u16);
+   3c93c:	lea    rax,[rsi+0x1]                ; rax = self.pc + 1
+   3c940:	cmp    rax,0x1000                   ; bounds check
+   3c946:	jae    400d7 <chipers::main+0x7327> ; "
+    let opcode = ((ram.read(self.pc) as u16) << 8)
+   3c94c:	movzx  r12d,BYTE PTR [rbp+rsi*1-0x9010] ; r12d = self.ram[pc]       : opcode.h
+   3c955:	mov    eax,r12d                         ; eax = r12d
+   3c958:	inc    QWORD PTR [rbp+rsi*8-0x19008]    ; self.reads[addr-2] += 1
+   3c960:	shl    eax,0x8                          ; eax <<= 8                 : opcode.h << 8
+    let y = ((opcode & 0x00F0) >> 4) as usize;
+   3c963:	movzx  r13d,BYTE PTR [rbp+rsi*1-0x900f] ; r13d = self.ram[pc+1]     : opcode.l
+    let opcode = ((ram.read(self.pc) as u16) << 8)
+   3c96c:	lea    ebx,[r13+rax*1+0x0]              ; ebx = r13 + eax           : opcode
+        self.stack.push_front(self.pc);
+   3c971:	lea    r14,[rsi+0x2]                    ; r14 = self.pc + 2
+    self.pc += 2;
+   3c975:	mov    QWORD PTR [rbp-0x19060],r14      ; self.pc = r14
+  fn exec<M, S, K>(&mut self, opcode: u16, ram: &mut M, screen: &mut S,
+   3c97c:	mov    WORD PTR [rbp-0x2a],bx           ; mov 16b opcode to stack
+    let addr = opcode & 0x0FFF;
+   3c980:	and    ebx,0xfff                        ; ebx: opcode & 0xfff    : addr
+    let x = ((opcode & 0x0F00) >> 8) as usize;
+   3c986:	and    r12d,0xf                         ; r12d : opcode.h & 0xf  : x
+    let y = ((opcode & 0x00F0) >> 4) as usize;
+   3c98a:	mov    r15,r13                          ; r15 : opcode.l
+   3c98d:	shr    r15,0x4                          ; r15 : opcode.l >> 4    : y
+    match opcode & 0xF000 {
+   3c991:	and    eax,0xff00f000                 ; eax : (opcode.h << 8) & 0xff00f000
+      0x0000 => match opcode & 0x00FF {         ;  ax : (opcode.h << 8) & 0xf000
+   3c996:	movsx  ecx,ax                         ; ecx : 0xfffff000 & (opcode.h << 8) or 0x0000f000 & (opcode.h << 8)
+   3c999:	movzx  eax,ax                         ; eax : 0x0000f000 & (opcode.h << 8)
+   3c99c:	cmp    ecx,0xffffefff
+   3c9a2:	jle    3c9d3 <chipers::main+0x3c23>
+   3c9a4:	cmp    ecx,0x3fff
+   3c9aa:	jg     3ca19 <chipers::main+0x3c69>
+   3c9ac:	cmp    ecx,0x1fff
+   3c9b2:	jg     3cad0 <chipers::main+0x3d20>
+   3c9b8:	cmp    eax,0xf000
+   3c9bd:	je     3d056 <chipers::main+0x42a6>
+   3c9c3:	cmp    eax,0x1000
+   3c9c8:	je     3d276 <chipers::main+0x44c6>
+   3c9ce:	jmp    3d134 <chipers::main+0x4384>
+   3c9d3:	cmp    ecx,0xffffafff
+   3c9d9:	jle    3ca56 <chipers::main+0x3ca6>
+   3c9db:	cmp    ecx,0xffffcfff
+   3c9e1:	jg     3ca83 <chipers::main+0x3cd3>
+   3c9e7:	cmp    eax,0xb000
+   3c9ec:	je     3cb1c <chipers::main+0x3d6c>
+   3c9f2:	cmp    eax,0xc000
+   3c9f7:	jne    3d134 <chipers::main+0x4384>
+   ...
+#+END_SRC
+
+#+BEGIN_SRC rust
+let opcode : u32 = self.ram[pc] << 8 | self.ram[pc+1];
+let a = opcode & 0xf000;
+let x = opcode & 0x0f00 >> 8;
+let y = opcode & 0x00f0 >> 4;
+let l = opcode & 0x00ff;
+if (a < 0xf000) {
+   if (a < 0xb000) {
+     3ca56
+   }
+   else if (a >= 0xd000) {
+     if (a == 0xd000) {
+       // draw sprite
+     }
+     else if (a == 0xe000) {
+       if (l == 0x9e) {
+         // check key
+       }
+       else if (l == 0xa1) {
+         // !check key
+       }
+       else {
+         panic!
+       }
+     }
+   }
+   else if (a == 0xb000) {
+     // self.pc = (addr + self.v[0])
+   }
+   else if (a == 0xc000) {
+     // RNG opcode
+   }
+   else {
+     if (l == 0xe0) {
+       // clear screen
+     }
+     else if (l == 0xee) {
+       // pop stack
+     }
+   }
+}
+else {
+  if (a >= 0x4000) {
+    3ca19
+  }
+  else if (a >= 0x2000) {
+    3cad0
+  }
+  else if (a == 0xf000) {
+     3d056
+  }
+  else if
+}
+else {
+}
+#+END_SRC
+
+It takes ages to decipher it by hand... but it certainly looks like a balanced
+tree.  It's not a straight conversion of the switch.
+
+But it's still more comparisons than needed, compared to the opcode table
+approach.
