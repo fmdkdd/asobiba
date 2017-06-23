@@ -11278,3 +11278,95 @@ tree.  It's not a straight conversion of the switch.
 
 But it's still more comparisons than needed, compared to the opcode table
 approach.
+
+* [2017-06-23 ven.]
+** Improving the megado debugger                                     :megado:
+Fixed a couple of annoyances with the debugger, namely the register view being
+cut and the displacement calculation for branching instructions being funky.
+
+In the process, I triggered a SIGFPE from a divide by zero in DIVU.  We did not
+account for this eventuality.  I added a check, but the M68k actually has a its
+own exception mechanism in case of division by zero, so that should be emulated
+rather than proceeding to the next instruction.
+
+Turns out that DIVU has a sibling, DIVS, which is exactly the same but for
+signed operands.  Pretty sure we did not handle that correctly, since:
+
+0xFE = -2 as signed = 254 as unsigned
+0x02 =  2 as signed =   2 as unsigned
+
+so: 0xFE / 0x02 = 0xFF if the division is signed
+                = 0x7F if the division is unsigned
+
+Now, I'm hoping this will fix some games... but it's unlikely as DIVU/DIVS each
+take around 150 cycles, so I would guess they are not used that often.
+
+** Fixing Quackshot                                                  :megado:
+Quackshot is hanging on the intro, I'm only seeing this torch:
+
+[[file:data/quackshot-torch.png]]
+
+... and the program becomes unresponsive.  What?
+
+GDB tells me we are in ~vdp_draw_scanline~.  Oh, I see, there's a ~do/while~
+loop here to browse the linked list of sprites.  But it's not exiting.. there's
+supposedly a hard limit on the number of sprites it can draw per scanlines:
+
+: true || (v->display_width == 32 && sprite_counter <= 16 || v->display_width == 40 && sprite_counter <= 20) disabled for now */);
+
+and re-activating this code indeed takes me further, but the victory is hollow:
+
+[[file:data/quackshot-intro-garbage.png]]
+
+Pressing start takes me to the glorious title screen though:
+
+[[file:data/quackshot-title-success.png]]
+
+But less than one second after, the garbage returns:
+
+[[file:data/quackshot-title-garbage.png]]
+
+Also, this change fucks up Sonic.
+
+Even if the condition doesn't work yet, it might be a good idea to stop the loop
+at some point, even with a ludicrous number, like 64.
+
+Doing that doesn't fuck up Sonic, but Quackshot is still garbage.  You can still
+make out the enemies and plungers behind the bars, so you /can/ play, but it
+could be better.
+
+** Sonic 2                                                           :megado:
+Hangs in a loop waiting for $C00004 to be ANDI $4.  That address is the control
+port of the VDP, and bit 2 is to indicate HBlank.
+
+But we are never setting the HBlank field.
+
+genvdp.txt says:
+
+#+BEGIN_QUOTE
+Bit 2 returns the real-time status of the horizontal blanking signal.
+ It is set at H counter cycle E4h and cleared at H counter cycle 08h.
+#+END_QUOTE
+
+Cool.  But we are not setting the h_counter either.  Hmm hmm.
+
+According to [[http://gendev.spritesmind.net/forum/viewtopic.php?t=94#p1105][someone on the Internet]], the Hblank period lasts for 84 CPU cycles.
+Let's run with that.
+
+Hey, it works!  (After fixing an embarrassing sign bug in the Z80).
+
+[[file:data/sonic2-annoyed.png]]
+
+And then, it crashed.
+
+It crashes on a FETCH_EA_AND_SET, because i->dst->set_value_func is 0.  Probably
+we are executing some invalid opcodes that's not caught at generation.  Opcode
+seems to be 0x19F1.
+
+0001 1001 1111 0001
+MOVE.b 100 111 110 001
+MOVE.b Address with index (A0), #Imm
+
+Yeah, moving into immediate value.  Definitely bogus.  So the cause is
+antecedent... but these bugs are hard to track down.  At the very least, we
+should /not/ crash on bogus instructions.
