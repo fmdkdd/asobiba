@@ -341,10 +341,10 @@ impl FromStr for ParsedOperand {
         => Bit(s.parse()
                .map_err(|_| format!("failed to parse bit '{}'", s))?),
 
-      // Weird operand for IM
+      // FIXME: Weird operand for IM
       "0/1" => Unknown,
 
-      // Even weirder
+      // FIXME: Even weirder
       "(C)* / IN F" => Unknown,
 
       _ => return Err(format!("unknown operand '{}'", s)),
@@ -409,6 +409,21 @@ impl FromStr for ParsedOpcode {
 }
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Dissambler code
+
+fn emit_disassembler(ops: &[ParsedOpcode]) {
+  for o in ops {
+    println!("[0x{:04x}] = \"{}\",", o.code, o.raw_mnemonic);
+  }
+}
+
+fn emit_op_table(ops: &[ParsedOpcode]) {
+  for o in ops {
+    println!("[0x{:04x}] = z80_op_nop,", o.code);
+  }
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Main
 
 
@@ -416,19 +431,22 @@ fn main() {
   let f = File::open("z80_ops.txt").expect("Can't open z80_ops.txt file");
   let b = BufReader::new(f);
   let parsed_ops: Result<Vec<ParsedOpcode>, String> = b.lines()
-    .map(|l| l.unwrap())
-    .map(|l| ParsedOpcode::from_str(&l))
+    .map(|l| ParsedOpcode::from_str(&l.unwrap()))
     .collect();
 
   if let Err(e) = parsed_ops {
     println!("Parse error: {}", e);
     ::std::process::exit(1);
   } else {
-    for p in parsed_ops.unwrap() {
-      if !p.undocumented {
-        println!("{:?}", p);
-      }
-    }
-  }
+    let ops = parsed_ops.unwrap();
+    let good_ops: Vec<ParsedOpcode> = ops.into_iter().filter(|p| !p.undocumented).collect();
 
+    // TODO: compare ops to the raw string
+    // for o in good_ops {
+    //   println!("{:?}", o);
+    // }
+
+    emit_disassembler(&good_ops);
+    emit_op_table(&good_ops);
+  }
 }
