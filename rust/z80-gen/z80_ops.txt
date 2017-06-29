@@ -54,7 +54,7 @@
 35    DEC (HL)
 36 n  LD (HL), n
 37    SCF
-38 n  JR C, PC + n
+38 n  JR Cy, PC + n
 39    ADD HL, SP
 3A n n      LD A, (nn)
 3B    DEC SP
@@ -469,11 +469,11 @@ D4 n n      CALL NC, nn
 D5    PUSH DE
 D6 n  SUB n
 D7    RST 10h
-D8    RET C
+D8    RET Cy
 D9    EXX
-DA n n      JP C, nn
+DA n n      JP Cy, nn
 DB n  IN A, (n)
-DC n n      CALL C, nn
+DC n n      CALL Cy, nn
 DD09  ADD IX, BC
 DD19  ADD IX, DE
 DD21 n n    LD IX, nn
