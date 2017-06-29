@@ -1,0 +1,8 @@
+[package]
+name = "z80_gen"
+version = "0.1.0"
+authors = ["fmdkdd"]
+
+[dependencies]
+regex = "0.2"
+lazy_static = "0.2"

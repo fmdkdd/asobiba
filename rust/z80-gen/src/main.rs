@@ -1,4 +1,11 @@
+#[macro_use] extern crate lazy_static;
+extern crate regex;
+
+use std::io::{BufRead, BufReader};
 use std::fmt::{self, Display, Formatter};
+use std::fs::File;
+
+use regex::Regex;
 
 // Micro operations used to define the behavior of opcodes, and that will be
 // translated to the target programming language.
@@ -207,8 +214,90 @@ fn emit(opcode: u16, b: Block) {
 }
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Parse z80_ops file
+
+#[derive(Debug)]
+struct ParsedOpcode {
+  raw: String,                  // the unparsed line
+  code: u16,
+  arg1: Option<OpcodeArg>,
+  arg2: Option<OpcodeArg>,
+  mnemonic: ParsedMnemonic,
+}
+
+#[derive(Debug)]
+struct ParsedMnemonic {
+  raw: String,
+  name: String,
+  dst: Operand,
+  src: Operand,
+}
+
+#[derive(Debug)]
+struct Operand {
+}
+
+#[derive(Debug)]
+enum OpcodeArg {
+  ImmUnsigned,
+  ImmSigned,
+  Code(u8),
+}
+
+fn parse_z80_op_arg(arg: &str) -> OpcodeArg {
+  println!("{}", arg);
+  match arg {
+    "n" => OpcodeArg::ImmUnsigned,
+    "d" => OpcodeArg::ImmSigned,
+    _   => OpcodeArg::Code(u8::from_str_radix(arg, 16).unwrap()),
+  }
+}
+
+fn parse_z80_mnemonic(input: &str) -> ParsedMnemonic {
+  let raw = input.to_owned();
+
+  ParsedMnemonic {
+    raw,
+    name: String::from("FOO"),
+    dst: Operand {},
+    src: Operand {},
+  }
+}
+
+fn parse_z80_op_line(line: String) -> ParsedOpcode {
+  lazy_static! {
+    static ref RE: Regex =
+      Regex::new(r"^([0-9ABCDEF]{2,4})(?: ([nd]))?(?: ([nd]|[0-9ABCDEF]{2}))?   *(.*)$")
+      .unwrap();
+  }
+
+  let raw = line.to_owned();
+  let caps = RE.captures(&line).unwrap();
+
+  let op = ParsedOpcode {
+    raw,
+    code: u16::from_str_radix(&caps[1], 16).unwrap(),
+    arg1: caps.get(2).map(|t| parse_z80_op_arg(t.as_str())),
+    arg2: caps.get(3).map(|t| parse_z80_op_arg(t.as_str())),
+    mnemonic: parse_z80_mnemonic(&caps[4]),
+  };
+
+  op
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Main
 
+
 fn main() {
-  emit_loads();
+  let f = File::open("z80_ops.txt").expect("Can't open z80_ops.txt file");
+  let b = BufReader::new(f);
+  let parsed_ops: Vec<ParsedOpcode> = b.lines()
+    .map(|l| l.unwrap())
+    .map(parse_z80_op_line)
+    .collect();
+
+  for p in parsed_ops {
+    println!("{:?}", p);
+  }
 }
