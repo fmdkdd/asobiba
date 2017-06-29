@@ -6,3 +6,5 @@ authors = ["fmdkdd"]
 [dependencies]
 regex = "0.2"
 lazy_static = "0.2"
+enum_derive = "0.1"
+custom_derive = "0.1"

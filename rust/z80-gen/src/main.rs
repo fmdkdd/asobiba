@@ -1,3 +1,8 @@
+#![recursion_limit = "1000"] // Needed for the large EnumFromStr derive
+// see https://github.com/DanielKeep/rust-custom-derive/issues/12
+
+#[macro_use] extern crate custom_derive;
+#[macro_use] extern crate enum_derive;
 #[macro_use] extern crate lazy_static;
 extern crate regex;
 
@@ -228,9 +233,21 @@ struct ParsedOpcode {
 #[derive(Debug)]
 struct ParsedMnemonic {
   raw: String,
-  name: String,
-  dst: Operand,
-  src: Operand,
+  name: MnemonicName,
+  dst: Option<Operand>,
+  src: Option<Operand>,
+  undocumented: bool,
+}
+
+custom_derive! {
+  #[derive(Debug, EnumFromStr)]
+  enum MnemonicName {
+    ADC, ADD, AND, BIT, CALL, CCF, CP, CPD, CPDR, CPI, CPIR, CPL, DAA,
+    DEC, DI, DJNZ, EI, EX, EXX, HALT, IM, IN, INC, IND, INDR, INI, INIR,
+    JP, JR, LD, LDD, LDDR, LDI, LDIR, NEG, NOP, OR, OTDR, OTIR, OUT, OUTD,
+    OUTI, POP, PUSH, RES, RET, RETI, RETN, RL, RLA, RLC, RLCA, RLD, RR, RRA,
+    RRC, RRCA, RRD, RST, SBC, SCF, SET, SLA, SLL, SRA, SRL, SUB, XOR,
+  }
 }
 
 #[derive(Debug)]
@@ -245,7 +262,6 @@ enum OpcodeArg {
 }
 
 fn parse_z80_op_arg(arg: &str) -> OpcodeArg {
-  println!("{}", arg);
   match arg {
     "n" => OpcodeArg::ImmUnsigned,
     "d" => OpcodeArg::ImmSigned,
@@ -254,13 +270,20 @@ fn parse_z80_op_arg(arg: &str) -> OpcodeArg {
 }
 
 fn parse_z80_mnemonic(input: &str) -> ParsedMnemonic {
+  lazy_static! {
+    static ref RE: Regex =
+      Regex::new(r"([A-Z]+)(?: (.+?))?(?:, (.+))?(\*)?$").unwrap();
+  }
+
   let raw = input.to_owned();
+  let caps = RE.captures(&input).unwrap();
 
   ParsedMnemonic {
     raw,
-    name: String::from("FOO"),
-    dst: Operand {},
-    src: Operand {},
+    name: caps[1].parse().unwrap(),
+    dst: None,
+    src: None,
+    undocumented: caps.get(4).is_some(),
   }
 }
 
@@ -273,6 +296,7 @@ fn parse_z80_op_line(line: String) -> ParsedOpcode {
 
   let raw = line.to_owned();
   let caps = RE.captures(&line).unwrap();
+  println!("Parsing {}", raw);
 
   let op = ParsedOpcode {
     raw,
