@@ -469,7 +469,7 @@ D4 n n      CALL NC, nn
 D5    PUSH DE
 D6 n  SUB n
 D7    RST 10h
-D8    RETC
+D8    RET C
 D9    EXX
 DA n n      JP C, nn
 DB n  IN A, (n)
