@@ -9,6 +9,7 @@ extern crate regex;
 use std::io::{BufRead, BufReader};
 use std::fmt::{self, Display, Formatter};
 use std::fs::File;
+use std::str::FromStr;
 
 use regex::Regex;
 
@@ -225,23 +226,42 @@ fn emit(opcode: u16, b: Block) {
 struct ParsedOpcode {
   raw: String,                  // the unparsed line
   code: u16,
-  arg1: Option<OpcodeArg>,
-  arg2: Option<OpcodeArg>,
-  mnemonic: ParsedMnemonic,
+  name: Mnemonic,
+  dst: Option<ParsedOperand>,
+  src: Option<ParsedOperand>,
+  undocumented: bool,
+  raw_mnemonic: String,
 }
 
 #[derive(Debug)]
 struct ParsedMnemonic {
   raw: String,
-  name: MnemonicName,
+  name: Mnemonic,
   dst: Option<ParsedOperand>,
   src: Option<ParsedOperand>,
   undocumented: bool,
 }
 
+#[derive(Debug)]
+enum ParsedOperand {
+  Bit(u8),
+  Register(Register),
+  Immediate,
+  ImmediateExtended,
+  ZeroPage(u8),
+  AddressRelative,
+  AddressImmediate,
+  AddressExtended,
+  AddressIndexed(Register),
+  AddressRegister(Register),
+  Conditional(Condition),
+
+  Unknown,
+}
+
 custom_derive! {
   #[derive(Debug, EnumFromStr)]
-  enum MnemonicName {
+  enum Mnemonic {
     ADC, ADD, AND, BIT, CALL, CCF, CP, CPD, CPDR, CPI, CPIR, CPL, DAA,
     DEC, DI, DJNZ, EI, EX, EXX, HALT, IM, IN, INC, IND, INDR, INI, INIR,
     JP, JR, LD, LDD, LDDR, LDI, LDIR, NEG, NOP, OR, OTDR, OTIR, OUT, OUTD,
@@ -268,136 +288,128 @@ custom_derive! {
   }
 }
 
-#[derive(Debug)]
-enum ParsedOperand {
-  Bit(u8),
-  Register(Register),
-  Immediate,
-  ImmediateExtended,
-  ZeroPage(u8),
-  AddressRelative,
-  AddressImmediate,
-  AddressExtended,
-  AddressIndexed(Register),
-  AddressRegister(Register),
-  Conditional(Condition),
+impl FromStr for ParsedOperand {
+  type Err = String;
 
-  Unknown,
-}
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    lazy_static! {
+      static ref COMPOUND: Regex =
+        Regex::new(r"^[A-Z]+ ([0-9], )?\([A-Z+ hld]+\)$").unwrap();
+    }
 
-#[derive(Debug)]
-enum OpcodeArg {
-  ImmUnsigned,
-  ImmSigned,
-  Code(u8),
-}
+    use ParsedOperand::*;
+    use Register::*;
 
-fn parse_z80_op_arg(arg: &str) -> OpcodeArg {
-  match arg {
-    "n" => OpcodeArg::ImmUnsigned,
-    "d" => OpcodeArg::ImmSigned,
-    _   => OpcodeArg::Code(u8::from_str_radix(arg, 16).unwrap()),
+    // FIXME: compound ops are ignored, as they are undocumented
+    if COMPOUND.is_match(s) {
+      return Ok(Unknown);
+    }
+
+    Ok(match s {
+      "n" => Immediate,
+      "A" | "B" | "C" | "D" | "E" |"H" | "L" | "I" | "R"
+        => Register(s.parse()
+                    .map_err(|_| format!("failed to parse register '{}'", s))?),
+
+      "nn" => ImmediateExtended,
+      "BC" | "DE" | "AF" | "HL" | "SP" | "IX" | "IY"
+        => Register(s.parse()
+                    .map_err(|_| format!("failed to parse register '{}'", s))?),
+      "IXH" => Register(IXh),
+      "IXL" => Register(IXl),
+      "IYH" => Register(IYh),
+      "IYL" => Register(IYl),
+      "AF'" => Register(AF_),
+
+      "(n)"  => AddressImmediate,
+      "(nn)" => AddressExtended,
+      "(C)" => AddressRegister(C),
+      "(BC)" | "(DE)" | "(HL)" | "(SP)" | "(IX)" | "(IY)"
+        => AddressRegister(s[1..s.len()-1].parse()
+                           .map_err(|_| format!("failed to parse register '{}'", s))?),
+
+      "(IX + d)" => AddressIndexed(IX),
+      "(IY + d)" => AddressIndexed(IY),
+
+      "PC + n" => AddressRelative,
+
+      "NZ" | "Z" | "Cy" | "NC" | "PO" | "PE" | "P" | "M"
+        => Conditional(s.parse()
+                       .map_err(|_| format!("failed to parse condition '{}'", s))?),
+
+      "0h" | "8h" | "10h" | "18h" | "20h" | "28h" | "30h" | "38h"
+        => ZeroPage(u8::from_str_radix(&s[..s.len()-1], 16)
+                    .map_err(|_| format!("failed to parse hex number '{}'", s))?),
+
+      "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7"
+        => Bit(s.parse()
+               .map_err(|_| format!("failed to parse bit '{}'", s))?),
+
+      // Weird operand for IM
+      "0/1" => Unknown,
+
+      // Even weirder
+      "(C)* / IN F" => Unknown,
+
+      _ => return Err(format!("unknown operand '{}'", s)),
+    })
   }
 }
 
-fn parse_z80_operand(op: &str) -> ParsedOperand {
-  lazy_static! {
-    static ref COMPOUND: Regex =
-      Regex::new(r"^[A-Z]+ ([0-9], )?\([A-Z+ hld]+\)$").unwrap();
-  }
+impl FromStr for ParsedMnemonic {
+  type Err = String;
 
-  use ParsedOperand::*;
-  use Register::*;
-
-  // Ignore compound ops for now, as they are all undocumented anyway
-  if COMPOUND.is_match(&op) {
-    return Unknown;
-  }
-
-  match op {
-    "n" => Immediate,
-    "A" | "B" | "C" | "D" | "E" |"H" | "L" | "I" | "R"
-      => Register(op.parse().unwrap()),
-
-    "nn" => ImmediateExtended,
-    "BC" | "DE" | "AF" | "HL" | "SP" | "IX" | "IY"
-      => Register(op.parse().unwrap()),
-    "IXH" => Register(IXh),
-    "IXL" => Register(IXl),
-    "IYH" => Register(IYh),
-    "IYL" => Register(IYl),
-    "AF'" => Register(AF_),
-
-    "(n)"  => AddressImmediate,
-    "(nn)" => AddressExtended,
-    "(C)" => AddressRegister(C),
-    "(BC)" | "(DE)" | "(HL)" | "(SP)" | "(IX)" | "(IY)"
-      => AddressRegister(op[1..op.len()-1].parse().unwrap()),
-
-    "(IX + d)" => AddressIndexed(IX),
-    "(IY + d)" => AddressIndexed(IY),
-
-    "PC + n" => AddressRelative,
-
-    "NZ" | "Z" | "Cy" | "NC" | "PO" | "PE" | "P" | "M"
-      => Conditional(op.parse().unwrap()),
-
-    "0h" | "8h" | "10h" | "18h" | "20h" | "28h" | "30h" | "38h"
-      => ZeroPage(u8::from_str_radix(&op[..op.len()-1], 16).unwrap()),
-
-    "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7"
-      => Bit(op.parse().unwrap()),
-
-    // Weird operand for IM
-    "0/1" => Unknown,
-
-    // Even weirder
-    "(C)* / IN F" => Unknown,
-
-    _ => panic!("Unknown operand: {}", op),
-  }
-}
-
-fn parse_z80_mnemonic(input: &str) -> ParsedMnemonic {
-  lazy_static! {
-    static ref RE: Regex =
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    lazy_static! {
+      static ref RE: Regex =
       // eg: LD A, RLC (IX + d)*
-      Regex::new(r"([A-Z]+)(?: (.+?))?(?:, (.+?))?(\*)?$").unwrap();
-  }
+        Regex::new(r"([A-Z]+)(?: (.+?))?(?:, (.+?))?(\*)?$").unwrap();
+    }
 
-  let raw = input.to_owned();
-  let caps = RE.captures(&input).unwrap();
+    let raw = s.to_owned();
+    let caps = RE.captures(&s)
+      .ok_or(format!("malformed mnemonic '{}'", s))?;
 
-  ParsedMnemonic {
-    raw,
-    name: caps[1].parse().unwrap(),
-    dst: caps.get(2).map(|t| parse_z80_operand(t.as_str())),
-    src: caps.get(3).map(|t| parse_z80_operand(t.as_str())),
-    undocumented: caps.get(4).is_some(),
+    Ok(ParsedMnemonic {
+      raw,
+      name: Mnemonic::from_str(&caps[1])
+        .map_err(|_| format!("failed to parse mnemonic name '{}' in '{}'",
+                             &caps[1], s))?,
+      // A bit hairy: turns Option<Result<Op, String>> into Result<Option<Op>, String>
+      dst: caps.get(2).map_or(Ok(None), |t| ParsedOperand::from_str(t.as_str()).map(Some))?,
+      src: caps.get(3).map_or(Ok(None), |t| ParsedOperand::from_str(t.as_str()).map(Some))?,
+      undocumented: caps.get(4).is_some(),
+    })
   }
 }
 
-fn parse_z80_op_line(line: String) -> ParsedOpcode {
-  lazy_static! {
-    static ref RE: Regex =
+impl FromStr for ParsedOpcode {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    lazy_static! {
+      static ref RE: Regex =
       // eg: DD09 n 78   mnemonic
-      Regex::new(r"^([0-9ABCDEF]{2,4})(?: ([nd]))?(?: ([nd]|[0-9ABCDEF]{2}))?   *(.*)$")
-      .unwrap();
+        Regex::new(r"^([0-9ABCDEF]{2,4})(?: [nd])?(?: (?:[nd]|[0-9ABCDEF]{2}))?   *(.*)$")
+        .unwrap();
+    }
+
+    let raw = s.to_owned();
+    let caps = RE.captures(&s)
+      .ok_or(format!("malformed opcode string '{}'", s))?;
+    let code = u16::from_str_radix(&caps[1], 16)
+      .map_err(|_| format!("failed to parse hex number '{}' in '{}'", &caps[1], s))?;
+    let mnemonic = ParsedMnemonic::from_str(&caps[2])?;
+
+    Ok(ParsedOpcode {
+      raw, code,
+      name: mnemonic.name,
+      raw_mnemonic: mnemonic.raw,
+      dst: mnemonic.dst,
+      src: mnemonic.src,
+      undocumented: mnemonic.undocumented,
+    })
   }
-
-  let raw = line.to_owned();
-  println!("Parsing {}", raw);
-  let caps = RE.captures(&line).unwrap();
-
-  let op = ParsedOpcode {
-    raw,
-    code: u16::from_str_radix(&caps[1], 16).unwrap(),
-    arg1: caps.get(2).map(|t| parse_z80_op_arg(t.as_str())),
-    arg2: caps.get(3).map(|t| parse_z80_op_arg(t.as_str())),
-    mnemonic: parse_z80_mnemonic(&caps[4]),
-  };
-
-  op
 }
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -407,12 +419,20 @@ fn parse_z80_op_line(line: String) -> ParsedOpcode {
 fn main() {
   let f = File::open("z80_ops.txt").expect("Can't open z80_ops.txt file");
   let b = BufReader::new(f);
-  let parsed_ops: Vec<ParsedOpcode> = b.lines()
+  let parsed_ops: Result<Vec<ParsedOpcode>, String> = b.lines()
     .map(|l| l.unwrap())
-    .map(parse_z80_op_line)
+    .map(|l| ParsedOpcode::from_str(&l))
     .collect();
 
-  for p in parsed_ops {
-    println!("{:?}", p);
+  if let Err(e) = parsed_ops {
+    println!("Parse error: {}", e);
+    ::std::process::exit(1);
+  } else {
+    for p in parsed_ops.unwrap() {
+      if !p.undocumented {
+        println!("{:?}", p);
+      }
+    }
   }
+
 }
