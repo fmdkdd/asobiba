@@ -11370,3 +11370,39 @@ MOVE.b Address with index (A0), #Imm
 Yeah, moving into immediate value.  Definitely bogus.  So the cause is
 antecedent... but these bugs are hard to track down.  At the very least, we
 should /not/ crash on bogus instructions.
+
+* [2017-06-29 jeu.]
+** Tackling Z80 instructions                                         :megado:
+Tried to find a test ROM that I could use to not waste too much time debugging
+tricky bit errors in strange instructions.
+
+Did find [[http://mdfs.net/Software/Z80/Exerciser/][this]], but couldn't manage to assemble it.  I tried z80asm, crasm, and
+binutils-z80.  The first one froze my computer, and the other two gave me 1000
+errors for the file.
+
+Tried to look into open source emulators.  FUSE has some tests in assembly, but
+they don't look exhaustive, and I don't see the expected output (maybe it's in
+the assembly itself, like YAZE and Blargg's tests for the GB CPU?).
+
+So it looks like I'll end up checking traces against working emulators, since
+this seems the only available option.
+
+I did find discussion mentioning that the official Zilog manual had errors, so I
+should avoid it as a definitive source.  In fact, the "Z80 Undocumented" doc
+also mentions errors in the official doc, and it has a handy table with all the
+opcodes, their patterns and cycles.  So it should be sufficient.
+
+So:
+
+- [[https://github.com/Emu-Docs/Emu-Docs/blob/master/Shared%2520Components/CPU%2520Z80/z80-documented.pdf][Sean Young's Z80 doc]], the PDF version for reading
+- And the [[https://github.com/Emu-Docs/Emu-Docs/blob/master/Shared%2520Components/CPU%2520Z80/z80-documented.pdf][text version]] for easier extraction
+
+[hours later]
+
+Wrote a parser for the opcode list.  I should be able to generate code for the
+disassembler now.  There are a bunch of weird instructions, like this one:
+
+: DDCB d 9F   LD A, RES 3, (IX + d)*
+
+They are weird to parse, not weird to understand.  Luckily, the '*' at the end
+stands for "Undocumented", so they are unlikely to be used in games.
