@@ -234,8 +234,8 @@ struct ParsedOpcode {
 struct ParsedMnemonic {
   raw: String,
   name: MnemonicName,
-  dst: Option<Operand>,
-  src: Option<Operand>,
+  dst: Option<ParsedOperand>,
+  src: Option<ParsedOperand>,
   undocumented: bool,
 }
 
@@ -250,8 +250,39 @@ custom_derive! {
   }
 }
 
+custom_derive! {
+  #[derive(Debug, EnumFromStr)]
+  enum Register {
+    B, C, D, E, H, L, A,
+    I, R,
+    IXh, IXl, IYh, IYl,
+    BC, DE, HL, AF, SP, IX, IY,
+    BC_, DE_, HL_, AF_,
+  }
+}
+
+custom_derive! {
+  #[derive(Debug, EnumFromStr)]
+  enum Condition {
+    NZ, Z, NC, Cy, PO, PE, P, M,
+  }
+}
+
 #[derive(Debug)]
-struct Operand {
+enum ParsedOperand {
+  Bit(u8),
+  Register(Register),
+  Immediate,
+  ImmediateExtended,
+  ZeroPage(u8),
+  AddressRelative,
+  AddressImmediate,
+  AddressExtended,
+  AddressIndexed(Register),
+  AddressRegister(Register),
+  Conditional(Condition),
+
+  Unknown,
 }
 
 #[derive(Debug)]
@@ -269,10 +300,69 @@ fn parse_z80_op_arg(arg: &str) -> OpcodeArg {
   }
 }
 
+fn parse_z80_operand(op: &str) -> ParsedOperand {
+  lazy_static! {
+    static ref COMPOUND: Regex =
+      Regex::new(r"^[A-Z]+ ([0-9], )?\([A-Z+ hld]+\)$").unwrap();
+  }
+
+  use ParsedOperand::*;
+  use Register::*;
+
+  // Ignore compound ops for now, as they are all undocumented anyway
+  if COMPOUND.is_match(&op) {
+    return Unknown;
+  }
+
+  match op {
+    "n" => Immediate,
+    "A" | "B" | "C" | "D" | "E" |"H" | "L" | "I" | "R"
+      => Register(op.parse().unwrap()),
+
+    "nn" => ImmediateExtended,
+    "BC" | "DE" | "AF" | "HL" | "SP" | "IX" | "IY"
+      => Register(op.parse().unwrap()),
+    "IXH" => Register(IXh),
+    "IXL" => Register(IXl),
+    "IYH" => Register(IYh),
+    "IYL" => Register(IYl),
+    "AF'" => Register(AF_),
+
+    "(n)"  => AddressImmediate,
+    "(nn)" => AddressExtended,
+    "(C)" => AddressRegister(C),
+    "(BC)" | "(DE)" | "(HL)" | "(SP)" | "(IX)" | "(IY)"
+      => AddressRegister(op[1..op.len()-1].parse().unwrap()),
+
+    "(IX + d)" => AddressIndexed(IX),
+    "(IY + d)" => AddressIndexed(IY),
+
+    "PC + n" => AddressRelative,
+
+    "NZ" | "Z" | "Cy" | "NC" | "PO" | "PE" | "P" | "M"
+      => Conditional(op.parse().unwrap()),
+
+    "0h" | "8h" | "10h" | "18h" | "20h" | "28h" | "30h" | "38h"
+      => ZeroPage(u8::from_str_radix(&op[..op.len()-1], 16).unwrap()),
+
+    "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7"
+      => Bit(op.parse().unwrap()),
+
+    // Weird operand for IM
+    "0/1" => Unknown,
+
+    // Even weirder
+    "(C)* / IN F" => Unknown,
+
+    _ => panic!("Unknown operand: {}", op),
+  }
+}
+
 fn parse_z80_mnemonic(input: &str) -> ParsedMnemonic {
   lazy_static! {
     static ref RE: Regex =
-      Regex::new(r"([A-Z]+)(?: (.+?))?(?:, (.+))?(\*)?$").unwrap();
+      // eg: LD A, RLC (IX + d)*
+      Regex::new(r"([A-Z]+)(?: (.+?))?(?:, (.+?))?(\*)?$").unwrap();
   }
 
   let raw = input.to_owned();
@@ -281,8 +371,8 @@ fn parse_z80_mnemonic(input: &str) -> ParsedMnemonic {
   ParsedMnemonic {
     raw,
     name: caps[1].parse().unwrap(),
-    dst: None,
-    src: None,
+    dst: caps.get(2).map(|t| parse_z80_operand(t.as_str())),
+    src: caps.get(3).map(|t| parse_z80_operand(t.as_str())),
     undocumented: caps.get(4).is_some(),
   }
 }
@@ -290,13 +380,14 @@ fn parse_z80_mnemonic(input: &str) -> ParsedMnemonic {
 fn parse_z80_op_line(line: String) -> ParsedOpcode {
   lazy_static! {
     static ref RE: Regex =
+      // eg: DD09 n 78   mnemonic
       Regex::new(r"^([0-9ABCDEF]{2,4})(?: ([nd]))?(?: ([nd]|[0-9ABCDEF]{2}))?   *(.*)$")
       .unwrap();
   }
 
   let raw = line.to_owned();
-  let caps = RE.captures(&line).unwrap();
   println!("Parsing {}", raw);
+  let caps = RE.captures(&line).unwrap();
 
   let op = ParsedOpcode {
     raw,
