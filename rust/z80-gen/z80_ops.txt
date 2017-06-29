@@ -479,47 +479,47 @@ DD19  ADD IX, DE
 DD21 n n    LD IX, nn
 DD22 n n    LD (nn), IX
 DD23  INC IX
-DD24  INC IXH*
-DD25  DEC IXH*
-DD26 n      LD IXH, n*
+DD24  INC IXh*
+DD25  DEC IXh*
+DD26 n      LD IXh, n*
 DD29  ADD IX, IX
 DD2A n n    LD IX, (nn)
 DD2B  DEC IX
-DD2C  INC IXL*
-DD2D  DEC IXL*
-DD2E n      LD IXL, n*
+DD2C  INC IXl*
+DD2D  DEC IXl*
+DD2E n      LD IXl, n*
 DD34 d      INC (IX + d)
 DD35 d      DEC (IX + d)
 DD36 d n    LD (IX + d), n
 DD39  ADD IX, SP
-DD44  LD B, IXH*
-DD45  LD B, IXL*
+DD44  LD B, IXh*
+DD45  LD B, IXl*
 DD46 d      LD B, (IX + d)
-DD4C  LD C, IXH*
-DD4D  LD C, IXL*
+DD4C  LD C, IXh*
+DD4D  LD C, IXl*
 DD4E d      LD C, (IX + d)
-DD54  LD D, IXH*
-DD55  LD D, IXL*
+DD54  LD D, IXh*
+DD55  LD D, IXl*
 DD56 d      LD D, (IX + d)
-DD5C  LD E, IXH*
-DD5D  LD E, IXL*
+DD5C  LD E, IXh*
+DD5D  LD E, IXl*
 DD5E d      LD E, (IX + d)
-DD60  LD IXH, B*
-DD61  LD IXH, C*
-DD62  LD IXH, D*
-DD63  LD IXH, E*
-DD64  LD IXH, IXH*
-DD65  LD IXH, IXL*
+DD60  LD IXh, B*
+DD61  LD IXh, C*
+DD62  LD IXh, D*
+DD63  LD IXh, E*
+DD64  LD IXh, IXh*
+DD65  LD IXh, IXl*
 DD66 d      LD H, (IX + d)
-DD67  LD IXH, A*
-DD68  LD IXL, B*
-DD69  LD IXL, C*
-DD6A  LD IXL, D*
-DD6B  LD IXL, E*
-DD6C  LD IXL, IXH*
-DD6D  LD IXL, IXL*
+DD67  LD IXh, A*
+DD68  LD IXl, B*
+DD69  LD IXl, C*
+DD6A  LD IXl, D*
+DD6B  LD IXl, E*
+DD6C  LD IXl, IXh*
+DD6D  LD IXl, IXl*
 DD6E d      LD L, (IX + d)
-DD6F  LD IXL, A*
+DD6F  LD IXl, A*
 DD70 d      LD (IX + d), B
 DD71 d      LD (IX + d), C
 DD72 d      LD (IX + d), D
@@ -527,32 +527,32 @@ DD73 d      LD (IX + d), E
 DD74 d      LD (IX + d), H
 DD75 d      LD (IX + d), L
 DD77 d      LD (IX + d), A
-DD7C  LD A, IXH*
-DD7D  LD A, IXL*
+DD7C  LD A, IXh*
+DD7D  LD A, IXl*
 DD7E d      LD A, (IX + d)
-DD84  ADD A, IXH*
-DD85  ADD A, IXL*
+DD84  ADD A, IXh*
+DD85  ADD A, IXl*
 DD86 d      ADD A, (IX + d)
-DD8C  ADC A, IXH*
-DD8D  ADC A, IXL*
+DD8C  ADC A, IXh*
+DD8D  ADC A, IXl*
 DD8E d      ADC A, (IX + d)
-DD94  SUB IXH*
-DD95  SUB IXL*
+DD94  SUB IXh*
+DD95  SUB IXl*
 DD96 d      SUB (IX + d)
-DD9C  SBC A, IXH*
-DD9D  SBC A, IXL*
+DD9C  SBC A, IXh*
+DD9D  SBC A, IXl*
 DD9E d      SBC A, (IX + d)
-DDA4  AND IXH*
-DDA5  AND IXL*
+DDA4  AND IXh*
+DDA5  AND IXl*
 DDA6 d      AND (IX + d)
-DDAC  XOR IXH*
-DDAD  XOR IXL*
+DDAC  XOR IXh*
+DDAD  XOR IXl*
 DDAE d      XOR (IX + d)
-DDB4  OR IXH*
-DDB5  OR IXL*
+DDB4  OR IXh*
+DDB5  OR IXl*
 DDB6 d      OR (IX + d)
-DDBC  CP IXH*
-DDBD  CP IXL*
+DDBC  CP IXh*
+DDBD  CP IXl*
 DDBE d      CP (IX + d)
 DDCB d 00   LD B, RLC (IX + d)*
 DDCB d 01   LD C, RLC (IX + d)*
@@ -928,47 +928,47 @@ FD19  ADD IY, DE
 FD21 n n    LD IY, nn
 FD22 n n    LD (nn), IY
 FD23  INC IY
-FD24  INC IYH*
-FD25  DEC IYH*
-FD26 n      LD IYH, n*
+FD24  INC IYh*
+FD25  DEC IYh*
+FD26 n      LD IYh, n*
 FD29  ADD IY, IY
 FD2A n n    LD IY, (nn)
 FD2B  DEC IY
-FD2C  INC IYL*
-FD2D  DEC IYL*
-FD2E n      LD IYL, n*
+FD2C  INC IYl*
+FD2D  DEC IYl*
+FD2E n      LD IYl, n*
 FD34 d      INC (IY + d)
 FD35 d      DEC (IY + d)
 FD36 d n    LD (IY + d), n
 FD39  ADD IY, SP
-FD44  LD B, IYH*
-FD45  LD B, IYL*
+FD44  LD B, IYh*
+FD45  LD B, IYl*
 FD46 d      LD B, (IY + d)
-FD4C  LD C, IYH*
-FD4D  LD C, IYL*
+FD4C  LD C, IYh*
+FD4D  LD C, IYl*
 FD4E d      LD C, (IY + d)
-FD54  LD D, IYH*
-FD55  LD D, IYL*
+FD54  LD D, IYh*
+FD55  LD D, IYl*
 FD56 d      LD D, (IY + d)
-FD5C  LD E, IYH*
-FD5D  LD E, IYL*
+FD5C  LD E, IYh*
+FD5D  LD E, IYl*
 FD5E d      LD E, (IY + d)
-FD60  LD IYH, B*
-FD61  LD IYH, C*
-FD62  LD IYH, D*
-FD63  LD IYH, E*
-FD64  LD IYH, IYH*
-FD65  LD IYH, IYL*
+FD60  LD IYh, B*
+FD61  LD IYh, C*
+FD62  LD IYh, D*
+FD63  LD IYh, E*
+FD64  LD IYh, IYh*
+FD65  LD IYh, IYl*
 FD66 d      LD H, (IY + d)
-FD67  LD IYH, A*
-FD68  LD IYL, B*
-FD69  LD IYL, C*
-FD6A  LD IYL, D*
-FD6B  LD IYL, E*
-FD6C  LD IYL, IYH*
-FD6D  LD IYL, IYL*
+FD67  LD IYh, A*
+FD68  LD IYl, B*
+FD69  LD IYl, C*
+FD6A  LD IYl, D*
+FD6B  LD IYl, E*
+FD6C  LD IYl, IYh*
+FD6D  LD IYl, IYl*
 FD6E d      LD L, (IY + d)
-FD6F  LD IYL, A*
+FD6F  LD IYl, A*
 FD70 d      LD (IY + d), B
 FD71 d      LD (IY + d), C
 FD72 d      LD (IY + d), D
@@ -976,32 +976,32 @@ FD73 d      LD (IY + d), E
 FD74 d      LD (IY + d), H
 FD75 d      LD (IY + d), L
 FD77 d      LD (IY + d), A
-FD7C  LD A, IYH*
-FD7D  LD A, IYL*
+FD7C  LD A, IYh*
+FD7D  LD A, IYl*
 FD7E d      LD A, (IY + d)
-FD84  ADD A, IYH*
-FD85  ADD A, IYL*
+FD84  ADD A, IYh*
+FD85  ADD A, IYl*
 FD86 d      ADD A, (IY + d)
-FD8C  ADC A, IYH*
-FD8D  ADC A, IYL*
+FD8C  ADC A, IYh*
+FD8D  ADC A, IYl*
 FD8E d      ADC A, (IY + d)
-FD94  SUB IYH*
-FD95  SUB IYL*
+FD94  SUB IYh*
+FD95  SUB IYl*
 FD96 d      SUB (IY + d)
-FD9C  SBC A, IYH*
-FD9D  SBC A, IYL*
+FD9C  SBC A, IYh*
+FD9D  SBC A, IYl*
 FD9E d      SBC A, (IY + d)
-FDA4  AND IYH*
-FDA5  AND IYL*
+FDA4  AND IYh*
+FDA5  AND IYl*
 FDA6 d      AND (IY + d)
-FDAC  XOR IYH*
-FDAD  XOR IYL*
+FDAC  XOR IYh*
+FDAD  XOR IYl*
 FDAE d      XOR (IY + d)
-FDB4  OR IYH*
-FDB5  OR IYL*
+FDB4  OR IYh*
+FDB5  OR IYl*
 FDB6 d      OR (IY + d)
-FDBC  CP IYH*
-FDBD  CP IYL*
+FDBC  CP IYh*
+FDBD  CP IYl*
 FDBE d      CP (IY + d)
 FDCB d 00   LD B, RLC (IY + d)*
 FDCB d 01   LD C, RLC (IY + d)*

@@ -312,13 +312,9 @@ impl FromStr for ParsedOperand {
                     .map_err(|_| format!("failed to parse register '{}'", s))?),
 
       "nn" => ImmediateExtended,
-      "BC" | "DE" | "AF" | "HL" | "SP" | "IX" | "IY"
+      "BC" | "DE" | "AF" | "HL" | "SP" | "IX" | "IY" | "IXh" | "IXl" | "IYh" | "IYl"
         => Register(s.parse()
                     .map_err(|_| format!("failed to parse register '{}'", s))?),
-      "IXH" => Register(IXh),
-      "IXL" => Register(IXl),
-      "IYH" => Register(IYh),
-      "IYL" => Register(IYl),
       "AF'" => Register(AF_),
 
       "(n)"  => AddressImmediate,
