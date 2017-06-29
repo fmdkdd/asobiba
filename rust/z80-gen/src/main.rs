@@ -226,6 +226,7 @@ fn emit(opcode: u16, b: Block) {
 struct ParsedOpcode {
   raw: String,                  // the unparsed line
   code: u16,
+  length: u8,
   name: Mnemonic,
   dst: Option<ParsedOperand>,
   src: Option<ParsedOperand>,
@@ -386,7 +387,7 @@ impl FromStr for ParsedOpcode {
     lazy_static! {
       static ref RE: Regex =
       // eg: DD09 n 78   mnemonic
-        Regex::new(r"^([0-9ABCDEF]{2,4})(?: [nd])?(?: (?:[nd]|[0-9ABCDEF]{2}))?   *(.*)$")
+        Regex::new(r"^([0-9ABCDEF]{2,4})(?: ([nd]))?(?: ([nd]|[0-9ABCDEF]{2}))?   *(.*)$")
         .unwrap();
     }
 
@@ -395,10 +396,12 @@ impl FromStr for ParsedOpcode {
       .ok_or(format!("malformed opcode string '{}'", s))?;
     let code = u16::from_str_radix(&caps[1], 16)
       .map_err(|_| format!("failed to parse hex number '{}' in '{}'", &caps[1], s))?;
-    let mnemonic = ParsedMnemonic::from_str(&caps[2])?;
+    let length = 1 + (if caps.get(2).is_some() { 1 } else { 0 })
+                   + (if caps.get(3).is_some() { 1 } else { 0 });
+    let mnemonic = ParsedMnemonic::from_str(&caps[4])?;
 
     Ok(ParsedOpcode {
-      raw, code,
+      raw, code, length,
       name: mnemonic.name,
       raw_mnemonic: mnemonic.raw,
       dst: mnemonic.dst,
