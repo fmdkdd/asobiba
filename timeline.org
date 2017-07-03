@@ -11406,3 +11406,53 @@ disassembler now.  There are a bunch of weird instructions, like this one:
 
 They are weird to parse, not weird to understand.  Luckily, the '*' at the end
 stands for "Undocumented", so they are unlikely to be used in games.
+
+* [2017-07-03 lun.]
+** Network troubles resurfaces                                         :arch:
+Remember the MTU weirdness?  Well, I've been having weird network slowdowns for
+months, but only on /some/ sites.  Like, I was trying to download GNU global
+from the GNU FTP.  2 hours remaining.  I usually don't bother with Youtube
+videos since most of them never load fast enough.  But checking a random web
+page (like the arch wiki page on Network): loading fine.
+
+At first, I was just blaming my ISP (we had had troubles multiple times
+already).  But then I noticed that Youtube was working flawlessly under
+Windows...
+
+So, this time, I tried to set the MTU to 1480, and GNU Global downloaded in 3
+seconds:
+
+: ip link set enp5s0 mtu 1480
+
+Will have to make this permanent...
+
+Hmm, trying to set the MTUBytes in the systemd profile as I did previously
+/does/ set the MTU to 1480 on boot... but then the network doesn't work /at
+all/.
+
+Not setting it, I have a connection.  Then if I ~pacup~, the link goes very slow
+after a few seconds.
+
+If I set the MTU to 1480 by hand, then it works flawlessly.  So I should set the
+MTU sometime after boot?  Like, on login?
+
+Seems to work with a systemd unit that runs after network-online.target:
+
+: cat /etc/systemd/system/set-mtu.service
+
+#+BEGIN_EXAMPLE
+[Unit]
+Description=Set MTU to fix Ethernet slowdowns
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/ip link set enp5s0 mtu 1480
+
+[Install]
+WantedBy=multi-user.target
+#+END_EXAMPLE
+
+The MTU is set to 1480 after login, and no connection slow down are apparent.
+
+Until next time...
