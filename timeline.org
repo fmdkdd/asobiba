@@ -11456,3 +11456,206 @@ WantedBy=multi-user.target
 The MTU is set to 1480 after login, and no connection slow down are apparent.
 
 Until next time...
+
+* [2017-07-06 jeu.]
+** Bug squashing in Megado                                           :megado:
+Most ROM segfaults now.  Let's see what Valgrind says.
+
+If I just launch a ROM and exit cleanly, here's the leak summary:
+
+#+BEGIN_EXAMPLE
+==18211== LEAK SUMMARY:
+==18211==    definitely lost: 5,431,384 bytes in 92,807 blocks
+==18211==    indirectly lost: 12,580,050 bytes in 260,314 blocks
+==18211==      possibly lost: 23,062,657 bytes in 7,735 blocks
+==18211==    still reachable: 2,150,599 bytes in 1,050 blocks
+==18211==         suppressed: 0 bytes in 0 blocks
+#+END_EXAMPLE
+
+:(
+
+Okay, let's clean that up.
+
+Oh, that was easy.  A bad copy/paste was calling instruction_make instead of
+instruction_free!
+
+#+BEGIN_EXAMPLE
+==19985== LEAK SUMMARY:
+==19985==    definitely lost: 234,720 bytes in 17 blocks
+==19985==    indirectly lost: 0 bytes in 0 blocks
+==19985==      possibly lost: 23,105,485 bytes in 8,216 blocks
+==19985==    still reachable: 15,545,480 bytes in 211,460 blocks
+==19985==         suppressed: 0 bytes in 0 blocks
+#+END_EXAMPLE
+
+Similarly, we forgot to free the renderer in genesis_free.
+
+#+BEGIN_EXAMPLE
+==20385== LEAK SUMMARY:
+==20385==    definitely lost: 72 bytes in 3 blocks
+==20385==    indirectly lost: 1,088 bytes in 3 blocks
+==20385==      possibly lost: 3,777,335 bytes in 34,201 blocks
+==20385==    still reachable: 9,798,474 bytes in 177,064 blocks
+==20385==         suppressed: 0 bytes in 0 blocks
+#+END_EXAMPLE
+
+And we forgot to free metrics in renderer_free.
+
+#+BEGIN_EXAMPLE
+==20476== LEAK SUMMARY:
+==20476==    definitely lost: 0 bytes in 0 blocks
+==20476==    indirectly lost: 0 bytes in 0 blocks
+==20476==      possibly lost: 3,777,335 bytes in 34,201 blocks
+==20476==    still reachable: 9,798,474 bytes in 177,064 blocks
+==20476==         suppressed: 0 bytes in 0 blocks
+#+END_EXAMPLE
+
+Okay that's a start.
+
+Hmm, invalid read when freeing:
+
+#+BEGIN_EXAMPLE
+==20476== Invalid read of size 8
+==20476==    at 0x410730: instruction_free (instruction.c:412)
+==20476==    by 0x403C3E: main (main.c:37)
+==20476==  Address 0x1 is not stack'd, malloc'd or (recently) free'd
+#+END_EXAMPLE
+
+instr is.. 0x1.  That's weird.
+
+Damn, that's a bad fix on my part... trying to instruction_free(opcode) -_-'
+
+#+BEGIN_EXAMPLE
+==23202== LEAK SUMMARY:
+==23202==    definitely lost: 760 bytes in 6 blocks
+==23202==    indirectly lost: 3,026 bytes in 9 blocks
+==23202==      possibly lost: 0 bytes in 0 blocks
+==23202==    still reachable: 162,436 bytes in 474 blocks
+==23202==         suppressed: 0 bytes in 0 blocks
+#+END_EXAMPLE
+
+We were not properly disposing of ImGui.
+
+#+BEGIN_EXAMPLE
+==24629== LEAK SUMMARY:
+==24629==    definitely lost: 0 bytes in 0 blocks
+==24629==    indirectly lost: 0 bytes in 0 blocks
+==24629==      possibly lost: 0 bytes in 0 blocks
+==24629==    still reachable: 122,782 bytes in 452 blocks
+==24629==         suppressed: 0 bytes in 0 blocks
+#+END_EXAMPLE
+
+Hmmmm not sure about these:
+
+#+BEGIN_EXAMPLE
+==24957== 1,872 bytes in 8 blocks are still reachable in loss record 84 of 92
+==24957==    at 0x4C2FB55: calloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==24957==    by 0x40120BD: _dl_check_map_versions (dl-version.c:293)
+==24957==    by 0x4015B18: dl_open_worker (dl-open.c:286)
+==24957==    by 0x4010563: _dl_catch_error (dl-error.c:187)
+==24957==    by 0x4014DA8: _dl_open (dl-open.c:660)
+==24957==    by 0x8D22F08: dlopen_doit (dlopen.c:66)
+==24957==    by 0x4010563: _dl_catch_error (dl-error.c:187)
+==24957==    by 0x8D23570: _dlerror_run (dlerror.c:163)
+==24957==    by 0x8D22FA0: dlopen@@GLIBC_2.2.5 (dlopen.c:87)
+==24957==    by 0x537ED38: ??? (in /usr/lib/x86_64-linux-gnu/mesa/libGL.so.1.2.0)
+==24957==    by 0x5381C14: ??? (in /usr/lib/x86_64-linux-gnu/mesa/libGL.so.1.2.0)
+==24957==    by 0x5358603: ??? (in /usr/lib/x86_64-linux-gnu/mesa/libGL.so.1.2.0)
+#+END_EXAMPLE
+
+#+BEGIN_EXAMPLE
+==24957== 8,176 bytes in 1 blocks are still reachable in loss record 90 of 92
+==24957==    at 0x4C2DB8F: malloc (in /usr/lib/valgrind/vgpreload_memcheck-amd64-linux.so)
+==24957==    by 0x7DA8D21: ??? (in /usr/lib/x86_64-linux-gnu/libX11.so.6.3.0)
+==24957==    by 0x7DA90B5: _XrmInternalStringToQuark (in /usr/lib/x86_64-linux-gnu/libX11.so.6.3.0)
+==24957==    by 0x7DBAB4F: XrmInitialize (in /usr/lib/x86_64-linux-gnu/libX11.so.6.3.0)
+==24957==    by 0x7D97D02: ??? (in /usr/lib/x86_64-linux-gnu/libX11.so.6.3.0)
+==24957==    by 0x7D97FBD: XGetDefault (in /usr/lib/x86_64-linux-gnu/libX11.so.6.3.0)
+==24957==    by 0x95400CF: _XcursorGetDisplayInfo (in /usr/lib/x86_64-linux-gnu/libXcursor.so.1.0.2)
+==24957==    by 0x9540118: XcursorSupportsARGB (in /usr/lib/x86_64-linux-gnu/libXcursor.so.1.0.2)
+==24957==    by 0x953E82D: XcursorImageLoadCursor (in /usr/lib/x86_64-linux-gnu/libXcursor.so.1.0.2)
+==24957==    by 0x586379C: _glfwCreateCursorX11 (in /home/fmdkdd/proj/megado/deps/glfw/build/src/libglfw.so.3.3)
+==24957==    by 0x586346F: createHiddenCursor (in /home/fmdkdd/proj/megado/deps/glfw/build/src/libglfw.so.3.3)
+==24957==    by 0x58638D0: _glfwPlatformInit (in /home/fmdkdd/proj/megado/deps/glfw/build/src/libglfw.so.3.3)
+#+END_EXAMPLE
+
+Doesn't look like anything we can solve.  If these are created by GLFW, we seem
+to already cleanup GLFW properly.  But as they are "still reachable", these are
+not leaks, and will be disposed of when we exit anyway.
+
+Besides, these are certainly not the cause of our segfaults.
+
+** Tracking the segfault                                            :megado:
+Still segfaulting, by the way.  Valgrind doesn't catch any erroneous reads, even
+though we are probably overwriting the opcode_table pointer.
+
+Indeed, at start opcode_table is
+
+: $1 = (Instruction **) 0x7ffff7f43010
+
+When we crash:
+
+: $3 = (Instruction **) 0x7f00f7003000
+
+Who is writing to it?
+
+: (gdb) watch opcode_table
+
+#+BEGIN_EXAMPLE
+Old value = (Instruction **) 0x7ffff7f43010
+New value = (Instruction **) 0x7ffff7f43000
+vdp_get_sprites_scanline (v=0x115ac40, scanline=131, data=0x6a247c <sprites_scanline>) at megado/vdp.c:818
+818	            for (uint8_t sprite_x = 0; sprite_x < total_width; ++sprite_x)
+#+END_EXAMPLE
+
+???
+
+Writing to sprite_x certainly wouldn't overwrite opcode_table.  Maybe the
+breakpoint is showing the instruction /after/ the write.  The end of the loop
+body is:
+
+#+BEGIN_SRC c
+                data->drawn[scanline_x] = true;
+                data->colors[scanline_x] = v->cram[palette_index * 16 + color_index];
+                data->priorities[scanline_x] = priority;
+#+END_SRC
+
+And scanline_x is 327.  And data->drawn/colors/priorities all have a size
+of 320.
+
+#+BEGIN_SRC c
+                if (scanline_x < 0) // TODO right bound
+                    continue;
+#+END_SRC
+
+Yes, TODO indeed.  I don't know the correct right bound, but it certainly cannot
+be larger than the data buffers.
+
+** Sanitize reads/writes                                             :megado:
+Is there a better way than using GDB to track these down?
+
+Apparently [[https://stackoverflow.com/a/24287919][yes]], clang and GCC both support:
+
+: -fno-omit-frame-pointer -fsanitize=undefined
+
+They instrument the code, so they slow it down a bit.  But for debugging, they
+are quite useful:
+
+#+BEGIN_EXAMPLE
+megado/m68k/cycles.c:96:46: runtime error: index 8 out of bounds for type 'uint8_t [2][12]'
+megado/m68k/cycles.c:112:28: runtime error: index 8 out of bounds for type 'uint8_t [2][12]'
+megado/m68k/cycles.c:104:28: runtime error: index 8 out of bounds for type 'uint8_t [2][12]'
+megado/m68k/cycles.c:82:32: runtime error: index 8 out of bounds for type 'uint8_t [2][12]'
+megado/m68k/cycles.c:83:32: runtime error: index 8 out of bounds for type 'uint8_t [2][12]'
+megado/m68k/instructions_shift.c:35:26: runtime error: index 12 out of bounds for type 'uint8_t [2][12]'
+#+END_EXAMPLE
+
+Wow hey look at that.  There are funky reads even before the segfault.
+
+i->size is a Size enum, with values -1/8/16/32, but calculation table indexed by
+size has only two lines.
+
+Some other associated fixes...
+
+Doesn't seem to make much of a difference for games, but at least now it's
+(more) correct.
