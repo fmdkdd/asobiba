@@ -121,6 +121,11 @@ impl FromStr for PatternArg {
   }
 }
 
+// TODO: Maybe this exists somewhere?
+fn lift<A, B, E>(f: fn(A) -> Result<B, E>, a: Option<A>) -> Result<Option<B>, E> {
+  a.map_or(Ok(None), |a| f(a).map(Some))
+}
+
 impl FromStr for ParsedPattern {
   type Err = String;
 
@@ -137,8 +142,8 @@ impl FromStr for ParsedPattern {
     Ok(Self {
       code: u16::from_str_radix(&caps[1], 16)
         .map_err(|_| format!("failed to parse hex number '{}' in '{}'", &caps[1], s))?,
-      arg1: caps.get(2).map_or(Ok(None), |t| PatternArg::from_str(t.as_str()).map(Some))?,
-      arg2: caps.get(3).map_or(Ok(None), |t| PatternArg::from_str(t.as_str()).map(Some))?,
+      arg1: lift(PatternArg::from_str, caps.get(2).as_ref().map(regex::Match::as_str))?,
+      arg2: lift(PatternArg::from_str, caps.get(3).as_ref().map(regex::Match::as_str))?,
     })
   }
 }
@@ -226,9 +231,8 @@ impl FromStr for ParsedMnemonic {
       name: Mnemonic::from_str(&caps[1])
         .map_err(|_| format!("failed to parse mnemonic name '{}' in '{}'",
                              &caps[1], s))?,
-      // A bit hairy: turns Option<Result<Op, String>> into Result<Option<Op>, String>
-      dst: caps.get(2).map_or(Ok(None), |t| ParsedOperand::from_str(t.as_str()).map(Some))?,
-      src: caps.get(3).map_or(Ok(None), |t| ParsedOperand::from_str(t.as_str()).map(Some))?,
+      dst: lift(ParsedOperand::from_str, caps.get(2).as_ref().map(regex::Match::as_str))?,
+      src: lift(ParsedOperand::from_str, caps.get(3).as_ref().map(regex::Match::as_str))?,
       undocumented: caps.get(4).is_some(),
     })
   }
