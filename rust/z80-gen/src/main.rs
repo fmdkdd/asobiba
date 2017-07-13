@@ -416,7 +416,7 @@ impl FromStr for ParsedOpcode {
 
 fn emit_disassembler(ops: &[ParsedOpcode]) {
   for o in ops {
-    println!("[0x{:04x}] = \"{}\",", o.code, o.raw_mnemonic);
+    println!("[0x{:04x}] = {{ {}, \"{}\" }},", o.code, o.length,  o.raw_mnemonic);
   }
 }
 
@@ -450,6 +450,6 @@ fn main() {
     // }
 
     emit_disassembler(&good_ops);
-    emit_op_table(&good_ops);
+    //emit_op_table(&good_ops);
   }
 }
