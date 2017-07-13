@@ -18,13 +18,28 @@ use regex::Regex;
 #[derive(Debug)]
 struct ParsedOpcode {
   raw: String,                  // the unparsed line
-  code: u16,
+  pattern: ParsedPattern,
   length: u8,
   name: Mnemonic,
   dst: Option<ParsedOperand>,
   src: Option<ParsedOperand>,
   undocumented: bool,
   raw_mnemonic: String,
+}
+
+#[derive(Debug)]
+struct ParsedPattern {
+  code: u16,
+  arg1: Option<PatternArg>,
+  arg2: Option<PatternArg>,
+}
+
+
+#[derive(Debug)]
+enum PatternArg {
+  Const(u8),
+  Unsigned,
+  Signed,
 }
 
 #[derive(Debug)]
@@ -79,6 +94,52 @@ custom_derive! {
   #[derive(Debug, EnumFromStr)]
   enum Condition {
     NZ, Z, NC, Cy, PO, PE, P, M,
+  }
+}
+
+impl FromStr for PatternArg {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    lazy_static! {
+      static ref RE: Regex =
+        Regex::new(r"^[0-9ABCDEF]{2}$").unwrap();
+    }
+    use PatternArg::*;
+
+    if RE.is_match(s) {
+      return Ok(Const(u8::from_str_radix(&s, 16)
+                      .map_err(|_| format!("failed to parse hex number '{}'", s))?));
+    }
+
+    Ok(match s {
+      "n" => Unsigned,
+      "e" | "d" => Signed,
+
+      _ => return Err(format!("unknown pattern arg '{}'", s)),
+    })
+  }
+}
+
+impl FromStr for ParsedPattern {
+  type Err = String;
+
+  fn from_str(s: &str) -> Result<Self, Self::Err> {
+    lazy_static! {
+      static ref RE: Regex =
+        Regex::new(r"^([0-9ABCDEF]{2,4})(?: ([nde]))?(?: ([nd]|[0-9ABCDEF]{2}))?$")
+        .unwrap();
+    }
+
+    let caps = RE.captures(&s)
+      .ok_or(format!("malformed pattern '{}'", s))?;
+
+    Ok(Self {
+      code: u16::from_str_radix(&caps[1], 16)
+        .map_err(|_| format!("failed to parse hex number '{}' in '{}'", &caps[1], s))?,
+      arg1: caps.get(2).map_or(Ok(None), |t| PatternArg::from_str(t.as_str()).map(Some))?,
+      arg2: caps.get(3).map_or(Ok(None), |t| PatternArg::from_str(t.as_str()).map(Some))?,
+    })
   }
 }
 
@@ -180,21 +241,20 @@ impl FromStr for ParsedOpcode {
     lazy_static! {
       static ref RE: Regex =
       // eg: DD09 n 78   mnemonic
-        Regex::new(r"^([0-9ABCDEF]{2,4})(?: ([nde]))?(?: ([nd]|[0-9ABCDEF]{2}))?   *(.*)$")
+        Regex::new(r"^([0-9ABCDEF]{2,4}(?: [nde])?(?: (?:[nd]|[0-9ABCDEF]{2}))?)   *(.*)$")
         .unwrap();
     }
 
     let raw = s.to_owned();
     let caps = RE.captures(&s)
       .ok_or(format!("malformed opcode string '{}'", s))?;
-    let code = u16::from_str_radix(&caps[1], 16)
-      .map_err(|_| format!("failed to parse hex number '{}' in '{}'", &caps[1], s))?;
-    let length = 1 + (if caps.get(2).is_some() { 1 } else { 0 })
-                   + (if caps.get(3).is_some() { 1 } else { 0 });
-    let mnemonic = ParsedMnemonic::from_str(&caps[4])?;
+    let pattern = ParsedPattern::from_str(&caps[1])?;
+    let length = 1 + (if pattern.arg1.is_some() { 1 } else { 0 })
+                   + (if pattern.arg2.is_some() { 1 } else { 0 });
+    let mnemonic = ParsedMnemonic::from_str(&caps[2])?;
 
     Ok(ParsedOpcode {
-      raw, code, length,
+      raw, pattern, length,
       name: mnemonic.name,
       raw_mnemonic: mnemonic.raw,
       dst: mnemonic.dst,
@@ -209,13 +269,13 @@ impl FromStr for ParsedOpcode {
 
 fn emit_disassembler(ops: &[ParsedOpcode]) {
   for o in ops {
-    println!("[0x{:04x}] = {{ {}, \"{}\" }},", o.code, o.length,  o.raw_mnemonic);
+    println!("[0x{:04x}] = {{ {}, \"{}\" }},", o.pattern.code, o.length,  o.raw_mnemonic);
   }
 }
 
 fn emit_op_table(ops: &[ParsedOpcode]) {
   for o in ops {
-    println!("[0x{:04x}] = z80_op_nop,", o.code);
+    println!("[0x{:04x}] = z80_op_nop,", o.pattern.code);
   }
 }
 
