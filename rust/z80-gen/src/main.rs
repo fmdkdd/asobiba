@@ -121,7 +121,7 @@ impl FromStr for ParsedOperand {
       "(IX + d)" => AddressIndexed(IX),
       "(IY + d)" => AddressIndexed(IY),
 
-      "PC + n" => AddressRelative,
+      "PC + e" => AddressRelative,
 
       "NZ" | "Z" | "Cy" | "NC" | "PO" | "PE" | "P" | "M"
         => Conditional(s.parse()
@@ -180,7 +180,7 @@ impl FromStr for ParsedOpcode {
     lazy_static! {
       static ref RE: Regex =
       // eg: DD09 n 78   mnemonic
-        Regex::new(r"^([0-9ABCDEF]{2,4})(?: ([nd]))?(?: ([nd]|[0-9ABCDEF]{2}))?   *(.*)$")
+        Regex::new(r"^([0-9ABCDEF]{2,4})(?: ([nde]))?(?: ([nd]|[0-9ABCDEF]{2}))?   *(.*)$")
         .unwrap();
     }
 

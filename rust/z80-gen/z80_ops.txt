@@ -14,7 +14,7 @@
 0D    DEC C
 0E n  LD C, n
 0F    RRCA
-10 n  DJNZ PC + n
+10 e  DJNZ PC + e
 11 n n      LD DE, nn
 12    LD (DE), A
 13    INC DE
@@ -22,7 +22,7 @@
 15    DEC D
 16 n  LD D, n
 17    RLA
-18 n  JR PC + n
+18 e  JR PC + e
 19    ADD HL, DE
 1A    LD A, (DE)
 1B    DEC DE
@@ -30,7 +30,7 @@
 1D    DEC E
 1E n  LD E, n
 1F    RRA
-20 n  JR NZ, PC + n
+20 e  JR NZ, PC + e
 21 n n      LD HL, nn
 22 n n      LD (nn), HL
 23    INC HL
@@ -38,7 +38,7 @@
 25    DEC H
 26 n  LD H, n
 27    DAA
-28 n  JR Z, PC + n
+28 e  JR Z, PC + e
 29    ADD HL, HL
 2A n n      LD HL, (nn)
 2B    DEC HL
@@ -46,7 +46,7 @@
 2D    DEC L
 2E n  LD L, n
 2F    CPL
-30 n  JR NC, PC + n
+30 e  JR NC, PC + e
 31 n n      LD SP, nn
 32 n n      LD (nn), A
 33    INC SP
@@ -54,7 +54,7 @@
 35    DEC (HL)
 36 n  LD (HL), n
 37    SCF
-38 n  JR Cy, PC + n
+38 e  JR Cy, PC + e
 39    ADD HL, SP
 3A n n      LD A, (nn)
 3B    DEC SP
