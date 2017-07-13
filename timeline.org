@@ -11659,3 +11659,29 @@ Some other associated fixes...
 
 Doesn't seem to make much of a difference for games, but at least now it's
 (more) correct.
+
+* [2017-07-13 jeu.]
+** Progress on generating the Z80                                    :megado:
+I've been generating the disassembly code, and I now parse all the required
+information from the z80_ops.txt file.  (In other words, I have a full model of
+the Z80 instructions, heh)
+
+Now, what do I do with it?  For the disassembly, there are two problems
+currently:
+
+1. opcodes xxCB which have two extra arguments, and do not fit in the opcode
+   table.
+2. mnemonics are represented as constant strings, hence we have "LD D,n" instead
+   of "LD D,1A" at runtime
+
+To solve #2, we can provide a function in the disassembly table that fetches and
+computes the extra arguments to return a fully decoded instruction.
+
+If we reduce the opcode table to 256 entries, we would solve #1 as well, by
+generating functions for these problematic xxCB opcodes.
+
+But now that I think of it, why have an ops_table and a disasm_table?  There is
+a great overlap between the two.  The disassembly will have to fetch any extra
+arguments, just like the operation.  The dissasembly will have to increase the
+PC, just like the operation.  In fact, the operation just has extra side effects
+on memory and registers, while the disassembly constructs and returns a string.
