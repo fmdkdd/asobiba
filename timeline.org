@@ -11685,3 +11685,234 @@ a great overlap between the two.  The disassembly will have to fetch any extra
 arguments, just like the operation.  The dissasembly will have to increase the
 PC, just like the operation.  In fact, the operation just has extra side effects
 on memory and registers, while the disassembly constructs and returns a string.
+
+* [2017-07-15 sam.]
+** Comparison of JS game engines for JAMMING                             :js:
+Last time we jammed, we used only a physics engine in JS, and wrote most of the
+rest from scratch/code we lifted from sparkets.
+
+The upside: we had complete control, and were not overwhelmed by unfamiliar
+libraries/frameworks (though we had no experience with /this/ particular physics
+library).  Easy to code, easy to put on Github, use our own tools for editing,
+etc.
+
+The downside was.. spotty result on other machines than the one we tested with.
+Had to hack around a bunch of stuff like cameras, a sprite engine, animations,
+GUI...
+
+Physics is important.  We have code that does basic collision detection, but if
+we want to push that forward, we would have to code the functionality rather
+than code the gameplay... That's time lost in a jam.
+
+And some things are especially dreadful to code: coherent key management across
+browsers / touch support for mobile / gamepad support.
+
+I wanted to research alternatives.
+
+*** Unity
+I never liked Unity for one simple reason: many LD games are made with Unity,
+and require the unity player extension to work!  When exported to Linux
+binaries, they usually work, though I wonder why they only managed scripting
+languages.
+
+In any case, I tried it.  There's a Linux build (though it's not advertised on
+the Download page).
+
+First of all, it's huge; a 7Gb+ install.  Had to make some room on my system
+partition...  Anyway, it works.
+
+After following the Space Shooter tutorial, here are my impressions:
+
+I like:
+- the simplicity of the entities/components: create entities, add components
+  like Renderer/RigidBody/Script.  Scripts can then be reused by other entities.
+
+  Save an entity as a prefab, and instantiate it from elsewhere.  The game
+  controller is just another entity.
+
+- the live editing: edit a script, variables are now tweakable in the editor.
+
+  Drag and drop prefab in the hierarchy, and you can immediately see how the
+  object behave.
+
+  Press play and start playing: variables can still be tweaked at runtime.
+
+- it builds to HTML5/WebGL.  No need for the unity player extension.
+
+  It took a bunch of time to build the HTML5 output, but when I tried it, it
+  worked well, without any surprises.
+
+I don't like:
+- the unresponsiveness.  Maybe it's due to the Linux build that's in beta, but
+  the editor feels slow; especially when editing scripts using MonoDevelop and
+  waiting for Unity to compile/serialize and notice the new public variables.
+
+- MonoDevelop: it's a really subpar editor.  Code completion is nearly useless,
+  no online documentation, no inline error notification...  I'm sure one can use
+  their editor of choice, but how does it integrates with Unity?
+
+- the fact that it generates blobs files that are not plain text, and do not
+  play well with Git.
+
+  I value portability and readability, even for one-off projects like a jam.
+
+- the scary privacy terms.  Basically, Unity can spy on you using their desktop
+  app.  Of course they do it to "improve the product", but that's still not okay
+  in my book.
+
+Overall, I think it's a decent tool, just not my taste.  The live editing
+functionality, we can emulate half of it with Dat.GUI.  The drag and dropping in
+the hierarchy is nice, but I get the feeling that it doesn't necessarily hold
+for games that are more procedural.  Again, we can add buttons to Dat.GUI to
+spawn some entity.
+
+The entity-component system is nice, but we find it in other engines.
+
+I think Unity is a decent choice, especially when you want to target many
+platforms.  If you know you aim for the web and the web only, then using
+libraries would be more up my alley.
+
+*** Phaser
+I think it's the go-to engine for 2D web game development.  It's all
+encompassing: physics, audio, asset loading, sprite support, particle system,
+camera, input...
+
+There are even three different physics engine, depending on the kind of game
+(arcadey physics, physics for sprites or full-on simulation).
+
+Outright, I don't like the marketing of Phaser: it's targeted at gimmicky games
+with childish graphics.  And when you look at the examples... well let's they
+are not the cream of the crop.
+
+Phaser is more library than framework: you call the functions at your own
+leisure.  You explicitly call game.physics.arcade.overlap for instance.  But I
+guess the overall experience is simpler if you stick to the included
+dependencies and not bring your own physics engine.
+
+There are lots of examples and documentation.
+
+It's a bit weird to me that you create "sprites" first, and the physics engine
+seem to generate a bounding box based on the sprite size.  But it looks like you
+can easily tweak the bounding box in any case.
+
+I like:
+- the low amount of boilerplate
+- the solid performance (but 2D is usually faster than 3D, so...)
+- fully open-source.  We can use tools like Git, text editors of choice...
+
+I don't like:
+- there doesn't seem to be any entity/component separation.  Just objects that
+  have properties that you have to update yourself.
+
+  Okay for a smallish game, but things will still get messy quickly.
+
+Overall, seems it's really well-suited for sprites and tile-based games.  So,
+platformers and 80's arcade stuff.  Though it can work for [[https://supernapie.itch.io/dead-sticks][minimalist puzzle
+games]].  I guess having picking and physics baked in helps to get started
+quickly.
+
+I wish it had 3D support though.
+
+*** BabylonsJS
+Trying an open-source 3D game engine.
+
+It looks to me like it's more a rendering engine than a game engine.  The input
+management is... weirdly verbose:
+
+#+BEGIN_SRC js
+scene.actionManager.registerAction(new BABYLON.ExecuteCodeAction(BABYLON.ActionManager.OnKeyUpTrigger, function (evt) {
+   if (evt.sourceEvent.key == "r") {
+       ...
+   }
+}));
+#+END_SRC
+
+There's audio functionality and physics, so I guess it /is/ a game engine after all.
+
+But there are "game objects": just shapes in a scene graph.  Any logic you add
+is your own.
+
+I like:
+- straightforward to use, well documented
+- decent default shaders, lighting and shadows
+- physics engines (plural)
+- 3D!  That opens a bunch of possibilities.  Even if we can do 2D stuff with it,
+  it seems a bit heavy-handed.
+
+I don't like:
+- maybe a bit on the heavy side.  Or maybe just JS+3D engines is a bad combo,
+  since I keep getting atrocious GC pauses that crush my FPS to low twenties
+  every few seconds...
+- not a full-featured game engine
+
+Overall, I would consider it over Three.js, since it has physics and easy-to-use
+rendering features.
+
+But the performance is not that great.  Maybe we hit native JS limits here.
+Unity compiles to asm.js, and I didn't have any frame drops.  For 3D projects, I
+would rather go with a native solution anyway, or compiling to JS at worst.
+
+*** PlayCanvas
+I tried a simple example, and took a look at the docs and examples.  To me, it
+seems they are trying to develop a credible alternative to Unity on the web, and
+focus and cloud integration/collaboration.
+
+The editor looks really solid.  (Sadly, you have to create an account to use it,
+and their privacy terms says that they are basically your info to advertisers).
+Too bad it's not open source.
+
+The engine, however, is open.  From the examples, it really looks like something
+close to Unity, with entities and components.
+
+#+BEGIN_SRC js
+ // create box entity
+ var cube = new pc.Entity('cube');
+ cube.addComponent('model', {
+     type: 'box'
+ });
+
+ // create camera entity
+ var camera = new pc.Entity('camera');
+ camera.addComponent('camera', {
+     clearColor: new pc.Color(0.1, 0.1, 0.1)
+ });
+
+ // create directional light entity
+ var light = new pc.Entity('light');
+ light.addComponent('light');
+
+ // add to hierarchy
+ app.root.addChild(cube);
+ app.root.addChild(camera);
+ app.root.addChild(light);
+#+END_SRC
+
+I like:
+- entity-component system
+- easy-to-use rendering features/shadows/physics
+- just write plain text code
+
+I don't like:
+- the editor being closed source (though you don't have to use it)
+- the proprietary model format.  You have to upload any 3D asset /to their
+  servers/ to convert it to their JSON format.  Granted, it's just JSON, so not
+  that opaque.  But still, that's preposterous, and I hope [[https://developer.playcanvas.com/en/engine/][the doc]] is actually
+  wrong on that.
+
+Overall, it has the parts I liked from Unity, and is native to the web.  But it
+shares the scarily closed attitude, with the editor being closed source and the
+proprietary model converter...
+
+** Verdict
+Well, there is no clear outlier.  For 2D, Phaser does not tick all my marks, but
+I would try it for a jam.
+
+Otherwise, I really like what rezoner has done with Playground.js and
+CanvasQuery, e.g.: [[http://store.steampowered.com/app/329320/QbQbQb/][QbQbQb]] or [[http://wilds.io/][wilds.io]].  I would be interested to try a
+playground+canvasQuery or three.js cocktail, with a side of p2.js on top.  I'm
+sure it's a killer combo for puzzle games.
+
+For 3D... I'm afraid the performance of JS engines scares me too much to go with
+something like BabylonJS.  Three.js is barebones, but at least it runs decently.
+Otherwise, there's WhitestormJS, a wrapper around three.js that integrates
+physics.
