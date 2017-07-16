@@ -11966,7 +11966,7 @@ Now, drawing it larger doesn't necessarily solves the problem:
 [[file:data/three-font-fail2.png]]
 
 Here it is drawn at 80pt.  it's legible, but not necessarily clean, and kerning
-is off.  It's a better with the linear filter:
+is off.  It's better with the linear filter:
 
 [[file:data/three-font-linear.png]]
 
@@ -12000,3 +12000,19 @@ for this retro SNES-over-composite vibe:
 
 Now here, since the font has no antialiasing, the linear filter is done on white
 pixels, so it is still legible, just blurry.
+
+*** Picking
+THREE has a Raycaster facility.  However, no-one told the mouse coordinates had
+to be in normalized device coordinates (-1,1,1,-1), and I was using screen
+coordinates for my orthographic camera...
+
+Anyway, it works fine: it gives all the objects intersecting the ray.  I wonder
+if I can get all objects in an area...  It seems with an Octree I could do a
+rough search.
+
+[[HTTPs://stackoverflow.com/q/20169665][Another suggestion]] is to render the scene to a texture, with a unique color for
+each object, keep the pixels corresponding to the selected area, and translate
+back from colors to objects.  Clever; and the GPU does most of the work.
+
+*** Pathfinding
+For pathfinding, one way is to [[https://github.com/nickjanssen/PatrolJS][use navigational meshes]].

@@ -24,3 +24,8 @@ canvas {
   text-align: center;
   z-index: 100;
 }
+
+#fullscreen {
+  position: absolute;
+  bottom: 0;
+}
