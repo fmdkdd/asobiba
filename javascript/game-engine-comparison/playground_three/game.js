@@ -35,6 +35,7 @@ STATES.Main = {
     texture.magFilter = THREE.NearestFilter
     texture.minFilter = THREE.NearestFilter
     var textMaterial = new THREE.SpriteMaterial({ map: texture,
+                                                  color: 0xffff00,
                                                   side: THREE.DoubleSide })
     this.plane = new THREE.Sprite(textMaterial)
     this.plane.scale.set(canvas.width, canvas.height, 1)

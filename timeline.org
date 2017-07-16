@@ -11916,3 +11916,87 @@ For 3D... I'm afraid the performance of JS engines scares me too much to go with
 something like BabylonJS.  Three.js is barebones, but at least it runs decently.
 Otherwise, there's WhitestormJS, a wrapper around three.js that integrates
 physics.
+
+* [2017-07-16 dim.]
+** Toying with THREE.js                                               :js:3d:
+Finding out how to:
+
+- draw text
+- mouse picking
+- path finding
+
+*** Drawing text
+So after a few hours of messing around, I have achieved the effect I wanted.
+
+THREE.js has no embedded facility for drawing 2D text.  The manual advises to
+use the DOM for that.  For an UI, it makes sense: overlay divs over the WebGL
+canvas and use that for buttons / text.  You get picking for free, the browser
+is already there anyway, and you don't have to reimplement all that stuff in
+THREE.
+
+However, I wanted to have text drawn on top of objects in the canvas, kinda like
+player names.  Since the objects live in the canvas, it's easy to add the text
+to their group and benefit from the scene graph to take care of all the
+transformations.  We could use the DOM for that, but then you'd have to
+export the projection matrix of objects and of the camera... messy.
+
+So, that leaves drawing text inside THREE.  One of the suggested way is to draw
+the text to a canvas, blit that canvas to a texture, put that texture on a
+mesh/sprite and put it in the scene.
+
+That works, with some gotchas.  You have to measure the text before hand, in
+order to know how large the texture should be to hold the full text.  It might
+make more sense to create textures for each letter, and stitch them in
+order... it looks like a number of textures vs. number of vertices tradeoff.
+
+Anyway, textures size are power of twos, so you have to be careful here.
+Especially as most fonts are antialiased by default (and there's no way to
+render them without antialiasing, in the canvas or in the browser).  If you use
+a small and upscale it in your scene, you will see all the antialiased pixels
+and it will ... basically look like crap:
+
+[[file:data/three-font-fail.png]]
+
+This is the default font blown up by 3, drawn at 8pt to the canvas.  (Here I am
+using NearestFilter for the texture magnification, but it still looks like crap
+with Linear)
+
+Now, drawing it larger doesn't necessarily solves the problem:
+
+[[file:data/three-font-fail2.png]]
+
+Here it is drawn at 80pt.  it's legible, but not necessarily clean, and kerning
+is off.  It's a better with the linear filter:
+
+[[file:data/three-font-linear.png]]
+
+But the edges are too smooth, too round.  As if we had applied a font shadow.
+
+Here it is rendered at an exact 24pt, no texture scaling:
+
+[[file:data/three-font-correct.png]]
+
+That's perfect legibility... but it only works if the text is never scaled.
+
+And actually, that's not at all what I wanted.  See, I want old school, crispy
+clear fonts, not fancy curvy serifs.
+
+I can blow the resolution up (and use image-rendering: optimizeSpeed):
+
+[[file:data/three-font-crispy.png]]
+
+Pixels!  That's actually.. not too bad.  But the antialised font blown up like
+this are not what I want, so we'll have to resort to bitmap fonts:
+
+[[file:data/three-font-crispier.png]]
+
+This is is 8pt Dina, blown up 3 times with NearestFilter all the way.  No alpha
+in these pixels.  Extra crispy.
+
+This fit more the vibe of the cube.  We can also smear butter over the screen
+for this retro SNES-over-composite vibe:
+
+[[file:data/three-font-success.png]]
+
+Now here, since the font has no antialiasing, the linear filter is done on white
+pixels, so it is still legible, just blurry.
