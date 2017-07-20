@@ -12016,3 +12016,62 @@ back from colors to objects.  Clever; and the GPU does most of the work.
 
 *** Pathfinding
 For pathfinding, one way is to [[https://github.com/nickjanssen/PatrolJS][use navigational meshes]].
+
+* [2017-07-20 jeu.]
+** Trying out afl-fuzz for megado                                    :megado:
+It's a generic fuzzer: it tries to generate input that cover different paths in
+the binary in order to make it crash.
+
+Setting it up was a bit of a pain.  First I wanted to compile the dependencies
+to megado statically.  I figured, since we already hardcode the
+environment... that would make invoking the binary easier.
+
+After that, running the fuzzer is a matter of:
+
+: make CC=afl-gcc USER_FLAGS=-DTIMEOUT=1000
+: env AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1 AFL_SKIP_CPUFREQ=1 afl-fuzz -i roms/ -o outdir -m 500 build/megado-bin @@
+
+Unfortunately, after a bunch of warnings about non-interesting test cases, I get
+to the main window of afl-fuzz, and it looks like it will spend... at least some
+hours to get a result.
+
+That's because running the emulator on a ROM is pretty slow.  When to stop?
+Here I stop after 1000 cycles, which is really not that many instructions.  And
+the fuzzer already complains our tests case take too long.
+
+I guess afl-fuzz is not really suited for testing large binaries like this,
+especially an emulator.
+
+Maybe if we split the M68k interpreter as a dynamic lib, we could fuzz this
+separately using this tool.
+
+Or maybe there are settings that could help.  Let's RTFM.
+
+#+BEGIN_QUOTE
+Note that afl-fuzz starts by performing an array of deterministic fuzzing
+steps, which can take several days
+#+END_QUOTE
+
+Hmm...
+
+#+BEGIN_QUOTE
+At minimum, you want to allow the fuzzer to complete one queue cycle, which may
+take anywhere from a couple of hours to a week or so.
+#+END_QUOTE
+
+Okay... we'll probably not be running this on Travis then.
+
+#+BEGIN_QUOTE
+Your CPU will run hot and will need adequate cooling. [...] when fuzzing on less
+suitable hardware (laptops, smartphones, etc), it's not entirely impossible for
+something to blow up.
+
+[...] you shouldn't be fuzzing on systems where the prospect of data loss is not
+an acceptable risk.
+
+[...] with very heavy I/O, the lifespan of many HDDs and SSDs may be reduced.
+#+END_QUOTE
+
+Figures.
+
+Okay, I'll probably skip the fuzzer.  But that gives me another idea...
