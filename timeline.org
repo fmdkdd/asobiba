@@ -12149,3 +12149,169 @@ I don't know if I would have found that...
 
 Anyway, it works.  Too bad we now have to actually compile stuff to get warnings
 even though the files are fresh.  Seems wasteful.
+
+* [2017-07-24 lun.]
+** Getting my own domain name                                :dns:0xc0de:ovh:
+So, since I helped M set up their VPS and domain on OVH, I figured: maybe it's
+time I get my own domain.
+
+I'm rather happy using Gmail and Github for hosting most of my stuff, but should
+I ever switch (or, rather, should they ever turn evil... or /eviler/), users
+wouldn't notice if everything was seemingly hosted by my domain.
+
+Plus, one place to put everything I want.
+
+But I still wanted to keep using those services, just behind my domain.  Turns
+out, this can be done.
+
+Buying the domain on OVH is easy enough.  Choosing the name was the hardest
+part.  It's a bit cheeky, but I'm rather happy with it.
+
+Now, to configure the DNS.  First thing I cared about was Email.  I know that
+OVH gives a basic plan for my mail with a domain purchase... but I didn't want
+to have /yet another/ email account.  Rather, I wanted to keep using Gmail, but
+send and receive email from @mydomain.
+
+*** Sending and receiving email from a custom domain                   :mail:
+Turns out, there is a way to do that, but it's not perfect.
+
+To /receive/ email sent to me@mydomain, I need an MX record and a redirect
+server.  When mail is addressed to me@mydomain, the mail transfer agent looks up
+the MX record of mydomain to know the address of the server to send the mail
+to.  It doesn't even care about anything in front of the '@'.
+
+So far, the MX record is already set up to point to the redirect server of OVH.
+So now the OVH mail server gets my mail, but I need it to go to me@gmail.  Well,
+OVH provides an easy setup for that, and there's even [[https://docs.ovh.com/fr/fr/web/emails/guide-des-redirections-emails/][a guide]].
+
+They take care of forwarding the mail to gmail at no extra cost.  You can
+forward up to 1000 addresses per domain, so I should be good for a while.
+
+The only downside is that it adds a server in the chain, so it's an additional
+potential point of failure.  Crucially, it could hold up mail, or even drop it
+without me knowing.  So far I haven't had any issues, but I'll monitor the
+delivery times.  To mitigate the issues, I can keep giving the me@gmail address
+to critical services (like, the French Tax Office).
+
+Now, to /send/ mail from me@mydomain, it's a tad more complex.  Traditionally,
+SMTP servers did not care about the From: field of a mail.  It's very convenient
+as long as people act responsibly.  Of course, the Internet has been overrun by
+jerks since 1989, so tighter restriction on From: fields had to be enforced.
+
+First of all, the Gmail interface doesn't let you change the From field when
+writing a mail.  You have to go to Accounts, and add another email address.
+They require SMTP credentials for this server, even if it's theirs (go
+figure...).  And, crucially, it won't work if you have 2-factor authentication.
+
+You have to generate an app password and use that.
+
+Now, you can send email from me@mydomain, and correspondents won't ever know you
+sent your email from Gmail—unless of course they routinely peruse the headers,
+but that's fair game.
+
+So, that works from the Gmail interface.  But what if you want to send your
+email from, say, Thunderbird?  Well, apparently, you can't.  I mean, you can put
+anything in the 'From' field, of course, but the mail will most likely appear as
+'Sent from me@mydomain on behalf of me@mydomain'.
+
+I read that this feature is supported, but when you have a Google Apps account
+(hint: it's not free).  Tricky fellows.
+
+Well, alright.  I can keep using the webmail; the Thunderbird has no integration
+for conversations anyway.  (At this point, I'm realizing that Gmail might be a
+proprietary extension of email that's only loosely compatible with open
+protocols... that would make an eventual switch easier to stomach).
+
+There's one more thing though: SPF.  I'm not sure it's essential, but it helps
+to not have your mails be classified as spam.  SPF records (which are actually
+TXT DNS records) are used to tell the outside world that, yes, it's okay if your
+receive mail from mydomain that has been sent by Google.  Gmail has [[records whether mydomain had][a doc on
+that]].
+
+At this point, I have a custom email address, and I'm rather happy about it.  (I
+used to have a snazzy @poulet.org email... but after a while I think my account
+just went down the drain, and I never dared ask the admin about it).
+
+*** Using my custom domain for my Github pages                   :github:dns:
+So, I wanted to have fmdkdd.0xc0de.fr point to fmdkdd.github.com.  This is easy:
+add a CNAME entry to the DNS zones file.  OVH has a GUI for that.
+
+Beware though, as the GUI can be tricky: it's supposed to be a pretty-printed
+table of the entries in the zones text file, but I've seen first-hand that
+sometimes it didn't show entries that were in the zones file, and vice-versa.
+Compounded by my total lack of knowledge of the field, this had me puzzling for
+a while.
+
+Anyway, just adding the CNAME entry from fmdkdd.0xc0de.fr -> fmdkdd.github.com
+was not enough.  You have to tell github that fmdkdd.0xc0de.fr is now the
+canonical name (the C in CNAME).  Luckily, Github has a guide on that as well,
+but it's only a single settings in the admin page for the project anyway.
+
+Once both sides are configured, going to fmdkdd.0xc0de.fr correctly loads what
+fmdkdd.github.com previously hosted.  And going to fmdkdd.github.com redirects
+to fmdkdd.0xc0de.fr (301 Moved Permanently).
+
+Good.  As an added effect, every gh-pages of other projects I had, which were
+hosted under fmdkdd.github.com/foo, are now redirected the same way.
+
+There's only one downside with this setup: I've lost HTTPS support.
+
+See, Github pages are served using HTTPS, and that's very nice.  Although,
+honestly, it's not all of that useful for my projects pages since... I just
+serve dumb HTML or client-only JavaScript apps.  Unless I'm mistaken, not much
+information to leak there; not very worthwhile to man-in-the-middle either.
+
+But, still, having HTTPS would be sweet.  Seeing as HTTP is getting closer and
+closer to drop off the face of the web.
+
+Well, turns out that [[https://github.com/isaacs/github/issues/156][I'm not the only one]].
+
+Someone in this thread suggested Netlify, so I investigated.
+
+This a free service for deploying and hosting static pages with a content
+delivery network.  It's actually pretty sweet, and easy to use.  You can login
+with your Github account through OAuth.  Point to a repository, give deployment
+instructions, and they continuously deploy your branch to their CDN.
+
+And of course, they support SSL for custom domains with Let's Encrypt.
+
+That changes the previous setup, however.  First, I have to create a Netlify
+site, say potato.netlify.com (they have random names by default).  Let's say
+this builds my fmdkdd.github.com project (which is still /also/ deployed at
+fmdkdd.github.io).  Now, I have to point fmdkdd.0xc0de.fr to
+potato.netlify.com.  Then, when I'm sure the DNS are setup properly, I enable
+HTTPS.  Bingo!
+
+But now I have an issue: I have a bunch of gh-pages that are still deployed on
+Github... and fmdkdd.github.io/foo still redirects to fmdkdd.0xc0de.fr/foo, but
+it's a 404, since fmdkdd.0xc0de.fr points the netlify deployed site, and it only
+contains my webpage.
+
+Solutions:
+
+1. Github supports setting a CNAME per-project.  So I could setup deployment of
+   all my projects on netlify, and add a CNAME in my DNS and in Github to
+   foo.0xc0de.fr for each project.
+
+   A bit cumbersome, but now everything would be using SSL.  Also, Netlify
+   deployments are easier to setup than Github's (they can actually build stuff,
+   whereas Github just copies the contents unless you use Jekyll).
+
+   And in fact, I don't even need to deploy on Github anymore, I can move
+   everything to netlify.  Less branches on Github, less hassle with CNAME on
+   Github's side.
+
+2. Setup a mega project that's deployed as one website on Netlify to replicate
+   the hierarchy fmdkdd.github.io/foo1 fmdkdd.github.io/foo2, etc.
+
+   The mega project would have all the individual projects as submodules,
+   and... okay not, that's probably a bad idea.
+
+   Besides, there's something a bit strange with the fmdkdd.github.io/foo1
+   scheme: what happens if the fmdkdd.github.com has a foo1 folder?
+
+3. Forego SSL.
+
+I think I'll go with 3 for now.  We'll see if Github eventually implements SSL
+for custom domains.  If I ever feel like going through all my projects to setup
+the deployments again, I might tackle #1, but now is not the time.
