@@ -12075,3 +12075,77 @@ an acceptable risk.
 Figures.
 
 Okay, I'll probably skip the fuzzer.  But that gives me another idea...
+
+* [2017-07-22 sam.]
+** Investigating cargo check --lib bug                           :cargo:rust:
+https://github.com/rust-lang/cargo/issues/3624
+
+`cargo check --lib` will give warnings only the first time, but `cargo check
+--bin foo` will give them every time.
+
+(For later: what's the behavior for examples/benches/tests?)
+
+It seems this is a freshness issue.  For some reason, compilation of binary
+targets always happen, hence we get warnings.  But library targets are not
+compiled, and we get no warnings.
+
+cargo uses values for "Dirty", "Fresh" and "Freshness" in the compile function.
+What are the exact meaning of these terms in this context?
+
+#+BEGIN_SRC rust
+/// Indication of the freshness of a package.
+///
+/// A fresh package does not necessarily need to be rebuilt (unless a dependency
+/// was also rebuilt), and a dirty package must always be rebuilt.
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
+pub enum Freshness {
+    Fresh,
+    Dirty,
+}
+#+END_SRC
+
+In the compile function, "dirty" and "fresh" relate to closures that will carry
+on the work in each respective case.  And "freshness" tells which one should be
+used for this compilation unit.
+
+Trying this:
+
+#+BEGIN_SRC rust
+        if unit.profile.check && unit.target.is_lib() {
+            freshness = Freshness::Dirty;
+        }
+#+END_SRC
+
+This does get the warnings each time, but it also recompiles every library,
+regardless of their freshness.  Here is a run of `cargo check --lib` on cargo
+itself:
+
+#+BEGIN_EXAMPLE
+ Compiling utf8-ranges v1.0.0
+   Compiling glob v0.2.11
+   Compiling semver-parser v0.7.0
+   Compiling dtoa v0.4.1
+   Compiling void v1.0.2
+   Compiling matches v0.1.6
+   [...]
+    Finished dev [unoptimized + debuginfo] target(s) in 12.59 secs
+#+END_EXAMPLE
+
+Compared to the `0.1` seconds the same call takes without this modification, I
+don't think the warnings are worth waiting this long.
+
+But we shouldn't be compiling all libs, surely.  Only the crate lib for `cargo
+check --lib`.  But how to target that?
+
+@ehuss replied on the PR and got the right idea there:
+
+#+BEGIN_SRC rust
+if unit.profile.check && unit.pkg.package_id() == cx.ws.current_opt().unwrap().package_id() {
+     freshness = Freshness::Dirty;
+}
+#+END_SRC
+
+I don't know if I would have found that...
+
+Anyway, it works.  Too bad we now have to actually compile stuff to get warnings
+even though the files are fresh.  Seems wasteful.
