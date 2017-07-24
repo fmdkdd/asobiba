@@ -12315,3 +12315,13 @@ Solutions:
 I think I'll go with 3 for now.  We'll see if Github eventually implements SSL
 for custom domains.  If I ever feel like going through all my projects to setup
 the deployments again, I might tackle #1, but now is not the time.
+
+Hmm, it looks like even with the 'simple' setup, Github is making this hard on
+me here.  Going to fmdkdd.github.io/foo redirects to fmdkdd.0xc0de.fr/foo, even
+though fmdkdd.github.com redirects to 0xc0de.fr, and not to the subdomain...
+
+So I'll have to put explicit CNAME everywhere?  Might as well deploy directly to
+Netlify, so I can skip this hassle on Github.  To keep the old URLs active, I
+just have to push 301 redirect pages to my gh-pages branches.
+
+Okay, later.
