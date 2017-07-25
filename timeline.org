@@ -12325,3 +12325,30 @@ Netlify, so I can skip this hassle on Github.  To keep the old URLs active, I
 just have to push 301 redirect pages to my gh-pages branches.
 
 Okay, later.
+
+[Update the day after]
+
+Actually, the problem arises when I try to access https://fmdkdd.github.io/s3c:
+this is redirected to https://fmdkdd.0xc0de.fr/s3c by Github, but there's
+nothing there (since the canonical name is supposed to be 0xc0de.fr), plus it's
+HTTPS.
+
+Going to http://fmdkdd.github.io/s3c redirects to http://0xc0de.fr/s3c.
+
+Actually, it seems I only have the issue in my browser.  Wget goes to 0xc0de.fr
+with the https link just fine, and so does my Firefox on Android.
+
+Hmm, maybe Firefox has a DNS cache or something?  Clearing the DNS does nothing.
+
+Actually, this does not happen for all of my project pages.  This is quite
+puzzling.
+
+Using "Forget about this site" for https://fmdkdd.github.io/s3c fixes it.
+Shrug.
+
+Another thing that might be useful one day: since I'm running my own DNS server,
+I can use `unbound-control flush 0xc0de.fr` for faster turnaround when tweaking
+things in my DNS zones.
+
+Even better, I guess I could tweak the zones directly in my local DNS server,
+and once I find something working, I can update my OVH Zones.
