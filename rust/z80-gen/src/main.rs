@@ -12,13 +12,15 @@ use std::io::{BufRead, BufReader};
 use std::fs::File;
 use std::str::FromStr;
 
-use parser::{ParsedOpcode, ParsedOperand, PatternArg};
+use parser::{ParsedOpcode, ParsedOperand};
 
+#[derive(Debug)]
 enum ArgType {
   None,
   Unsigned,
   UnsignedWord,
   Signed,
+  Relative,
 }
 
 fn emit_disassembler_arg(arg: &ParsedOperand) -> (String, ArgType) {
@@ -28,26 +30,16 @@ fn emit_disassembler_arg(arg: &ParsedOperand) -> (String, ArgType) {
   match arg {
     &Bit(ref b)             => (format!("{}", b), None),
     &Register(ref r)        => (format!("{}", r), None),
-    &Immediate              => (String::from("%02x"), Unsigned),
-    &ImmediateExtended      => (String::from("%04x"), UnsignedWord),
+    &Immediate              => (String::from("$%02x"), Unsigned),
+    &ImmediateExtended      => (String::from("$%04x"), UnsignedWord),
     &ZeroPage(n)            => (format!("${:02x}", n), Unsigned),
-    &AddressRelative        => (String::from("PC + %d"), Signed),
-    &AddressImmediate       => (String::from("(%02x)"), Unsigned),
-    &AddressExtended        => (String::from("(%04x)"), UnsignedWord),
+    &AddressRelative        => (String::from("PC%+d [$%04x]"), Relative),
+    &AddressImmediate       => (String::from("($%02x)"), Unsigned),
+    &AddressExtended        => (String::from("($%04x)"), UnsignedWord),
     &AddressRegister(ref r) => (format!("({:?})", r), None),
     &AddressIndexed(ref r)  => (format!("({:?} + %d)", r), Signed),
     &Conditional(ref c)     => (format!("{:?}", c), None),
     _                       => (format!("{:?}", arg), None),
-  }
-}
-
-fn disassembler_arg_type(arg: &Option<PatternArg>) -> u8 {
-  use PatternArg::*;
-
-  match arg {
-    &Some(Unsigned) => 1,
-    &Some(Signed) => 2,
-    _ => 0,
   }
 }
 
@@ -70,9 +62,9 @@ fn emit_disassembler(ops: &[ParsedOpcode]) {
       arg2_type = t;
     }
 
-    println!("[0x{:04x}] = {{ {}, \"{:?} {}\", {}, {} }},",
+    println!("[0x{:04x}] = {{ {}, \"{:?} {}\", {:?}, {:?} }},",
              o.pattern.code, o.length, o.name, args,
-             arg1_type as u8, arg2_type as u8);
+             arg1_type, arg2_type);
   }
 }
 
