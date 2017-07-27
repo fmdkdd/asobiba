@@ -1,3 +1,4 @@
+use std::fmt;
 use std::str::FromStr;
 
 use regex::{Regex, Match};
@@ -30,12 +31,12 @@ pub enum PatternArg {
 }
 
 #[derive(Debug)]
-pub struct ParsedMnemonic {
-  pub raw: String,
-  pub name: Mnemonic,
-  pub dst: Option<ParsedOperand>,
-  pub src: Option<ParsedOperand>,
-  pub undocumented: bool,
+struct ParsedMnemonic {
+  raw: String,
+  name: Mnemonic,
+  dst: Option<ParsedOperand>,
+  src: Option<ParsedOperand>,
+  undocumented: bool,
 }
 
 #[derive(Debug)]
@@ -74,6 +75,19 @@ custom_derive! {
     IXh, IXl, IYh, IYl,
     BC, DE, HL, AF, SP, IX, IY,
     BC_, DE_, HL_, AF_,
+  }
+}
+
+impl fmt::Display for Register {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    use self::Register::*;
+    match self {
+      &BC_ => write!(f, "BC'"),
+      &DE_ => write!(f, "DE'"),
+      &HL_ => write!(f, "HL'"),
+      &AF_ => write!(f, "AF'"),
+      r => write!(f, "{:?}", r),
+    }
   }
 }
 

@@ -12,11 +12,67 @@ use std::io::{BufRead, BufReader};
 use std::fs::File;
 use std::str::FromStr;
 
-use parser::ParsedOpcode;
+use parser::{ParsedOpcode, ParsedOperand, PatternArg};
+
+enum ArgType {
+  None,
+  Unsigned,
+  UnsignedWord,
+  Signed,
+}
+
+fn emit_disassembler_arg(arg: &ParsedOperand) -> (String, ArgType) {
+  use ParsedOperand::*;
+  use ArgType::*;
+
+  match arg {
+    &Bit(ref b)             => (format!("{}", b), None),
+    &Register(ref r)        => (format!("{}", r), None),
+    &Immediate              => (String::from("%02x"), Unsigned),
+    &ImmediateExtended      => (String::from("%04x"), UnsignedWord),
+    &ZeroPage(n)            => (format!("${:02x}", n), Unsigned),
+    &AddressRelative        => (String::from("PC + %d"), Signed),
+    &AddressImmediate       => (String::from("(%02x)"), Unsigned),
+    &AddressExtended        => (String::from("(%04x)"), UnsignedWord),
+    &AddressRegister(ref r) => (format!("({:?})", r), None),
+    &AddressIndexed(ref r)  => (format!("({:?} + %d)", r), Signed),
+    &Conditional(ref c)     => (format!("{:?}", c), None),
+    _                       => (format!("{:?}", arg), None),
+  }
+}
+
+fn disassembler_arg_type(arg: &Option<PatternArg>) -> u8 {
+  use PatternArg::*;
+
+  match arg {
+    &Some(Unsigned) => 1,
+    &Some(Signed) => 2,
+    _ => 0,
+  }
+}
 
 fn emit_disassembler(ops: &[ParsedOpcode]) {
+  // For each opcode, we emit a struct that gives the necessary data for a
+  // common function to produce a disassembly string
   for o in ops {
-    println!("[0x{:04x}] = {{ {}, \"{}\" }},", o.pattern.code, o.length,  o.raw_mnemonic);
+    let mut args = String::new();
+    let mut arg1_type = ArgType::None;
+    if let Some(ref arg) = o.dst {
+      let (s, t) = emit_disassembler_arg(arg);
+      args += &s;
+      arg1_type = t;
+    }
+    let mut arg2_type = ArgType::None;
+    if let Some(ref arg) = o.src {
+      args += ", ";
+      let (s, t) = emit_disassembler_arg(arg);
+      args += &s;
+      arg2_type = t;
+    }
+
+    println!("[0x{:04x}] = {{ {}, \"{:?} {}\", {}, {} }},",
+             o.pattern.code, o.length, o.name, args,
+             arg1_type as u8, arg2_type as u8);
   }
 }
 
@@ -38,7 +94,12 @@ fn main() {
     ::std::process::exit(1);
   } else {
     let ops = parsed_ops.unwrap();
-    let good_ops: Vec<ParsedOpcode> = ops.into_iter().filter(|p| !p.undocumented).collect();
+    let good_ops: Vec<ParsedOpcode> = ops.into_iter()
+      // Ignore undocumented opcodes
+      .filter(|p| !p.undocumented)
+      // Ignore CB prefix opcode
+      .filter(|p| !(p.pattern.code & 0xFF == 0xCB))
+      .collect();
 
     // TODO: compare ops to the raw string
     // for o in good_ops {
