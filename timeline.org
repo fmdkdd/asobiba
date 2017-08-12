@@ -12225,8 +12225,7 @@ protocols... that would make an eventual switch easier to stomach).
 There's one more thing though: SPF.  I'm not sure it's essential, but it helps
 to not have your mails be classified as spam.  SPF records (which are actually
 TXT DNS records) are used to tell the outside world that, yes, it's okay if your
-receive mail from mydomain that has been sent by Google.  Gmail has [[records whether mydomain had][a doc on
-that]].
+receive mail from mydomain that has been sent by Google.  Gmail has [[https://support.google.com/a/answer/178723?hl%3Den&ref_topic%3D2759192][a doc on that]].
 
 At this point, I have a custom email address, and I'm rather happy about it.  (I
 used to have a snazzy @poulet.org email... but after a while I think my account
