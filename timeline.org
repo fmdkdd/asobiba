@@ -7159,8 +7159,8 @@ so the predicate is true.
 Now it calls ~-start-current-syntax-check~, which creates a ~syntax-check~
 object, a struct that holds information about the state of the syntax check.
 
-It creates a callback to report status at a later point using passing this
-syntax check as first argument, and saves the syntax check as the
+It creates a callback to report status at a later point passing this syntax
+check as first argument, and saves the syntax check as the
 ~-current-syntax-check~.
 
 Flycheck status turn to "running" (but this only sends the status to hooks which
