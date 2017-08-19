@@ -3,11 +3,65 @@ use std::str::Chars;
 
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Character stream
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+// This is only to record position, line and column information when building
+// the tokens
+struct CharStream<'a> {
+  input: Peekable<Chars<'a>>,
+  pos: u32,
+  line: u32,
+  column: u32,
+  current_char_position: Option<(u32, u32, u32)>,
+}
+
+impl<'a> CharStream<'a> {
+  fn new(input: &'a str) -> Self {
+    CharStream {
+      input: input.chars().peekable(),
+      pos: 0,
+      line: 1,
+      column: 0,
+      current_char_position: None,
+    }
+  }
+
+  fn peek(&mut self) -> Option<&char> {
+    self.input.peek()
+  }
+
+  fn next(&mut self) -> Option<char> {
+    self.current_char_position = Some((self.pos, self.line, self.column));
+    let c = self.input.next();
+    self.pos += 1;
+    self.column += 1;
+    if let Some('\n') = c {
+      self.line += 1;
+      self.column = 0;
+    }
+    c
+  }
+}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Tokenizer
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 #[derive(PartialEq, Debug, Clone)]
-pub enum Token {
+pub struct Token {
+  kind: TokenKind,
+  pos_start: u32,
+  line_start: u32,
+  column_start: u32,
+  pos_end: u32,
+  line_end: u32,
+  column_end: u32,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum TokenKind {
   EOF,
   LeftParen,
   RightParen,
@@ -21,15 +75,17 @@ pub enum Token {
 }
 
 pub struct TokenStream<'a> {
-  input: Peekable<Chars<'a>>,
+  input: CharStream<'a>,
   peeked_token: Option<Token>,
+  saved_position: Option<(u32, u32, u32)>,
 }
 
 impl<'a> TokenStream<'a> {
   pub fn new(input: &'a str) -> Self {
     TokenStream {
-      input: input.chars().peekable(),
+      input: CharStream::new(input),
       peeked_token: None,
+      saved_position: None,
     }
   }
 
@@ -38,6 +94,32 @@ impl<'a> TokenStream<'a> {
       None                        => panic!("Expected '{}' but found end of input instead"),
       Some(actual) if actual != c => panic!("Expected '{}' but found '{}' instead", c, actual),
       _                           => {},
+    }
+  }
+
+  // Save position of the *next* character
+  fn save_position(&mut self) {
+    self.saved_position = Some((self.input.pos, self.input.line, self.input.column));
+  }
+
+  // Emit token with the position of the *current* character as the end position
+  fn emit(&mut self, kind: TokenKind) -> Token {
+    let end = self.input.current_char_position.unwrap();
+
+    let start = match self.saved_position {
+      None    => end,
+      Some(p) => p,
+    };
+    self.saved_position = None;
+
+    Token {
+      kind,
+      pos_start: start.0,
+      line_start: start.1,
+      column_start: start.2,
+      pos_end: end.0,
+      line_end: end.1,
+      column_end: end.2,
     }
   }
 
@@ -157,21 +239,21 @@ impl<'a> TokenStream<'a> {
 
     // Bail if no more input
     if let None = self.input.peek() {
-      return Token::EOF
+      return self.emit(TokenKind::EOF)
     }
 
     // Have to dance around since peek borrows self.input
     let c = *self.input.peek().unwrap();
     match c {
-      '('                 => { self.input.next(); Token::LeftParen },
-      ')'                 => { self.input.next(); Token::RightParen },
-      '\''                => { self.input.next(); Token::Quote },
-      '#'                 => { self.input.next(); Token::Pound },
-      '`'                 => { self.input.next(); Token::Backquote },
-      '"'                 => Token::String(self.read_string()),
-      ';'                 => Token::Comment(self.read_comment()),
-      _ if c.is_digit(10) => Token::Number(self.read_number()),
-      _                   => Token::Ident(self.read_identifier()),
+      '('                 => { self.input.next(); self.emit(TokenKind::LeftParen) },
+      ')'                 => { self.input.next(); self.emit(TokenKind::RightParen) },
+      '\''                => { self.input.next(); self.emit(TokenKind::Quote) },
+      '#'                 => { self.input.next(); self.emit(TokenKind::Pound) },
+      '`'                 => { self.input.next(); self.emit(TokenKind::Backquote) },
+      '"'                 => { self.save_position(); let t = TokenKind::String(self.read_string());    self.emit(t) },
+      ';'                 => { self.save_position(); let t = TokenKind::Comment(self.read_comment());  self.emit(t) },
+      _ if c.is_digit(10) => { self.save_position(); let t = TokenKind::Number(self.read_number());    self.emit(t) },
+      _                   => { self.save_position(); let t = TokenKind::Ident(self.read_identifier()); self.emit(t) },
     }
   }
 
@@ -193,7 +275,7 @@ impl<'a> TokenStream<'a> {
   }
 
   pub fn is_eof(&mut self) -> bool {
-    self.peek() == &Token::EOF
+    self.peek().kind == TokenKind::EOF
   }
 }
 
@@ -211,7 +293,7 @@ enum Node {
 enum Atom {
   Ident(String),
   String(String),
-  Number(u32),
+  Number(i64),
 }
 
 fn parse(input: &str) {
@@ -225,26 +307,26 @@ fn parse(input: &str) {
 
 #[cfg(test)]
 mod tests {
-  use super::{Token, TokenStream};
+  use super::{Token, TokenKind, TokenStream};
 
   #[test]
   fn sexp() {
-    let expected = [Token::Comment(" Comment".to_string()),
-                    Token::LeftParen,
-                    Token::Ident("defun".to_string()),
-                    Token::Ident("foo".to_string()),
-                    Token::LeftParen,
-                    Token::Ident("bla".to_string()),
-                    Token::Ident("comp".to_string()),
-                    Token::RightParen,
-                    Token::Comment(" other comment".to_string()),
-                    Token::String("multi-line\ndocstring".to_string()),
-                    Token::LeftParen,
-                    Token::Ident("progn".to_string()),
-                    Token::Number(1),
-                    Token::RightParen,
-                    Token::RightParen,
-                    Token::EOF];
+    let expected = [TokenKind::Comment(" Comment".to_string()),
+                    TokenKind::LeftParen,
+                    TokenKind::Ident("defun".to_string()),
+                    TokenKind::Ident("foo".to_string()),
+                    TokenKind::LeftParen,
+                    TokenKind::Ident("bla".to_string()),
+                    TokenKind::Ident("comp".to_string()),
+                    TokenKind::RightParen,
+                    TokenKind::Comment(" other comment".to_string()),
+                    TokenKind::String("multi-line\ndocstring".to_string()),
+                    TokenKind::LeftParen,
+                    TokenKind::Ident("progn".to_string()),
+                    TokenKind::Number(1),
+                    TokenKind::RightParen,
+                    TokenKind::RightParen,
+                    TokenKind::EOF];
     let mut t = TokenStream::new(r#"
 ;; Comment
 (defun foo (bla comp) ; other comment
@@ -252,7 +334,7 @@ mod tests {
 docstring"
   (progn 1))"#);
     for token in expected.iter() {
-      assert_eq!(*token, t.next());
+      assert_eq!(*token, t.next().kind);
     }
     assert!(t.is_eof());
   }
@@ -260,28 +342,53 @@ docstring"
   #[test]
   fn peek() {
     let mut t = TokenStream::new("ba bi bo");
-    assert_eq!(&Token::Ident("ba".to_string()), t.peek());
-    assert_eq!(&Token::Ident("ba".to_string()), t.peek());
-    assert_eq!( Token::Ident("ba".to_string()), t.next());
-    assert_eq!(&Token::Ident("bi".to_string()), t.peek());
-    assert_eq!(&Token::Ident("bi".to_string()), t.peek());
-    assert_eq!( Token::Ident("bi".to_string()), t.next());
-    assert_eq!( Token::Ident("bo".to_string()), t.next());
-    assert_eq!(&Token::EOF, t.peek());
-    assert_eq!( Token::EOF, t.next());
-    assert_eq!( Token::EOF, t.next());
+    assert_eq!(TokenKind::Ident("ba".to_string()), t.peek().kind);
+    assert_eq!(TokenKind::Ident("ba".to_string()), t.peek().kind);
+    assert_eq!(TokenKind::Ident("ba".to_string()), t.next().kind);
+    assert_eq!(TokenKind::Ident("bi".to_string()), t.peek().kind);
+    assert_eq!(TokenKind::Ident("bi".to_string()), t.peek().kind);
+    assert_eq!(TokenKind::Ident("bi".to_string()), t.next().kind);
+    assert_eq!(TokenKind::Ident("bo".to_string()), t.next().kind);
+    assert_eq!(TokenKind::EOF, t.peek().kind);
+    assert_eq!(TokenKind::EOF, t.next().kind);
+    assert_eq!(TokenKind::EOF, t.next().kind);
   }
 
   #[test]
   fn escaped_string() {
     {
       let mut t = TokenStream::new(r#"  "b\"i" "#);
-      assert_eq!(Token::String("b\"i".to_string()), t.next());
+      assert_eq!(TokenKind::String("b\"i".to_string()), t.next().kind);
     }
 
     {
       let mut t = TokenStream::new(r#" "a\nb" "#);
-      assert_eq!(Token::String("a\nb".to_string()), t.next());
+      assert_eq!(TokenKind::String("a\nb".to_string()), t.next().kind);
     }
+  }
+
+  #[test]
+  fn character_position() {
+    let mut t = TokenStream::new(r#"abc
+def"#);
+    assert_eq!(Token {
+      kind: TokenKind::Ident("abc".to_string()),
+      pos_start: 0,
+      line_start: 1,
+      column_start: 0,
+      pos_end: 2,
+      line_end: 1,
+      column_end: 2,
+    }, t.next());
+
+    assert_eq!(Token {
+      kind: TokenKind::Ident("def".to_string()),
+      pos_start: 4,
+      line_start: 2,
+      column_start: 0,
+      pos_end: 6,
+      line_end: 2,
+      column_end: 2,
+    }, t.next());
   }
 }
