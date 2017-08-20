@@ -8,22 +8,32 @@ use std::str::Chars;
 
 // This is only to record position, line and column information when building
 // the tokens
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+pub struct TextPosition {
+  pos: u32,                     // absolute character position
+  line: u32,                    // line number (starts at 1)
+  column: u32,                  // column number (starts at 0)
+}
+
+impl TextPosition {
+  pub fn new() -> Self {
+    TextPosition { pos: 0, line: 1, column: 0 }
+  }
+}
+
 struct CharStream<'a> {
   input: Peekable<Chars<'a>>,
-  pos: u32,
-  line: u32,
-  column: u32,
-  current_char_position: Option<(u32, u32, u32)>,
+  pos_of_current_char: Option<TextPosition>,
+  pos_of_next_char: TextPosition,
 }
 
 impl<'a> CharStream<'a> {
   fn new(input: &'a str) -> Self {
     CharStream {
       input: input.chars().peekable(),
-      pos: 0,
-      line: 1,
-      column: 0,
-      current_char_position: None,
+      pos_of_current_char: None,
+      pos_of_next_char: TextPosition::new(),
     }
   }
 
@@ -32,13 +42,13 @@ impl<'a> CharStream<'a> {
   }
 
   fn next(&mut self) -> Option<char> {
-    self.current_char_position = Some((self.pos, self.line, self.column));
+    self.pos_of_current_char = Some(self.pos_of_next_char);
     let c = self.input.next();
-    self.pos += 1;
-    self.column += 1;
+    self.pos_of_next_char.pos += 1;
+    self.pos_of_next_char.column += 1;
     if let Some('\n') = c {
-      self.line += 1;
-      self.column = 0;
+      self.pos_of_next_char.line += 1;
+      self.pos_of_next_char.column = 0;
     }
     c
   }
@@ -52,12 +62,8 @@ impl<'a> CharStream<'a> {
 #[derive(PartialEq, Debug, Clone)]
 pub struct Token {
   kind: TokenKind,
-  pos_start: u32,
-  line_start: u32,
-  column_start: u32,
-  pos_end: u32,
-  line_end: u32,
-  column_end: u32,
+  start: TextPosition,
+  end: TextPosition,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -77,7 +83,7 @@ pub enum TokenKind {
 pub struct TokenStream<'a> {
   input: CharStream<'a>,
   peeked_token: Option<Token>,
-  saved_position: Option<(u32, u32, u32)>,
+  saved_position: Option<TextPosition>,
 }
 
 impl<'a> TokenStream<'a> {
@@ -99,12 +105,12 @@ impl<'a> TokenStream<'a> {
 
   // Save position of the *next* character
   fn save_position(&mut self) {
-    self.saved_position = Some((self.input.pos, self.input.line, self.input.column));
+    self.saved_position = Some(self.input.pos_of_next_char);
   }
 
   // Emit token with the position of the *current* character as the end position
   fn emit(&mut self, kind: TokenKind) -> Token {
-    let end = self.input.current_char_position.unwrap();
+    let end = self.input.pos_of_current_char.unwrap();
 
     let start = match self.saved_position {
       None    => end,
@@ -112,15 +118,7 @@ impl<'a> TokenStream<'a> {
     };
     self.saved_position = None;
 
-    Token {
-      kind,
-      pos_start: start.0,
-      line_start: start.1,
-      column_start: start.2,
-      pos_end: end.0,
-      line_end: end.1,
-      column_end: end.2,
-    }
+    Token { kind, start, end }
   }
 
   fn eat_space(&mut self) {
@@ -307,7 +305,7 @@ fn parse(input: &str) {
 
 #[cfg(test)]
 mod tests {
-  use super::{Token, TokenKind, TokenStream};
+  use super::{TextPosition, Token, TokenKind, TokenStream};
 
   #[test]
   fn sexp() {
@@ -373,22 +371,14 @@ docstring"
 def"#);
     assert_eq!(Token {
       kind: TokenKind::Ident("abc".to_string()),
-      pos_start: 0,
-      line_start: 1,
-      column_start: 0,
-      pos_end: 2,
-      line_end: 1,
-      column_end: 2,
+      start: TextPosition { pos: 0, line: 1, column: 0 },
+      end: TextPosition { pos: 2, line: 1, column: 2 },
     }, t.next());
 
     assert_eq!(Token {
       kind: TokenKind::Ident("def".to_string()),
-      pos_start: 4,
-      line_start: 2,
-      column_start: 0,
-      pos_end: 6,
-      line_end: 2,
-      column_end: 2,
+      start: TextPosition { pos: 4, line: 2, column: 0 },
+      end: TextPosition { pos: 6, line: 2, column: 2 },
     }, t.next());
   }
 }
