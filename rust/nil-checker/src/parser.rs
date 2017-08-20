@@ -75,6 +75,7 @@ pub enum TokenKind {
   Quote,
   Backquote,
   Pound,
+  Comma,
   Comment(String),
   String(String),
   Ident(String),
@@ -249,6 +250,7 @@ impl<'a> TokenStream<'a> {
       '\''                => { self.input.next(); self.emit(TokenKind::Quote) },
       '#'                 => { self.input.next(); self.emit(TokenKind::Pound) },
       '`'                 => { self.input.next(); self.emit(TokenKind::Backquote) },
+      ','                 => { self.input.next(); self.emit(TokenKind::Comma) },
       '"'                 => { self.save_position(); let t = TokenKind::String(self.read_string());    self.emit(t) },
       ';'                 => { self.save_position(); let t = TokenKind::Comment(self.read_comment());  self.emit(t) },
       _ if c.is_digit(10) => { self.save_position(); let t = TokenKind::Number(self.read_number());    self.emit(t) },
@@ -302,6 +304,11 @@ pub enum NodeKind {
   Symbol(usize),
   String(String),
   Number(i64),
+  Comment(String),
+  Quote(Box<Node>),
+  Backquote(Box<Node>),
+  Pound(Box<Node>),
+  Comma(Box<Node>),
 }
 
 pub struct Parser<'a> {
@@ -324,7 +331,7 @@ impl<'a> Parser<'a> {
       nodes.push(self.parse_node());
     }
 
-    self.expect(TokenKind::EOF);
+    self.expect(&TokenKind::EOF);
 
     // Transform the Map<String, usize> into a Vec<String> where the strings are
     // put in increasing order of the map value.  The Vec<String> is actually a
@@ -362,9 +369,9 @@ impl<'a> Parser<'a> {
     }
   }
 
-  fn expect(&mut self, kind: TokenKind) -> Token {
+  fn expect(&mut self, kind: &TokenKind) -> Token {
     let t = self.input.next();
-    if t.kind != kind  {
+    if t.kind != *kind  {
       panic!("Expected token '{:?}', but got '{:?}'", kind, t.kind);
     }
     t
@@ -410,7 +417,7 @@ impl<'a> Parser<'a> {
   }
 
   fn parse_sexp(&mut self) -> Node {
-    let start = self.expect(TokenKind::LeftParen).start;
+    let start = self.expect(&TokenKind::LeftParen).start;
 
     let mut nodes = Vec::new();
 
@@ -418,7 +425,7 @@ impl<'a> Parser<'a> {
       nodes.push(self.parse_node());
     }
 
-    let end = self.expect(TokenKind::RightParen).end;
+    let end = self.expect(&TokenKind::RightParen).end;
 
     Node {
       kind: NodeKind::Sexp(nodes),
@@ -427,16 +434,69 @@ impl<'a> Parser<'a> {
     }
   }
 
+  fn parse_comment(&mut self) -> Node {
+    let first_comment = self.input.next();
+
+    if let TokenKind::Comment(text) = first_comment.kind {
+      let start = first_comment.start;
+      let mut end = first_comment.end;
+      let mut comment_text = text;
+
+      // Concatenate all successive comments, in order to have only one node in
+      // the tree
+      while let TokenKind::Comment(_) = self.input.peek().kind {
+        let comment = self.input.next();
+        if let TokenKind::Comment(c) = comment.kind {
+          comment_text += &c;
+          end = comment.end;
+        }
+      }
+
+      Node {
+        kind: NodeKind::Comment(comment_text),
+        start: start,
+        end: end,
+      }
+    } else {
+      panic!("Expected comment, got '{:?}'", first_comment.kind);
+    }
+  }
+
+  // For comma, backquote, etc
+  fn parse_operator(&mut self, kind: &TokenKind) -> Node {
+    let token = self.expect(kind);
+
+    // Operators apply to the next node
+    let node = self.parse_node();
+
+    Node {
+      start: token.start,
+      end: node.end, // kind last because it moves `node` into the box
+      kind: match kind {
+        &TokenKind::Backquote => NodeKind::Backquote(Box::new(node)),
+        &TokenKind::Quote     => NodeKind::Quote(Box::new(node)),
+        &TokenKind::Comma     => NodeKind::Comma(Box::new(node)),
+        &TokenKind::Pound     => NodeKind::Pound(Box::new(node)),
+        _                     => panic!("Invalid token kind for parse_operator: '{:?}'", kind),
+      },
+    }
+  }
+
   fn parse_node(&mut self) -> Node {
     use self::TokenKind::*;
 
     let kind = self.input.peek().kind.clone();
     match kind {
-      LeftParen => self.parse_sexp(),
-      String(_) => self.parse_string(),
-      Ident(_)  => self.parse_symbol(),
-      Number(_) => self.parse_number(),
-      _         => panic!("Unexpected token: '{:?}'", kind),
+      LeftParen  => self.parse_sexp(),
+      Backquote  => self.parse_operator(&Backquote),
+      Quote      => self.parse_operator(&Quote),
+      Comma      => self.parse_operator(&Comma),
+      Pound      => self.parse_operator(&Pound),
+      Comment(_) => self.parse_comment(),
+      String(_)  => self.parse_string(),
+      Ident(_)   => self.parse_symbol(),
+      Number(_)  => self.parse_number(),
+      _          => panic!("Unexpected token: '{:?}'", kind),
     }
   }
 }
@@ -657,5 +717,29 @@ atom
   fn parse_error() {
     let mut p = Parser::new("(unbalanced (paren)");
     p.parse();
+  }
+
+  #[test]
+  fn parse_quote() {
+    let mut p = Parser::new("(foo `(1 ,a))");
+    let t = p.parse();
+
+    assert_eq!(vec!["foo", "a"], t.symbol_table);
+
+    println!("{:?}", t.root[0].kind);
+
+    if let NodeKind::Sexp(ref nodes) = t.root[0].kind {
+      assert_eq!(NodeKind::Symbol(0), nodes[0].kind);
+      if let NodeKind::Backquote(ref quoted) = nodes[1].kind {
+        if let NodeKind::Sexp(ref quoted_sexp) = quoted.kind {
+          assert_eq!(NodeKind::Number(1), quoted_sexp[0].kind);
+          if let NodeKind::Comma(ref unquoted) = quoted_sexp[1].kind {
+            assert_eq!(NodeKind::Symbol(1), unquoted.kind);
+            return;
+          }
+        }
+      }
+    }
+    assert!(false);
   }
 }
