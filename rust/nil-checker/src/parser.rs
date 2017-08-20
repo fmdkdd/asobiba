@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -282,20 +283,162 @@ impl<'a> TokenStream<'a> {
 // Parser
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-enum Node {
-  Sexp(Vec<Node>),
-  Atom(Atom),
+#[derive(PartialEq, Debug, Clone)]
+pub struct ParseTree {
+  root: Vec<Node>,
+  symbol_table: Vec<String>,
 }
 
-#[derive(Debug, Clone)]
-enum Atom {
-  Ident(String),
+#[derive(PartialEq, Debug, Clone)]
+pub struct Node {
+  kind: NodeKind,
+  start: TextPosition,
+  end: TextPosition,
+}
+
+#[derive(PartialEq, Debug, Clone)]
+pub enum NodeKind {
+  Sexp(Vec<Node>),
+  Symbol(usize),
   String(String),
   Number(i64),
 }
 
-fn parse(input: &str) {
+pub struct Parser<'a> {
+  input: TokenStream<'a>,
+  symbol_table: BTreeMap<String, usize>,
+}
 
+impl<'a> Parser<'a> {
+  pub fn new(input: &'a str) -> Self {
+    Parser {
+      input: TokenStream::new(input),
+      symbol_table: BTreeMap::new(),
+    }
+  }
+
+  pub fn parse(&mut self) -> ParseTree {
+    let mut nodes = Vec::new();
+
+    while !self.input.is_eof() {
+      nodes.push(self.parse_node());
+    }
+
+    self.expect(TokenKind::EOF);
+
+    // Transform the Map<String, usize> into a Vec<String> where the strings are
+    // put in increasing order of the map value.  The Vec<String> is actually a
+    // Map<usize, String>, but since the index is exactly in [0, len], we can
+    // use a Vec to represent the mapping.
+    //
+    // We have to extract the pairs into a temporary vector first.
+    let mut pair_vector = Vec::with_capacity(self.symbol_table.len());
+    for (symbol, index) in self.symbol_table.iter() {
+      pair_vector.push((index, symbol.clone()));
+    }
+    // Sort the pairs so we have [(0, _), (1, _), ...]
+    pair_vector.sort();
+
+    // Now we just need to extract the symbols in order
+    let mut symbol_vector = Vec::with_capacity(pair_vector.len());
+    while !pair_vector.is_empty() {
+      let (_, symbol) = pair_vector.remove(0);
+      symbol_vector.push(symbol);
+    }
+
+    ParseTree {
+      root: nodes,
+      symbol_table: symbol_vector,
+    }
+  }
+
+  fn lookup_or_insert_symbol(&mut self, name: String) -> usize {
+    if !self.symbol_table.contains_key(&name) {
+      let index = self.symbol_table.len();
+      self.symbol_table.insert(name, index);
+      index
+    } else {
+      *self.symbol_table.get(&name).unwrap()
+    }
+  }
+
+  fn expect(&mut self, kind: TokenKind) -> Token {
+    let t = self.input.next();
+    if t.kind != kind  {
+      panic!("Expected token '{:?}', but got '{:?}'", kind, t.kind);
+    }
+    t
+  }
+
+  fn parse_number(&mut self) -> Node {
+    let token = self.input.next();
+    if let TokenKind::Number(n) = token.kind {
+      Node {
+        kind: NodeKind::Number(n),
+        start: token.start,
+        end: token.end,
+      }
+    } else {
+      panic!("Expected number, got '{:?}'", token.kind);
+    }
+  }
+
+  fn parse_string(&mut self) -> Node {
+    let token = self.input.next();
+    if let TokenKind::String(s) = token.kind {
+      Node {
+        kind: NodeKind::String(s),
+        start: token.start,
+        end: token.end,
+      }
+    } else {
+      panic!("Expected string, got '{:?}'", token.kind);
+    }
+  }
+
+  fn parse_symbol(&mut self) -> Node {
+    let token = self.input.next();
+    if let TokenKind::Ident(name) = token.kind {
+      Node {
+        kind: NodeKind::Symbol(self.lookup_or_insert_symbol(name)),
+        start: token.start,
+        end: token.end,
+      }
+    } else {
+      panic!("Expected string, got '{:?}'", token.kind);
+    }
+  }
+
+  fn parse_sexp(&mut self) -> Node {
+    let start = self.expect(TokenKind::LeftParen).start;
+
+    let mut nodes = Vec::new();
+
+    while self.input.peek().kind != TokenKind::RightParen {
+      nodes.push(self.parse_node());
+    }
+
+    let end = self.expect(TokenKind::RightParen).end;
+
+    Node {
+      kind: NodeKind::Sexp(nodes),
+      start,
+      end,
+    }
+  }
+
+  fn parse_node(&mut self) -> Node {
+    use self::TokenKind::*;
+
+    let kind = self.input.peek().kind.clone();
+    match kind {
+      LeftParen => self.parse_sexp(),
+      String(_) => self.parse_string(),
+      Ident(_)  => self.parse_symbol(),
+      Number(_) => self.parse_number(),
+      _         => panic!("Unexpected token: '{:?}'", kind),
+    }
+  }
 }
 
 
@@ -305,7 +448,7 @@ fn parse(input: &str) {
 
 #[cfg(test)]
 mod tests {
-  use super::{TextPosition, Token, TokenKind, TokenStream};
+  use super::{Node, NodeKind, Parser, TextPosition, Token, TokenKind, TokenStream};
 
   #[test]
   fn sexp() {
@@ -370,15 +513,149 @@ docstring"
     let mut t = TokenStream::new(r#"abc
 def"#);
     assert_eq!(Token {
-      kind: TokenKind::Ident("abc".to_string()),
-      start: TextPosition { pos: 0, line: 1, column: 0 },
-      end: TextPosition { pos: 2, line: 1, column: 2 },
+      kind  : TokenKind::Ident("abc".to_string()),
+      start : TextPosition { pos: 0, line: 1, column: 0 },
+      end   : TextPosition { pos: 2, line: 1, column: 2 },
     }, t.next());
 
     assert_eq!(Token {
-      kind: TokenKind::Ident("def".to_string()),
-      start: TextPosition { pos: 4, line: 2, column: 0 },
-      end: TextPosition { pos: 6, line: 2, column: 2 },
+      kind  : TokenKind::Ident("def".to_string()),
+      start : TextPosition { pos: 4, line: 2, column: 0 },
+      end   : TextPosition { pos: 6, line: 2, column: 2 },
     }, t.next());
+  }
+
+  #[test]
+  fn parse_atom() {
+    let mut p = Parser::new("atom");
+    let t = p.parse();
+    assert_eq!(t.root, vec![
+      Node {
+        kind  : NodeKind::Symbol(0),
+        start : TextPosition { pos: 0, line: 1, column: 0 },
+        end   : TextPosition { pos: 3, line: 1, column: 3 },
+      },
+    ]);
+  }
+
+  #[test]
+  fn parse_sexp() {
+    let mut p = Parser::new(r#"(foo 23)"#);
+    let t = p.parse();
+    assert_eq!(vec!["foo"], t.symbol_table);
+    assert_eq!(vec![
+      Node {
+        kind: NodeKind::Sexp(vec![
+          Node {
+            kind  : NodeKind::Symbol(0),
+            start : TextPosition { pos: 1, line: 1, column: 1 },
+            end   : TextPosition { pos: 3, line: 1, column: 3 },
+          },
+          Node {
+            kind  : NodeKind::Number(23),
+            start : TextPosition { pos: 5, line: 1, column: 5 },
+            end   : TextPosition { pos: 6, line: 1, column: 6 },
+          },
+        ]),
+        start : TextPosition { pos: 0, line: 1, column: 0 },
+        end   : TextPosition { pos: 7, line: 1, column: 7 },
+      },
+    ], t.root);
+  }
+
+  #[test]
+  fn parse_multi_symbols() {
+    let mut p = Parser::new(r#"(foo a foo a)"#);
+    let t = p.parse();
+
+    assert_eq!(vec!["foo", "a"], t.symbol_table);
+
+    // Check symbols first
+    if let NodeKind::Sexp(ref nodes) = t.root[0].kind {
+      assert_eq!(NodeKind::Symbol(0), nodes[0].kind);
+      assert_eq!(NodeKind::Symbol(1), nodes[1].kind);
+      assert_eq!(NodeKind::Symbol(0), nodes[2].kind);
+      assert_eq!(NodeKind::Symbol(1), nodes[3].kind);
+    }
+
+    // Then the full shebang with positions
+    assert_eq!(vec![
+      Node {
+        kind: NodeKind::Sexp(vec![
+          Node {
+            kind  : NodeKind::Symbol(0),
+            start : TextPosition { pos: 1, line: 1, column: 1 },
+            end   : TextPosition { pos: 3, line: 1, column: 3 },
+          },
+          Node {
+            kind  : NodeKind::Symbol(1),
+            start : TextPosition { pos: 5, line: 1, column: 5 },
+            end   : TextPosition { pos: 5, line: 1, column: 5 },
+          },
+          Node {
+            kind  : NodeKind::Symbol(0),
+            start : TextPosition { pos: 7, line: 1, column: 7 },
+            end   : TextPosition { pos: 9, line: 1, column: 9 },
+          },
+          Node {
+            kind  : NodeKind::Symbol(1),
+            start : TextPosition { pos: 11, line: 1, column: 11 },
+            end   : TextPosition { pos: 11, line: 1, column: 11 },
+          },
+        ]),
+        start : TextPosition { pos: 0,  line: 1, column: 0  },
+        end   : TextPosition { pos: 12, line: 1, column: 12 },
+      },
+    ], t.root);
+  }
+
+  #[test]
+  fn parse_multiline() {
+    let mut p = Parser::new(r#"
+(foo a "bla" 23)
+atom
+"#);
+    let t = p.parse();
+    assert_eq!(vec!["foo", "a", "atom"], t.symbol_table);
+    assert_eq!(vec![
+      Node {
+        kind: NodeKind::Sexp(vec![
+          Node {
+            kind  : NodeKind::Symbol(0),
+            start : TextPosition { pos: 2, line: 2, column: 1 },
+            end   : TextPosition { pos: 4, line: 2, column: 3 },
+          },
+          Node {
+            kind  : NodeKind::Symbol(1),
+            start : TextPosition { pos: 6, line: 2, column: 5 },
+            end   : TextPosition { pos: 6, line: 2, column: 5 },
+          },
+          Node {
+            kind  : NodeKind::String("bla".to_string()),
+            start : TextPosition { pos: 8,  line: 2, column: 7  },
+            end   : TextPosition { pos: 12, line: 2, column: 11 },
+          },
+          Node {
+            kind  : NodeKind::Number(23),
+            start : TextPosition { pos: 14, line: 2, column: 13 },
+            end   : TextPosition { pos: 15, line: 2, column: 14 },
+          },
+        ]),
+        start : TextPosition { pos: 1,  line: 2, column: 0 },
+        end   : TextPosition { pos: 16, line: 2, column: 15 },
+      },
+      Node {
+        kind  : NodeKind::Symbol(2),
+        start : TextPosition { pos: 18, line: 3, column: 0 },
+        end   : TextPosition { pos: 21, line: 3, column: 3 },
+      },
+    ], t.root);
+  }
+
+  #[test]
+  #[should_panic]
+  fn parse_error() {
+    let mut p = Parser::new("(unbalanced (paren)");
+    p.parse();
   }
 }
