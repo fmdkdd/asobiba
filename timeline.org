@@ -12351,3 +12351,36 @@ things in my DNS zones.
 
 Even better, I guess I could tweak the zones directly in my local DNS server,
 and once I find something working, I can update my OVH Zones.
+
+* [2017-08-24 jeu.]
+** Trying to tackle the cargo caching warning PR                 :cargo:rust:
+Heads up: compiling rustc from scratch takes around 1h on my machine and 4Gb
+disk space.
+
+Actually, I don't even know if extracting the diagnostics from rustc is a good
+first step.  I could just try to save rustc output received by cargo to a file,
+then replay if the output is fresh.  /Then/ we would see what kind of issues
+arise from that.
+
+Hmm, just tried a very simple patch to save the diagnostics to a file, and that
+built cargo fails with:
+
+: error: unknown crate type: `metadata`
+
+and indeed, it calls `rustc` with:
+
+: Running `rustc --crate-name cargo_targets src/lib.rs --crate-type metadata
+
+whereas the standard cargo uses ~lib~ as crate-type, as I would expect.  Doesn't
+look like my patch is guilty here.
+
+Okay got it, I based my new branch of an 8-month old commit... I did find
+suspicious that my previous PR fix wasn't in there... anyway.  Updating.
+
+Proof of concept of saving diagnostics to a file and loading them on a fresh
+unit works.  It's /very rough/, but it works.
+
+Next step:
+- separate saved diagnostics per unit
+- ensure modifying the crate triggers a recompilation/not modifying gives us
+  saved diagnostics
