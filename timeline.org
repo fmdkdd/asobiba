@@ -12414,3 +12414,61 @@ chips, and allow them to catch up.
 
 The VDP should also behave in this way, with a run_cycles function that takes
 the number of elapsed cycles, and do something if enough have elapsed.
+
+* [2017-08-31 jeu.]
+** YM2612 frequency calculations                                     :megado:
+Got the YM2612 to output sound, but the frequencies seem off.
+
+Maybe I should just try to output a plain 440Hz sine wave, and see if that's
+indeed what I get.  If I do get it, then I need to implement modulation through
+the operators.  If I don't get it, then I need to fix the frequency calculation.
+
+So according to my calculations, I should output 440.53Hz (A4), but Audacity
+spectrum analysis reports a 391Hz peak (G4).
+
+Let's see.  I'm emitting one sample every 8.7 YM2612 clock.  In one second, at
+44100, there are:
+
+: 8.696665873016 * 44100 = 383522.965 YM2612 clocks in one second
+or
+: 7670453 / 20           = 383522.65
+
+A 440Hz tone has 440 periods in one second, so:
+
+: 383522.65 / 440 = 871.64 YM2612 clocks per period
+
+But when I'm using 871 as freq number, I output a 488Hz tone, not 440Hz.  What
+am I missing?
+
+Hmm... Okay.  Reverse calculations: I know that a freq number of 1084 should
+output a 440Hz tone, according to the formula in the YM2612 manual:
+
+: freq number = (144 * note * 2^20 / Master_freq) / 2^(block - 1)
+
+and the master frequency of the YM2612 is 7670453 according to [[https://segaretro.org/Sega_Mega_Drive][this]].
+
+So:
+
+: 1084 * 440 = 476960 YM2612 clocks per second
+: 476960 / 44100 = 10.8154195011 clocks per samples
+
+And I get... a 477Hz tone.  Grmbl.  But wait a minute, the spectrum appears to
+not be very reliable when reporting the peak tone, I see variations of around
+~20Hz.
+
+Furthermore, if I generate a 440Hz tone and use the spectrum, it reports between
+406Hz and 496Hz...  Looks like I have wasted time!
+
+Listening to the intervals is better.  Hears like my 440Hz is too low.  But
+fudging the number of samples means we don't have the same length with the PSG!
+
+Actually, the frequency of the YM2612 is not a multiple of the PSG freq!  So the
+two sound very bad when played together right now.
+
+Haha! It's a bit better now: we can recognize the melody.  I did not notice
+until now that the freq number were growing proportionally to the frequency
+numbers... which is absurd!  I was using the freq number to load the internal
+counter, but of course, if the frequency is higher, the counter needs to be
+smaller.
+
+It's still off, but at lest I'm on the right track.
