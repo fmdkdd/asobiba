@@ -12384,3 +12384,33 @@ Next step:
 - separate saved diagnostics per unit
 - ensure modifying the crate triggers a recompilation/not modifying gives us
   saved diagnostics
+
+* [2017-08-30 mer.]
+** Step by frame                                                     :megado:
+I was trying to implement a step_frame feature... but decided against it as it
+is quite tricky to get right, and the sole reason of using a debugger is to
+/find/ bugs, not create them.
+
+What's tricky is the interaction of step by frame with breakpoints: stepping by
+a whole frame is easy enough, but when you hit a breakpoint you want to stop the
+emulation right here.  However, if you stop the M68k, what happens to the other
+components in the system?  Should the Z80 catch up?  Should the VDP?  Should the
+sound?
+
+Say, you run the m68k for 100 cycles in genesis_frame, then hit a breakpoint.
+Conceptually, the Z80 should run for 50 cycles to be in sync.  If it doesn't,
+then when we resume emulation (by step, or by frame, or running), the m68 will
+run for 488 cycles, then the Z80 will run for 244.  So the m68 will still be 100
+cycles ahead.
+
+Should we still draw a scanline if the m68k stops at 100 cycles?  Probably not:
+vdp_draw_scanline has side effects, and should only be called after the proper
+number of cycles has elapsed in the m68k.
+
+I guess the correct way to solve these issues would be to have a debt of master
+cycles to run: genesis_frame runs the m68k for 488 cycles say, but it might exit
+early, so get the actual number of cycles run.  Then add this debt to the other
+chips, and allow them to catch up.
+
+The VDP should also behave in this way, with a run_cycles function that takes
+the number of elapsed cycles, and do something if enough have elapsed.
