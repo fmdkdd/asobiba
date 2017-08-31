@@ -12429,9 +12429,9 @@ spectrum analysis reports a 391Hz peak (G4).
 Let's see.  I'm emitting one sample every 8.7 YM2612 clock.  In one second, at
 44100, there are:
 
-: 8.696665873016 * 44100 = 383522.965 YM2612 clocks in one second
+: 8.69665873016 * 44100 = 383522.965 YM2612 clocks in one second
 or
-: 7670453 / 20           = 383522.65
+: 7670453 / 20          = 383522.65
 
 A 440Hz tone has 440 periods in one second, so:
 
@@ -12472,3 +12472,56 @@ counter, but of course, if the frequency is higher, the counter needs to be
 smaller.
 
 It's still off, but at lest I'm on the right track.
+
+So I found the bug: in ym2612_clock, when reloading the sample counter, we were
+not counting the channel clock that had happened.  Off by one!  But on the scale
+of 9 clocks, it mattered a lot.
+
+Now my calculations match: when asking for a 440Hz tone, I know I need a freq
+number of 1176:
+
+: 2048 - 1176 = 872 clocks/period
+: 872 / 8.697 = 100.264 samples/period
+: 44100 / 100.264 = 439.839 period/sec (Hz)
+
+Pretty close.
+
+But!  Sonic still sounds bad.  Probably because the freq numbers used by the
+program do not match mine.  According to the formula:
+
+: freq_number = (144 * note * 2^20 / master_freq) / 2^(block - 1)
+
+So according to this formula, 440Hz corresponds to the freq number 1084.  But,
+1176 is what gets me nearer to 440Hz.  So, the master frequency is off in this
+case.  Let's compute it backwards, assuming 1176 matches a 440Hz tone:
+
+: 1176 = (144 * 440 * 2^20 / master_freq) / 2^3
+: master_freq = 7061838.36737 Hz
+
+Strange frequency... but alright.  Let's use that.  Doesn't sound better, at all.
+In fact:
+
+: 2048 - 1084 = 964 clocks/period
+: 964 / 8.697 = 110.843 samples/period
+: 44100 / 110.843 = 397.860 Hz
+
+So the clocks per sample constant (8.7) is wrong?
+
+: 44100 / (964 / x) = 440
+: x / 964 = 440 / 44100
+: x = 9.61814058957
+
+And if the master cycles per clock is 20:
+
+: 9.61814058957 * 44100 * 20 = 8483200 Hz
+
+and if the frequency stays at 7670453, the cycles per clock is at:
+
+: 9.61814058957 * 44100 = 7670453 / mpc
+: mpc = 18.083866937
+
+Not a round number.  Let's hear it.  Still bad.
+
+Okay, maybe I should go on implementing the rest of the frequency modulation,
+since without detunes/multiples and modulation, it's hard to know whether this
+is the expected sound.
