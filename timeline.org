@@ -12525,3 +12525,13 @@ Not a round number.  Let's hear it.  Still bad.
 Okay, maybe I should go on implementing the rest of the frequency modulation,
 since without detunes/multiples and modulation, it's hard to know whether this
 is the expected sound.
+
+* [2017-09-03 dim.]
+** YM2612 reference posts on spritesmind                             :megado:
+Nemesis explanations on the workings of the YM2612 are a gold mine:
+
+- [[http://gendev.spritesmind.net/forum/viewtopic.php?p%3D6114#p6114][Post about the operator unit as whole]]
+- [[http://gendev.spritesmind.net/forum/viewtopic.php?p%3D6177#p6177][Post about the phase generator]]
+- [[http://gendev.spritesmind.net/forum/viewtopic.php?p%3D5716#p5716][Post about envelope and SSG register]]
+
+This [[http://gendev.spritesmind.net/forum/viewtopic.php?f%3D2&t%3D2227][aggregating post]] for the overall MD research is also priceless.
