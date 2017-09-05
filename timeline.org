@@ -12535,3 +12535,8 @@ Nemesis explanations on the workings of the YM2612 are a gold mine:
 - [[http://gendev.spritesmind.net/forum/viewtopic.php?p%3D5716#p5716][Post about envelope and SSG register]]
 
 This [[http://gendev.spritesmind.net/forum/viewtopic.php?f%3D2&t%3D2227][aggregating post]] for the overall MD research is also priceless.
+
+* [2017-09-05 mar.]
+** Additional YM2612 reference                                       :megado:
+- [[http://gendev.spritesmind.net/forum/viewtopic.php?f%3D24&t%3D1883][Frequency tables]]
+- [[http://gendev.spritesmind.net/forum/viewtopic.php?f%3D24&t%3D1387&hilit%3Dfrequency][Some discussion on timing]]
