@@ -12546,3 +12546,141 @@ Following the tremendously useful resources above, the YM2612 does not sound bad
 now.  A tad too slow, but it's mostly there!
 
 [[file:data/2017-09-05-sonic1.ogg][Here's the Sonic 1]] title screen and demos.  And [[file:data/2017-09-05-phantasy-star-4.ogg][here's Phantasy Star IV]].
+
+* [2017-09-06 mer.]
+** Potential culprit for the wrong frequency of the YM2612           :megado:
+So, after double-checking the frequency numbers, the output of the YM2612 still
+sounds too slow, by about 15~20%.  I'm not sure what is causing it, but here are
+potential causes:
+
+1. We don't account for actual cycles emulated by the M68.  We assume it runs
+   for 488 cycles, and run the YM2612 for that many cycles as well.
+
+   I've changed it so that we run the YM2612 for the actual number of emulated
+   cycles, so now on average we run for 488 cycles before Hblank.
+
+   The alternative is to synchronize everything to elapsed emulated time, though
+   it's prey to floating point inaccuracies.
+
+   Since we always ran ahead of 488 (often 496), in practice it could have a
+   small impact (~1%) on the timing, but that's not enough to explain the 15%
+   disparity I'm hearing.
+
+2. Dropping samples from 53267Hz to 44100Hz.  The YM2612 maximum output
+   frequency is the former, but we actually write a file at 44100Hz sample
+   rate.
+
+   The way we do that currently is we skip one out of every 5 clocks of the
+   YM2612 when sampling:
+
+   : -C---C---C---C---C---C-        <- C: YM2612 clock
+   : -S---S---S---S---.---S-        <- S: write sample
+
+   So the sampling interval is actually not uniform along time.  We should have
+   this instead:
+
+   : -C---C---C---C---C---C-        <- C: YM2612 clock
+   : ----S----S----S----S---
+
+   I guess it can mess up reconstitution of the waveform since it assumes a
+   uniform sampling rate.  However, dropping sample is what I did in Boyo/GBS to
+   downsample the APU and it sounded okay.  Even now in YM2612, apart from the
+   slowness of the YM2612, it's close to what the MD emits.
+
+   However, 53267/44100 ~= 1.208, so it could be the culprit here.
+
+   But the strange thing is that I /can/ output at 53267Hz directly, by emitting
+   a sample every clock.  I tried that, and Audacity correctly reports the
+   sample rate, but there is no difference to be heard between the two.
+
+   One issue here is that I'm doing the sampling test in the clock, so we are
+   tied to the clock frequency.  It's okay because sampling frequency is lower
+   anyway, so we don't miss anything.  And since we are not pushing the samples
+   in a WAV, it does not matter /when/ exactly between clocks we sample, since
+   the channel output is exactly the same between two FM clocks (that will not
+   be true once envelope is implemented though).
+
+   I think what I could check is the actual sampling frequency: how many samples
+   I get in one second of emulated time, how many FM clocks, and how many cpu
+   cycles; to make sure everything matches up.
+
+   In one second I should have: 7670453 M68k cycles, 53267 YM2612 clocks, and
+   44100 samples.  Since nothing is synced to time yet, I can count until
+   7670453 M68k cycles and check the other counts align.
+
+Here is a trace of these count on Sonic 1:
+
+|------------+----------+---------+----------+--------------|
+|       M68k |   YM2612 | M68k/YM |  Samples | M68k/Samples |
+|------------+----------+---------+----------+--------------|
+|    7670462 |    53303 |  143.90 |    44130 |       173.82 |
+|    7670461 |    53276 |  143.98 |    44107 |       173.91 |
+|    7670462 |    53267 |  144.00 |    44100 |       173.93 |
+|    7670457 |    53291 |  143.94 |    44120 |       173.85 |
+|    7670462 |    53463 |  143.47 |    44262 |       173.30 |
+|    7670455 |    53728 |  142.76 |    44482 |       172.44 |
+|    7670468 |    53597 |  143.11 |    44373 |       172.86 |
+|    7670455 |    53824 |  142.51 |    44561 |       172.13 |
+|    7670458 |    54042 |  141.94 |    44742 |       171.44 |
+|    7670459 |    54054 |  141.90 |    44751 |       171.40 |
+|    7670454 |    54058 |  141.89 |    44755 |       171.39 |
+|    7670463 |    54058 |  141.89 |    44755 |       171.39 |
+|    7670462 |    54058 |  141.89 |    44755 |       171.39 |
+|    7670457 |    54054 |  141.90 |    44751 |       171.40 |
+|    7670460 |    53887 |  142.34 |    44613 |       171.93 |
+|    7670459 |    53672 |  142.91 |    44436 |       172.62 |
+|    7670458 |    54666 |  140.31 |    45258 |       169.48 |
+|    7670461 |    54654 |  140.35 |    45248 |       169.52 |
+|    7670460 |    54395 |  141.01 |    45034 |       170.33 |
+|    7670465 |    54420 |  140.95 |    45055 |       170.25 |
+|    7670462 |    55254 |  138.82 |    45745 |       167.68 |
+|    7670455 |    55317 |  138.66 |    45797 |       167.49 |
+|    7670454 |    54919 |  139.67 |    45467 |       168.70 |
+|    7670457 |    54694 |  140.24 |    45282 |       169.39 |
+|    7670458 |    54177 |  141.58 |    44853 |       171.01 |
+|    7670459 |    53383 |  143.69 |    44196 |       173.56 |
+|    7670456 |    53295 |  143.92 |    44123 |       173.84 |
+|    7670457 |    53264 |  144.01 |    44098 |       173.94 |
+|    7670456 |    53275 |  143.98 |    44106 |       173.91 |
+|    7670463 |    53343 |  143.80 |    44163 |       173.69 |
+|    7670460 |    53641 |  143.00 |    44410 |       172.72 |
+|    7670461 |    53509 |  143.35 |    44300 |       173.15 |
+|    7670462 |    53773 |  142.65 |    44519 |       172.30 |
+|    7670457 |    54022 |  141.99 |    44725 |       171.50 |
+|    7670456 |    54062 |  141.88 |    44758 |       171.38 |
+|    7670459 |    54050 |  141.91 |    44749 |       171.41 |
+|    7670458 |    54062 |  141.88 |    44758 |       171.38 |
+|    7670465 |    54058 |  141.89 |    44755 |       171.39 |
+|    7670454 |    54058 |  141.89 |    44754 |       171.39 |
+|    7670463 |    54054 |  141.90 |    44752 |       171.40 |
+|    7670456 |    53550 |  143.24 |    44334 |       173.02 |
+|    7670463 |    54113 |  141.75 |    44801 |       171.21 |
+|    7670454 |    54388 |  141.03 |    45028 |       170.35 |
+|    7670459 |    54392 |  141.02 |    45031 |       170.34 |
+|    7670456 |    53867 |  142.40 |    44597 |       171.99 |
+|    7670463 |    55241 |  138.85 |    45734 |       167.72 |
+|    7670458 |    54852 |  139.84 |    45412 |       168.91 |
+|    7670459 |    54317 |  141.22 |    44969 |       170.57 |
+|    7670460 |    54070 |  141.86 |    44765 |       171.35 |
+|    7670461 |    53383 |  143.69 |    44196 |       173.56 |
+|    7670454 |    53299 |  143.91 |    44127 |       173.83 |
+|    7670455 |    53267 |  144.00 |    44100 |       173.93 |
+|    7670456 |    53264 |  144.01 |    44097 |       173.95 |
+|    7670459 |    53307 |  143.89 |    44133 |       173.80 |
+|    7670454 |    53586 |  143.14 |    44364 |       172.90 |
+|    7670463 |    53601 |  143.10 |    44377 |       172.85 |
+|    7670456 |    53724 |  142.78 |    44478 |       172.46 |
+|    7670455 |    53959 |  142.15 |    44673 |       171.70 |
+|------------+----------+---------+----------+--------------|
+| 7670458.80 | 53933.74 |  142.23 | 44651.97 |       171.80 |
+|------------+----------+---------+----------+--------------|
+#+TBLFM: @III=vmean(@II..III);%.2f
+
+So one interesting observation is that while we are consistently over the M68k
+cycles target (which is expected because we are unlikely to exactly get 7670453
+cycles), we are also consistently /under/ the 144 cycles per YM2612 clock and
+173 cycles per sample targets.  And these cycles per X figures account for
+the extra M68k cycles over the 7.67Mhz target.
+
+However, the differences are on the order of 1%, not 15%, so I'm not sure it's
+the root cause here.
