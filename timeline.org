@@ -12684,3 +12684,72 @@ the extra M68k cycles over the 7.67Mhz target.
 
 However, the differences are on the order of 1%, not 15%, so I'm not sure it's
 the root cause here.
+
+* [2017-09-07 jeu.]
+** Using SDL for outputting audio                                    :megado:
+We are using GLFW for handling the window, but I guess I can use SDL to handle
+only audio.
+
+Using SDL_QueueAudio, I'm able to queue samples as soon as they are ready in the
+YM2612, and SDL handles draining them to the audio device at the requested
+sample rate.
+
+At first, audio output was lagging severely behind the video output: at least 3
+seconds behind, with Vsync on.  And unexpectedly, with Vsync off, the audio is
+playing at the same speed, while the video is 3 times faster.
+
+I double checked the constants, and ended up tweaking the number of M68k CPU
+clocks we use in genesis_frame based on the master clock:
+
+There are 3420 master clocks per scanline.
+The NTSC master clock is 53693175 Hz.
+H32 mode is 256 pixels wide -> 2560 master clocks for pixels + 860 master
+clocks for HBlank.
+
+M68k divides the master clock by 7, thus:
+- 2560 / 7 ~= 365 cycles before vdp_draw_scanline
+-  860 / 7 ~= 122 cycles during Hblank
+
+And using these numbers of cycles synced up the audio and video pretty well.  It
+did not occur to me that the slower tempo of the WAV output was caused by a
+larger slice of emulated M68k.  Conversely, shortening the cycles slice in
+genesis_frame hurries the tempo without altering the frequencies of the note.
+
+I understand that larger time slices will take more time to react to key on/key
+off changes, but I don't understand how shorter time slices end up playing the
+notes quicker.
+
+Better make sure the timings are proper anyway, as the framerate seems slow to
+me in Vsync.
+
+53693175Hz master clock rate
+3420 master clocks (MC) per scanline
+- 2560 MC for the pixels + 860 MC for Hblank
+
+224 lines (in NTSC progressive scan)
+
+: 3420 * 224 = 766080 master clocks per screen
+
+There are 896040 MC per frame, so:
+
+: 896040 - 766080 = 129960 MC for Vblank
+
+The NTSC refresh rate is 59.9227434043Hz, pretty close to 60Hz, so with Vsync
+turned on in the emulator, we should be pretty close to actual NTSC speed.
+
+I ought to double check what I get per frame.
+
+Also, why is the audio not running faster with Vsync off?  Actually, the audio
+is not synced to the running speed at all, it just sounds good with vsync on
+because the timings align.
+
+Ah, I see.  With vsync on, the audio queue is draining at just the right speed,
+but with vsync off, its filling fast.  So we are in fact pushing samples into
+the queue as fast as the emulation is going, but we are not /playing/ them fast
+enough.  But that makes sense, because we are not running the console at 60Hz
+anymore, but at 200Hz, so the sampling rate should follow.
+
+But, the sampling rate cannot follow!  Whereas we can pump video frames at
+200Hz, if the screen supports only 60Hz, the extra frames will be dropped, here
+everything in the audio output queue is played, so we must drop samples if we
+want to synchronize with the video output.
