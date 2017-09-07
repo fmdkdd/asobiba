@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
   int32_t len = want.samples * want.channels;
   int16_t data[len];
   int16_t tone_volume = 1000;
-  int32_t period = want.freq / 256;
+  int32_t period = 128;
   int32_t i;
   for (i=0; i < len; ++i) {
     if ((i/ period) % 2 == 0) {

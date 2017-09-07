@@ -12753,3 +12753,23 @@ But, the sampling rate cannot follow!  Whereas we can pump video frames at
 200Hz, if the screen supports only 60Hz, the extra frames will be dropped, here
 everything in the audio output queue is played, so we must drop samples if we
 want to synchronize with the video output.
+
+Hmm, trying to resolve this issue using SDL callback instead.  Didn't work.  The
+idea was that the SDL audio callback would ping us every 11ms (with a 512
+samples buffer), and then we would resample all the samples we had accumulated
+in that time to the 512 samples buffer, so it would fit to 44100Hz.  The timing
+works, but the result sounds like shit, as we keep underunning the accumulated
+samples buffer.  The number of accumulated samples available is really not
+consistent between callback invocations.
+
+One difficulty is that we don't know how fast we are supposed to be running the
+emulation, so we don't know how many samples we need to pick from the buffer.
+Draining the whole buffer leaves us dry for the next callback.
+
+I'll revert that and leave the audio working on vsync, for now.
+
+Got the PSG and YM2612 to output together by using the two stereo channels.  I
+can't just mix both together by adding their channel outputs, since the PSG is
+not normalized (centered around 0).  There are still audio skips, and the
+downsampling is bad, but it's heartwarming to finally hear the catchy tunes in
+our own emulator in real time!
