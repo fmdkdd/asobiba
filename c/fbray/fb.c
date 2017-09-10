@@ -161,6 +161,12 @@ uint8_t level[8][8] = {
 const uint32_t TILE_SIZE = 64;
 const float WALL_MAGNIFY = 100;
 
+const uint8_t textures[3][8] = {
+  {0,0,0,1,1,1,0,0},
+  {1,1,0,1,1,0,0,1},
+  {0,1,0,1,0,0,1,0},
+};
+
 void draw_walls(struct screen* s) {
   // Cast one ray for each screen column, and draw the wall that the ray hits
   // depending on its distance.
@@ -170,8 +176,8 @@ void draw_walls(struct screen* s) {
   float player_x = 2.5;
   float player_y = 4.5;
 
-  static float player_direction = 0; // looking at the right
-  float fov = M_PI_2 / 4; // 90deg field of view
+  static float player_direction = M_PI; // looking at the right
+  float fov = M_PI / 8; // field of view
 
   // Slice the field of views into as many columns as there is on the screen
   float angle_step = fov / s->width;
@@ -197,20 +203,22 @@ void draw_walls(struct screen* s) {
         uint32_t wall_height = WALL_MAGNIFY / distance;
         uint32_t wall_type = level[(int)ray_y][(int)ray_x];
 
-        printf("hit wall %u at (%.2f,%.2f)\tdistance: %.2f\theight: %u\n",
-               wall_type, ray_x, ray_y, distance, wall_height);
+        /* printf("hit wall %u at (%.2f,%.2f)\tdistance: %.2f\theight: %u\n", */
+        /*        wall_type, ray_x, ray_y, distance, wall_height); */
 
         // Draw wall!
         uint32_t y_start = (s->height / 2) - (wall_height / 2);
         uint32_t y_end = y_start + wall_height;
+        uint32_t color;
+        switch (wall_type) {
+        case 1: color = 0x00008800; break;
+        case 2: color = 0xBB0BB000; break;
+        case 3: color = 0xBBBB0000; break;
+        }
         for (uint32_t y = y_start; y < y_end; ++y) {
-          uint32_t color;
-          switch (wall_type) {
-          case 1: color = 0x00008800; break;
-          case 2: color = 0xBB0BB000; break;
-          case 3: color = 0xBBBB0000; break;
-          }
-          draw_pixel(s, pixel_x, y, color);
+          int texture_index = (float)(y - y_start) * 8 / wall_height;
+          uint8_t texel = textures[wall_type][texture_index];
+          draw_pixel(s, pixel_x, y, texel * color);
         }
 
         // Done for this ray
@@ -225,26 +233,26 @@ void draw_walls(struct screen* s) {
     current_angle += angle_step;
   }
 
-  //player_direction += 0.01;
+  player_direction += 0.01;
 }
 
 int main() {
   struct screen screen;
   screen_init(&screen);
 
-  clear_screen(&screen);
-  draw_walls(&screen);
-  while (getchar() != 10) {
-    sleep(1);
-  }
-
-  /* int frames = 0; */
-  /* while (frames < 1) { */
-  /*   clear_screen(&screen); */
-  /*   draw_walls(&screen); */
-  /*   frames++; */
-  /*   usleep(20000); */
+  /* clear_screen(&screen); */
+  /* draw_walls(&screen); */
+  /* while (getchar() != 10) { */
+  /*   sleep(1); */
   /* } */
+
+  int frames = 0;
+  while (frames < 500) {
+    clear_screen(&screen);
+    draw_walls(&screen);
+    frames++;
+    usleep(20000);
+  }
 
   screen_deinit(&screen);
   return EXIT_SUCCESS;
