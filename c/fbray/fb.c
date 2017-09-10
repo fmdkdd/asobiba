@@ -3,6 +3,8 @@
 #include <fcntl.h>
 #include <linux/kd.h>
 #include <linux/fb.h>
+#include <math.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,6 +12,9 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+
+// TODO: should check ray casting computations with a top-level debug view
+// TODO: clearing/redrawing at 50fps has very bad flickering; double buffering?
 
 struct screen {
   int fb_fd;
@@ -153,34 +158,74 @@ uint8_t level[8][8] = {
   {1,1,1,1,1,1,1,1},
 };
 
-void raycast(struct screen* s) {
+const uint32_t TILE_SIZE = 64;
+const float WALL_MAGNIFY = 100;
+
+void draw_walls(struct screen* s) {
   // Cast one ray for each screen column, and draw the wall that the ray hits
   // depending on its distance.
 
-  uint32_t player_x = 2;
-  uint32_t player_y = 4;
+  // Player coordinates.  Integral part is position of tile in level, fractional
+  // part is position of player in tile.
+  float player_x = 2.5;
+  float player_y = 4.5;
 
-  for (uint32_t x=0; x < s->width; ++x) {
-    ray_march();
+  static float player_direction = 0; // looking at the right
+  float fov = M_PI_2 / 4; // 90deg field of view
 
-  }
+  // Slice the field of views into as many columns as there is on the screen
+  float angle_step = fov / s->width;
+  // We go from the leftmost screen column to the rightmost, so we must proceed
+  // clockwise, and thus from +fov/2 to -fov/2
+  float current_angle = player_direction + fov/2;
 
-  uint32_t wall_height[] = {0, 0, 0, 100, 110, 120, 150, 150, 120, 130, 120, 120, 120, 110, 0, 0};
-  uint32_t segment_width = 40;
+  // For each column
+  for (uint32_t pixel_x=0; pixel_x < s->width; ++pixel_x) {
+    float x_step = cosf(current_angle);
+    float y_step = sinf(current_angle);
 
-  uint32_t x = 0;
-  for (uint32_t segment=0; segment < 16; ++segment) {
-    if (wall_height[segment] > 0) {
-      for (uint32_t segment_x=0; segment_x < segment_width; ++segment_x) {
-        uint32_t y_start = (s->height / 2) - (wall_height[segment] / 2);
-        uint32_t y_end = y_start + wall_height[segment];
+    float ray_x = player_x;
+    float ray_y = player_y;
+
+    ray_x += x_step;
+    ray_y += y_step;
+    while (ray_x > 0 && ray_x < 8 && ray_y > 0 && ray_y < 8) {
+      // Have we hit a wall?
+      if (level[(int)ray_y][(int)ray_x] > 0) {
+        // Compute distance to camera (NOT player)
+        float distance = fabs((ray_x - player_x) * x_step - (ray_y - player_y) * y_step);
+        uint32_t wall_height = WALL_MAGNIFY / distance;
+        uint32_t wall_type = level[(int)ray_y][(int)ray_x];
+
+        printf("hit wall %u at (%.2f,%.2f)\tdistance: %.2f\theight: %u\n",
+               wall_type, ray_x, ray_y, distance, wall_height);
+
+        // Draw wall!
+        uint32_t y_start = (s->height / 2) - (wall_height / 2);
+        uint32_t y_end = y_start + wall_height;
         for (uint32_t y = y_start; y < y_end; ++y) {
-          draw_pixel(s, x + segment_x, y, 0xBBBB0000);
+          uint32_t color;
+          switch (wall_type) {
+          case 1: color = 0x00008800; break;
+          case 2: color = 0xBB0BB000; break;
+          case 3: color = 0xBBBB0000; break;
+          }
+          draw_pixel(s, pixel_x, y, color);
         }
+
+        // Done for this ray
+        break;
       }
+
+      ray_x += x_step;
+      ray_y += y_step;
     }
-    x += segment_width;
+
+    // Next angle slice
+    current_angle += angle_step;
   }
+
+  //player_direction += 0.01;
 }
 
 int main() {
@@ -188,11 +233,18 @@ int main() {
   screen_init(&screen);
 
   clear_screen(&screen);
-  raycast(&screen);
-
+  draw_walls(&screen);
   while (getchar() != 10) {
     sleep(1);
   }
+
+  /* int frames = 0; */
+  /* while (frames < 1) { */
+  /*   clear_screen(&screen); */
+  /*   draw_walls(&screen); */
+  /*   frames++; */
+  /*   usleep(20000); */
+  /* } */
 
   screen_deinit(&screen);
   return EXIT_SUCCESS;
