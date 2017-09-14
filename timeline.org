@@ -12773,3 +12773,29 @@ can't just mix both together by adding their channel outputs, since the PSG is
 not normalized (centered around 0).  There are still audio skips, and the
 downsampling is bad, but it's heartwarming to finally hear the catchy tunes in
 our own emulator in real time!
+
+* [2017-09-15 ven.]
+** Syncing to audio                                                  :megado:
+After hours of toiling away at the problem, it works!
+
+Okay so, running by video frame slice meant that CPU and video timing was right,
+but audio was not, since it meant we were emulating 16ms slices, which amount to
+~730 audio samples at 44kHz all at once.
+
+So we actually have to emulate on slice of audio frames, instead of video
+frames.  That means emulating enough of the Genesis to produce exactly one audio
+sample, sample the PSG and YM2612 at this time, and queue the samples.
+
+In the process, it meant I had to add a vdp_run_cycles function to catch up the
+VDP based on the number of master cycles.  We could probably factorize some code
+with draw_scanlines, but for the moment I wrote it to do the same thing as when
+draw_scanlines was called by genesis_frame.
+
+But now code of each subsystem is more homogeneous, as they are all based on the
+number of master cycles elapsed.
+
+And the number of emulated master cycles is decoupled from wall time, so
+speeding up/slowing down the emulation now also speeds up/slows down the audio
+and video.  It's a nice effect.
+
+Next step is to make sure that debugging works with these changes.
