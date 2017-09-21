@@ -12799,3 +12799,50 @@ speeding up/slowing down the emulation now also speeds up/slows down the audio
 and video.  It's a nice effect.
 
 Next step is to make sure that debugging works with these changes.
+
+* [2017-09-21 jeu.]
+** Tasks before merging sdl-audio back into master                   :megado:
+
+1. Fix the speed throttling.
+
+   Measuring lag on one audio frame is not robust enough.  We need an accurate
+   measure of "the machine is too slow".  Alternatively, find a way to run as
+   fast as possible, but not faster.
+
+2. Make sure debugging does not mess up the master cycles timing.
+
+   That includes stepping, breakpoints and rewinding.
+
+3. Fix the AppVeyor build.
+
+These two tasks need to be resolved before merging back.  Unfortunately, hacking
+on the YM2612 is much more satisying at the moment.
+
+** Fixing frequency calculations                                     :megado:
+To get the note:
+
+: freq_number = (144 * note * 2^20 / Master_freq) / 2^(block - 1)
+
+: fnum * 2^(block-1) = 144 * note * 2^20 / master_freq
+: fnum * 2^(block-1) * master_freq = 144 * note * 2^20
+: note = fnum * 2^(block-1) * master_freq / 2^20 / 144
+
+Well, not sure about the resulting values anyway.
+
+** Additional info on the YM2612                                     :megado:
+[[http://gendev.spritesmind.net/forum/viewtopic.php?p%3D7967#p7967][Corrections on the envelope generator]].  Crucially, the envelope generator clocks
+every 3 FM clock, not with a weird ratio.
+
+[[http://gendev.spritesmind.net/forum/viewtopic.php?p%3D5650#p5650][CSM mode]].  A variant of special mode for channel 3.
+
+** Trying to implement the envelope generator                        :megado:
+Well, I'm still missing some pieces.  The bad part of following the docs is that
+when they don't have all the answers, I'm essentially blind.
+
+Also, I'm not sure the operator modulation is correct.  Most tracks I have
+listened to use algorithms 5, 6 or 7, and there, no modulation (except maybe
+feedback) happens.  But algorithm 0 is all noisy if I implement modulation
+following the info from Nemesis.
+
+Checking by ear for these details is essentially useless.  I need some ground
+truth, from a console or another emulator.
