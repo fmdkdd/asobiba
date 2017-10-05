@@ -12846,3 +12846,52 @@ following the info from Nemesis.
 
 Checking by ear for these details is essentially useless.  I need some ground
 truth, from a console or another emulator.
+
+* [2017-10-05 jeu.]
+** Playing GYM files                                                 :megado:
+So, it turns out, [[http://vgmrips.net/wiki/GYM_File_Format][GYM files]] are much simpler than GBS files.  GBS files are a
+trace of CPU instructions that pertain to the playing of audio samples, so to be
+able to play them you need to implement the GB sound generator /and/ the GB CPU.
+
+GYM files, on the other hand, are just a trace of the register writes to the PSG
+and YM2612.  No need to emulate the CPU, which makes them great for testing the
+accuracy of the YM2612 and PSG against other GYM players.
+
+One downside of GYM files is that if they were captured in inaccurate emulators,
+then the output might not match the Genesis.  [[http://vgmrips.net/wiki/VGM_Specification][The VGM format]] is more popular,
+and probably has more accurate rips.  The specification looks slightly scarier,
+as it handles many different sound chips (including the GB DMG and NES APU!),
+but it's still based on recording register writes, so a boon for testing.
+
+The GYM only has 4 different instructions, so it's trivial to implement.  Right
+now I can play [[https://www.emuparadise.me/music/genesis.html][many songs]] from this directly.  And I should be able to compare
+the state of our PSG and YM2612 emulation to those of other players, like [[https://bitbucket.org/mpyne/game-music-emu/][GME]].
+
+[later]
+
+SEEEEEEEEEEGAAAAAAAAAAAAAAAAAAAAA!
+
+I finally got to hear it emulated!  Since GME (through DeaDBeeF) was able to
+play the SEGA logo correctly, I looked into the GME code.  Turns out, it's a
+rather simple tweak to the YM2612: when the DAC is enabled, we play the value in
+the register DAC_data instead of channel 6.  (Also, that's probably why channel
+6 is mostly unused in the ROMs I've seen playing).
+
+But!  In Megado, we never seem to see any DAC data written to the YM2612
+registers.  Since the YM2612 holds only one DAC value, and these needs to be
+pumped out at 44100, or 735 per video frame, maybe ROMs are using some DMA
+transfer that's not implemented yet for this.
+
+Anyway, in the GYM file, I could see the writes going to the DAC, that meant I
+could play them.  However, due to the way the GYM format is set up, you get a
+bunch of DAC writes in one frame (around 240 for the SEGA logo), and need to
+play them back all during the frame.
+
+So, the GYM player buffers all the DAC writes itself, and writes them back to
+the YM2612 when we are emulating one video frame.
+
+The DAC samples also need to be played evenly spaced out in the frame, or you
+get something else entirely.
+
+I believe drums samples in most tracks are also played through the DAC, so,
+great progress on this front!
