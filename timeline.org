@@ -12895,3 +12895,70 @@ get something else entirely.
 
 I believe drums samples in most tracks are also played through the DAC, so,
 great progress on this front!
+
+* [2017-10-12 jeu.]
+** Checking that debugging does not mess up timings                  :megado:
+I was thinking of redoing genesis_step to add a temporary breakpoint to the next
+instruction, and run instead of step.
+
+But we can't actually know what the next instruction will be without executing
+at least partially the current one.  It could be a jump.
+
+So I guess we have to call m68k_step manually, and account for elapsed cycles.
+
+Well, actually, I don't need to account for anything.  Because calling m68k_step
+returns the number of cycles we would have needed to pass to m68k_run_cycles, so
+we would have added, only to subtract after, so the remaining cycles would have
+not changed after this operation.
+
+Breakpoints are still broken though.
+
+Okay, I just needed to account for early exits in m68k_step (and the loops in
+the stack) due to breakpoints.
+
+Checking rewinding now.  Apart that they did not save PSG or YM2612 data, they
+look fine.
+
+One last thing: I don't like that we can't distinguish between m68k_step
+returning 0 cycles because the instruction is bugged out, and returning 0 cycles
+because of a breakpoint or error condition.
+
+Simplest thing would be to use negative values as exceptional conditions.  But I
+think we have valid instruction which take around 150 cycles, so we need to
+change the return type to int16_t at least.
+
+** Fixing throttling                                                 :megado:
+The previous test of looking at the length of time since the last frame (dt) and
+cutting down the speed of emulation was not robust enough.  It prevented the
+emulator from slowing to a crawl and being unresponsive, but it was also
+responding too quickly to instanteneous frame drops.
+
+Instead, I went with another solution: determine a maximum time allocated for
+the emulation, and break early if we overshoot it.  That way, we always try to
+take not longer than the previous update call.
+
+So what happens when we ask for a speed setting that's too high for the machine?
+We abort the loop early, and leave the audio->remaining_time positive.  That
+means we have not emulated enough to catch up, so we won't have enough audio
+samples to feed to the audio device, and we'll have clicks.  But the emulator
+stays responsive.
+
+** Looking into OSX build on Travis                                  :megado:
+Adding an OSX build to the build matrix is easy enough.  But then you have to
+wait an eternity for the build backlog to clear, so I don't think that's
+feasible.  I won't have the patience to iterate on the travis.yml (adding brew
+commands, etc) if I have to wait 30min to 1 hour between builds.
+
+I've also looked at alternatives to bundling the dependencies as sub modules.
+Not much success.  The canonical way is, at least on Linux, to not bundle them,
+and to just use the libraries installed on your system.  Of course, this only
+works for libraries that are packaged by your distribution... which imgui isn't.
+
+So once you have to deal with one dependency that's not packaged, why not
+bundle them all?  It also simplifies reproducibility.
+
+I might add a toggle in the Makefile to allow a build to use system libraries
+instead of submodule deps, but that's about it.
+
+** Tring to fix AppVeyor build                                       :megado:
+[[https://stackoverflow.com/q/43441273][This]] [[https://stackoverflow.com/q/45474857][is]] [[https://stackoverflow.com/q/45452145][terrible]].
