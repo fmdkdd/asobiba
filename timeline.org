@@ -12962,3 +12962,20 @@ instead of submodule deps, but that's about it.
 
 ** Tring to fix AppVeyor build                                       :megado:
 [[https://stackoverflow.com/q/43441273][This]] [[https://stackoverflow.com/q/45474857][is]] [[https://stackoverflow.com/q/45452145][terrible]].
+
+* [2017-10-19 jeu.]
+** Taking another look at lsp-mode for RLS                     :lsp:rust:rls:
+The setup is still a bit rough on the lsp-mode side.  I've sent patches to
+improve the situation and documentation.
+
+There was a bug with cleaning up overlays from Flycheck, I've patched that too.
+
+More distressing is that not all diagnostics make it to lsp-mode.  Might be
+related to [[https://github.com/rust-lang-nursery/rls/issues/393][this RLS issue]].
+
+Also, lsp-mode is a bit slow (<1sec) to start when you open a buffer.  And it's super
+slow (~5sec) when exiting Emacs.
+
+My understanding is that it sends a "shutdown" message to the LSP server and
+waits for the answer, to avoid killing the process and giving it a chance to
+cleanup.  So lsp-mode is not to blame here, RLS is.
