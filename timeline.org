@@ -13096,3 +13096,88 @@ checker could do the same.
 
 But I don't foresee any complication from loading modules.  It should be
 equivalent to having all definitions in the same file.
+
+* [2017-12-05 mar.]
+** Using Docker for testing Flycheck                        :flycheck:docker:
+Seeing as it was relatively painless to use Docker to run Gitit, I wonder if
+that would help us get our integration tests running without too much hassle.
+
+Trying to set up a simple image from debian:latest... apt-get update seems to
+take forever.
+
+Looks related to [[https://bugs.launchpad.net/ubuntu/+source/apt/+bug/1332440][this bug]], which talk about MTU... And indeed, it seems the
+default network bridge that Docker uses for container have the MTU set to 1500!
+
+To override it,
+
+: systemctl edit docker.service
+
+#+BEGIN_EXAMPLE
+[Service]
+ExecStart=
+ExecStart=/usr/bin/dockerd --mtu 1480 -H fd://
+#+END_EXAMPLE
+
+: systemctl restart docker.service
+
+After that, I can toy with a simple Dockerfile:
+
+#+BEGIN_SRC dockerfile
+FROM debian:latest
+
+RUN apt-get update
+RUN apt-get install -y emacs25-nox
+
+# Install Cask
+RUN apt-get install -y curl python
+RUN curl -fsSL https://raw.githubusercontent.com/cask/cask/master/go | python
+ENV PATH="/root/.cask/bin:${PATH}"
+
+# Install Make
+RUN apt-get install make
+#+END_SRC
+
+And I'm good to run tests against a /local/ version of Flycheck, with, e.g.:
+
+: docker run --rm -v flycheck:/root/flycheck -w /root/flycheck 3a7cfe4842d7 /bin/bash -c "make init && make integ"
+
+This spins up the image above, with Emacs and Cask installed, and runs ~make
+init && make integ~ on the host ~flycheck~ directory (e.g., my local version).
+
+~docker run~ takes only one command... so using bash allows to pass an arbitrary
+long list.
+
+So, where to go from there?
+
+I could build a Dockerfile that includes all the checker tools.  From that, I
+could build an image that contains everything, and we could presumably run that
+in a CI.  It would probably be huge though, on the order of several Gb.
+
+Also, one downside of that, is that the image is... frozen?  So it will contain
+the version of checkers at the time it is built.  If we want to test again other
+version of checkers, we would need to update the image.
+
+When do we need to run the integration tests?  Presumably, if you are adding a
+new checker, you might not even need to run the tests.  If you are modifying a
+checker that has tests, then you want to only run the tests for that language or
+checker.  If you change Flycheck internals, then maybe a full run is warranted.
+
+Since we are running on Travis, already inside containers, it doesn't seem to
+make much sense to launch another Docker instance inside it.
+
+So, maybe we could just tweak the Travis file to also run the integration tests
+conditionally, and crucially installing only the required checker tools.
+
+That would keep the CI times reasonably low, and we would actually run the
+integration tests.
+
+Now, I know that if I have to modify the Travis file, I will have a very bad day
+(or /days/) if I have to wait around for testing each modification on Travis
+itself.  But maybe with Docker I can test my changes locally.
+
+I found [[https://docs.travis-ci.com/user/common-build-problems/#Troubleshooting-Locally-in-a-Docker-Image][this]].  It's not I wished for exactly, but it's close.  If I can run the
+image Travis uses, then I can at least test commands locally before sending them
+to Travis.
+
+For testing the travis.yml directly, I can run [[https://github.com/travis-ci/travis-build][travis-build]] in another
+container, and it should output the build script used by Travis.
