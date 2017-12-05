@@ -8230,7 +8230,7 @@ What do I want to put into it?
   for JSON output), or extending one (adding variables)
 
 * [2017-02-28 mar.]
-** Nil-checker                                                  :elisp:types:
+** Nil-checker                                                  :types:elisp:
 Made a quick and dirty prototype for a basic nil-check for Elisp.  Emacs Lisp,
 like JavaScript, is rather lenient, but some calls still create errors.  Why not
 check them statically?
@@ -12979,3 +12979,120 @@ slow (~5sec) when exiting Emacs.
 My understanding is that it sends a "shutdown" message to the LSP server and
 waits for the answer, to avoid killing the process and giving it a chance to
 cleanup.  So lsp-mode is not to blame here, RLS is.
+
+* [2017-12-04 lun.]
+** Nil-checker redux                                            :types:elisp:
+Going back to this idea.  Checking only for Nil is not the most useful, since
+currently there is nothing that prevents you from writing dumb code like this:
+
+: (car 1)
+
+even though that's a runtime error.
+
+Of course, no-one would write such an obvious error.  However, if you write:
+
+#+BEGIN_SRC elisp
+(defun f (l)
+  (car (car l)))
+#+END_SRC
+
+Then this function can fail if ~l~ is a list of numbers.  Or, more egregiously,
+if the list /contains/ a number.  Because lists are not necessarily homogeneous
+in Elisp.
+
+*** Type predicates
+Also, type predicates are common in Elisp code, and a type checker that does not
+account for them is practically useless:
+
+#+BEGIN_SRC elisp
+(if (listp x)
+    (car x)
+  (print x))
+#+END_SRC
+
+Here, the type checker should know that in the ~then~ branch of ~if~, ~x~ must
+be a list.
+
+Well, I guess that would be caught by a standard HM checker, since ~car x~
+already implies that ~x~ is a list.
+
+However:
+
+#+BEGIN_SRC elisp
+(when (null x)
+    (max x)
+#+END_SRC
+
+Here, ~max x~ implies that ~x~ is a number.  This is compatible with ~null x~,
+since ~null~ can take anything as argument.  But this will obviously fail at
+runtime, since ~(max nil)~ is an error and ~x~ must be ~nil~, since the
+predicate ~(null x)~ returned true.
+
+One way to type that is to add temporary constraints on branches: here ~(null
+x)~ adds the constraint ~x = nil~ to the branch, and ~x != nil~ to the
+alternative (but ~when~ has no alternative).
+
+It could potentially catch impossible branches:
+
+#+BEGIN_SRC elisp
+(when (and (null x) (not (null x)))
+  (print "Not gonna happen"))
+#+END_SRC
+
+Because the ~and~ would result in an unsatisfiable set of constraints.
+
+*** Type constraints as return types
+Now, we could hardcode type constraints on built-in predicates, like ~null~,
+~stringp~, etc.  But what if we want to define a custom predicate?
+
+#+BEGIN_SRC elisp
+(defun p (x)
+  (and (or (markerp x) (numberp x)))
+
+(when (p x)
+  (+ x x))
+#+END_SRC
+
+In this case, it's obvious that after ~(p x)~, ~x~ is either a number or marker,
+and the addition can only succeed.
+
+But for the type system to know that, the predicate ~p~ should propagate the
+constraints from the built-in ~markerp~ and ~numberp~ to its return type.
+
+*** Union types
+Another difference from HM is that functions arguments can be unions of types
+rather than a single type.  ~max~ accepts numbers and markers, at the same time:
+
+: (max 0 (make-marker))
+
+So the correct type signature would be:
+
+: max :: {number, marker} -> {number, marker} -> {number, marker}
+
+Where {number, marker} is an union of the two types ~number~ and ~marker~.
+
+Whereas, in a HM-style system, you would have to use an explicit distinct union:
+
+: max :: Either(Number, Marker) -> Either(Number, Marker) -> Either(Number, Marker)
+
+On the signature, it does not make much of a difference, but in the code, you
+would now have to use an Either constructor.
+
+And of course, that gets quickly tiring when you want to construct arbitrary unions.
+
+*** Variable arity
+But in fact, ~max~ can take a variable number of arguments: at least one, but up
+to n.  This could be written as:
+
+: max :: {number, marker} -> {number, marker}... -> {number, marker}
+
+The dots indicate that this type is the ~&rest~ where all remainder arguments
+go.
+
+*** Modules
+The type checker would also need to handle definitions from other files.  The
+byte compiler already understands ~require~ calls when compiling.  The type
+checker could do the same.
+
+But I don't foresee any complication from loading modules.  It should be
+equivalent to having all definitions in the same file.
