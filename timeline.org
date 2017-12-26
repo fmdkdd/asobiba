@@ -2214,8 +2214,8 @@ single syntax error.
 I don't have errors working yet, but we are already losing functionality I'm not
 sure I can get back.
 
-Cleaning up the logic.  I can't use the backlog method because now because
-markers in blocks may receive multiple results.
+Cleaning up the logic.  I can't use the backlog method now because markers in
+blocks may receive multiple results.
 
 Cleaning up more, I have errors and timeouts working again.  For the moment one
 error stops evaluation for the whole program.  Maybe I can capture them by
@@ -2246,7 +2246,7 @@ worker.  So ~undefined~.
 I fixed this by using a map to keep track of comments already seen and the
 marker we constructed for it.
 
-The we did not associate evaluation comments to the nearest parent expression
+Then we did not associate evaluation comments to the nearest parent expression
 statement, but to all expression statements above.  Thus, in an IIFE like:
 
 (function(x) {
@@ -13181,3 +13181,40 @@ to Travis.
 
 For testing the travis.yml directly, I can run [[https://github.com/travis-ci/travis-build][travis-build]] in another
 container, and it should output the build script used by Travis.
+
+* [2017-12-26 mar.]
+** Improving s3c                                                        :s3c:
+Fixed the //: delimiter showing all values of the current iteration on the first
+run.
+
+This was due to having no characters after the delimiter, which meant the `from`
+and `to` markers were identical, and this ended up inserting the text and never
+erasing the rest of the line.
+
+The fix is to use `null` as the character value, which CodeMirror takes to mean
+"until the end of the line".
+
+But now, I would still like to have that functionality.  But property this
+time, with another delimiter.
+
+Okay, done.  This is nice!  I also added the ability to customize the timeout,
+so I can actually run some AdventOfCode solutions to the end now.
+
+Although, since the execution is async, there might not be a point to having a
+timeout anyway.
+
+I also added visual feedback for when an evalution is running, since with if the
+timeout is large, it can be jarring to not see anything going.
+
+Run into a bug with uglify-js@3.3.2, the latest version.  Somehow, mangling or
+compression produced invalid code...  Reverted to 3.2, and it worked fine.
+
+Hmm, trying to have a distinct syntactic highlighting for delimiters while I'm
+at it.  I'm doing exactly like [[https://codemirror.net/addon/search/search.js][here]] and it seems I'm not advancing the stream.
+
+Ah, wait, I wasn't doing /exactly/ like in the search addon.  My regexp was
+lacking the 'g' flag.  So presumably, it was not restarting after one match, and
+we where always skipping to the end?
+
+Anyway, it works now.  Found some nice colors to play with.  Nice progress
+today.
