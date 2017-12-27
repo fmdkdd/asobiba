@@ -13218,3 +13218,39 @@ we where always skipping to the end?
 
 Anyway, it works now.  Found some nice colors to play with.  Nice progress
 today.
+
+* [2017-12-27 mer.]
+** Adding Typescript support                                            :s3c:
+I think I want to use s3c for my updated JS course.  If I want to use
+Typescript, s3c better support it.
+
+On the syntax highlighting front, it seems the latest versions of CodeMirror
+include TS support in the JS mode.
+
+On the evaluation front, I think I just need to run the code through the TS
+compiler first.  But the tricky part might be to not lose any evaluation
+markers...
+
+Okay, so including [[https://github.com/Microsoft/TypeScript/blob/master/lib/typescriptServices.js][this file]] and calling ts.transpile on code generates plain
+JS.  Indeed, I run into issues with markers, because the positions in the
+compiled JS code do not match the position of the source.
+
+But ~transpile~ also does not produce any compilation error, which is quite
+useless.  I need to run the compiler to report errors /and/ keep track of
+markers position after the compilation.
+
+Looking into the typescript-services file, I found:
+
+: createTypeChecker
+: emitFile seem to be able to get diagnostics
+: createProgram as well (that's what the playground seems to be doing)
+: transpileModule calls createProgram
+: transpile calls transpileModule
+
+I managed to get diagnostics from transpileModule, but only for syntax errors,
+not type errors.  Going through the debugger in the playground, and it seems it
+doesn't spout out type errors that way either.  But they do appear; probably
+because the playground uses some code from VS Code, notably the typescript mode.
+
+But this code is minified.  Can't seem to find where this happens.  Probably
+_doValidate, but the Firefox debugger seem to choke.
