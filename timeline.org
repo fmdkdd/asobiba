@@ -13327,3 +13327,50 @@ The fix to set the working directory seems to work for nightly and stable.
 Testing it out, it looks like stable cargo returns filepaths relative to the
 CWD, whereas nightly cargo returns filepaths relative to the manifest.  So the
 fix is sound, and backwards-compatible.
+
+* [2018-01-12 ven.]
+** Fixing an s3c crash with Chromium                           :s3c:chromium:
+Students ran into reproducible crashes under Chromium.  Firefox handles the same
+snippets fine.
+
+Trouble: s3c never actually saves the content of the editor in case of a crash.
+
+Seems to be occurring when a timeout happens?
+
+Reduced the snippet to:
+
+#+BEGIN_SRC js
+function f() {
+  let n = [];
+  while (true) {
+    n.push(undefined);
+  }
+}
+
+f()
+#+END_SRC
+
+100% guaranteed crash under Chromium 63.0.3239.132.
+
+Interestingly, this doesn't crash:
+
+#+BEGIN_SRC js
+function f() {
+  let n = [];
+  while (true) {
+    n.push();
+  }
+}
+
+f()
+#+END_SRC
+
+I'm not even trying to print the result or anything.
+
+Trying to print the heap size using ~window.performance.memory~: it doesn't look
+like it's a memory issue.  Even though we are building a large array.  At least,
+~window.performance.memory~ is not reporting anything close to the max heap
+size.
+
+I guess that leaves me with the option of saving before calling ~reval~, to
+avoid losing work.
