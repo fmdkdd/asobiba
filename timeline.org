@@ -13142,7 +13142,7 @@ And I'm good to run tests against a /local/ version of Flycheck, with, e.g.:
 : docker run --rm -v flycheck:/root/flycheck -w /root/flycheck 3a7cfe4842d7 /bin/bash -c "make init && make integ"
 
 This spins up the image above, with Emacs and Cask installed, and runs ~make
-init && make integ~ on the host ~flycheck~ directory (e.g., my local version).
+init && make integ~ on the host ~flycheck~ directory (i.e., my local version).
 
 ~docker run~ takes only one command... so using bash allows to pass an arbitrary
 long list.
@@ -13254,3 +13254,76 @@ because the playground uses some code from VS Code, notably the typescript mode.
 
 But this code is minified.  Can't seem to find where this happens.  Probably
 _doValidate, but the Firefox debugger seem to choke.
+
+* [2017-12-31 dim.]
+** Fixing a Flycheck rust bug                           :flycheck:rust:cargo:
+[[https://github.com/flycheck/flycheck/issues/1378][Namely]].
+
+Somehow, nightly cargo changed the ~file_name~ part of span.  They seem to be
+relative to where the Cargo.toml is.
+
+- Test whether this is relative to the manifest, or the CWD of cargo
+- Fix the rust integration tests that are broken because of the ~group~ property
+- Fix the bug, make sure it works with stable and nightly
+
+*** Fixing the Flycheck rust integration tests
+All the rust tests currently fail because of the added ~group~ property.  This
+is the relevant code:
+
+#+BEGIN_SRC elisp
+  (let ((expected (mapcar (apply-partially #'apply #'flycheck-error-new-at)
+                          errors)))
+    (should (equal expected flycheck-current-errors))
+#+END_SRC
+
+We create error objects from lists by applying the arguments to the constructor,
+then we just call ~equal~ to check if the created errors are the same as the
+current errors.
+
+This fails because we don't provide a value for the ~group~ property, so it
+stays ~nil~, and is then compared to the non-nil value produced by the
+rust-cargo/rust checkers.
+
+Trouble is, the group property produced by the checkers is a ~make-symbol~, so
+we can't easily get that value back to make it equal in the tests.  I mean,
+that's part of the point.
+
+So, either we create an interned symbol for the group property in a predictible
+fashion amenable to tests.  Or, we must define an equality predicate that
+doesn't take the group property into account...
+
+In the second case, we might still want a way to test if errors belong to the
+same group.
+
+One way to do that would be to modify ~-should-syntax-check~ to accept group of
+errors and call the verification on that.
+
+But since we don't actually do anything in Flycheck with error groups, it's okay
+if we don't test them for now.
+
+Tried to use the following function:
+
+#+BEGIN_SRC elisp
+(defun flycheck-ert-error-equal (err1 err2)
+  (seq-every-p (lambda (slot)
+                 (should
+                  (equal (cl-struct-slot-value 'flycheck-error slot err1)
+                         (cl-struct-slot-value 'flycheck-error slot err2))))
+               (seq-difference (mapcar #'car
+                                       (cl-struct-slot-info 'flycheck-error))
+                               '(cl-tag-slot group))))
+#+END_SRC
+
+But it makes the ert errors basically unusable, since ERT provides no useful
+info without an accompanying error explainer.  There is one for ~equal~, of
+course.
+
+So, maybe I should just fix the somewhat serious bug first, and come back to
+this later.
+
+*** Fixing the bug with relative paths
+The fix to set the working directory seems to work for nightly and stable.
+
+Testing it out, it looks like stable cargo returns filepaths relative to the
+CWD, whereas nightly cargo returns filepaths relative to the manifest.  So the
+fix is sound, and backwards-compatible.
