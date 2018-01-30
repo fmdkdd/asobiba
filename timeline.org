@@ -13374,3 +13374,88 @@ size.
 
 I guess that leaves me with the option of saving before calling ~reval~, to
 avoid losing work.
+
+* [2018-01-22 lun.]
+** Running a specific test for Orgzly                 :android:gradle:orgzly:
+Been trying to add plain timestamps to Orgzly.  Wrapping my head around Android
+development and patterns.
+
+I think the Provider class in the project is responsible for interacting with
+the DB, and specifically expose info from it thanks to queries.  I found a test
+class ProviderTest, but it's not picked up by ~gradlew test~.  I guess it's run
+by the connected tests, which I can run on the emulator.  But there are 650
+such tests, and they are taking a loooong time (i.e., more than ten minutes).
+
+[[https://stackoverflow.com/a/35585778][Found]] a way to run a specific test.  This is convoluted, but it works:
+
+: ./gradlew connectedPremiumDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class='com.orgzly.android.provider.ProviderTest'
+
+Also, [[http://books.goalkicker.com/AndroidBook/][this book]] on Android programming created from the defunct StackOverflow
+Documentation project is helpful.  But maybe not as helpful as [[https://developer.android.com/reference/android/database/MergeCursor.html][the official
+documentation]].
+
+* [2018-01-30 mar.]
+** Progress for adding plain timestamps on Orgzly      :android:orgzly:
+Now that I've added the DbNoteContentTime table, I want these notes to appear
+the Agenda view!  I figured that AgendaFragment is built from the following
+query:
+
+: ProviderContract.Notes.ContentUri.notesSearchQueried
+
+If the query contains an ~ad~ keyword, then the AgendaFragment is used.  That's
+in DisplayManager:
+
+#+BEGIN_SRC java
+// Display agenda or query fragment
+if (query.getOptions().getAgendaDays() > 0) {
+    fragment = AgendaFragment.getInstance(queryString);
+    tag = AgendaFragment.FRAGMENT_TAG;
+
+} else {
+    fragment = SearchFragment.getInstance(queryString);
+    tag = SearchFragment.FRAGMENT_TAG;
+}
+#+END_SRC
+
+Then, AgendaFragment runs the query on the DB through NotesClient.  That's from
+QueryFragment.onCreateLoader:
+
+: return NotesClient.getLoaderForQuery(getActivity(), mQuery);
+
+That method uses the following URI:
+
+: ProviderContract.Notes.ContentUri.notesSearchQueried(query),
+
+which calls ~Provider.runUserQuery~, which adds a WHERE clause:
+
+: if (query.getOptions().getAgendaDays() > 0) {
+:     selections.add(DatabaseUtils.WHERE_NOTES_WITH_TIMES);
+: }
+
+and ultimately runs the query on DbNoteView:
+
+: return db.query(DbNoteView.VIEW_NAME, null, selection, selectionArgs, null, null, sortOrder);
+
+The resulting cursor is then passed to AgendaFragment.onLoadFinished, and used
+to build the list displayed to the user.
+
+So, I managed to extend WHERE_NOTES_WITH_TIMES to include notes which have
+content times as well.  I tested that by calling notesSearchQueried directly,
+and it returns the correct note.
+
+However, the cursor does not include the content times.  That's because the
+DbNoteView table doesen't have these columns, and does not join them.  The
+author has stated that we should not modify the view itself, because it should
+be a one-to-one mapping.
+
+In any case, the code that makes use of the cursor in AgendaFragment has to be
+modified, because currently it's only looking for scheduled and deadline times
+when computing whether to display.  So maybe we can solve the problem by just
+adding logic to AgendaFragment to look into DbNoteContentTime as well for all
+notes that are present?
+
+Haha!  It seems to work.  At least, by tinkering a lot, I managed to get notes
+with plain timestamps into the list shown by the Agenda query.
+
+However, I seem to get duplicate entries... and the notes are not matching the
+timestamps.  Mild victory.
