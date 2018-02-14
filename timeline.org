@@ -13459,3 +13459,117 @@ with plain timestamps into the list shown by the Agenda query.
 
 However, I seem to get duplicate entries... and the notes are not matching the
 timestamps.  Mild victory.
+
+Ah, wait, I left the debug cause that was pulling all notes...  Yeah, that's
+better.
+
+It's too bad I'm not seeing the actual times, but I guess that could be
+arranged later.
+
+* [2018-02-14 mer.]
+** Diagnosing a strange Flycheck macro bug                   :flycheck:elisp:
+[[https://github.com/flycheck/flycheck/issues/1398][Namely]].
+
+Using a ~define-checker~:
+
+#+BEGIN_SRC elisp
+(progn
+  (with-eval-after-load 'flycheck
+    (flycheck-define-checker foo
+      ""
+      :command ("foo")
+      :error-patterns ((error line-start))
+      :error-filter (lambda (errors))
+      :modes c++-mode))
+
+  (package-initialize)
+  (add-to-list 'load-path "~/proj/flycheck")
+  (require 'flycheck))
+#+END_SRC
+
+This fails when loading flycheck with:
+
+: (error ":error-filter (function (lambda (errors))) of syntax checker foo is not a function")
+
+The :error-filter property is indeed turned into this:
+
+: (function (lambda (errors)))
+
+However, when evaluating the expression directly, it raises no errors.
+
+If I macroexpand the definition, I get this for :error-filter:
+
+: :error-filter #'(lambda (errors))
+
+which should be the same as ~function~, as I understand it.  If replace the #'
+by ~function~, it works fine when evaluating the expansion.
+
+Actually, evaluating this in ~emacs -Q~:
+
+#+BEGIN_SRC elisp
+(progn
+  (package-initialize)
+  (add-to-list 'load-path "~/proj/flycheck")
+  (require 'flycheck)
+
+  (flycheck-define-checker foo
+    ""
+    :command ("foo")
+    :error-patterns ((error line-start))
+    :error-filter (lambda (errors))
+    :modes c++-mode))
+#+END_SRC
+
+also triggers the error.  But only the first time it is evaluated!
+
+When stepping the definition through the debugger, I'm seeing that
+~define-command-checker~ is getting ~(function (function (lambda errors)))~ at
+some point.  Though that doesn't seem to be an issue, as it reduces to
+~(function (lambda errors))~.
+
+However, stepping through, I can see that:
+
+: (functionp (function (lambda (errors))))
+
+returns ~nil~!  Even though, when evaluating the expression, it returns ~t~.
+
+Can reproduce with this small standalone snippet:
+
+#+BEGIN_SRC elisp
+(progn
+  (defun gen-check (&rest props)
+    (unless (functionp (plist-get props :filter))
+      (error "%s is not a function" (plist-get props :filter))))
+
+  (defun com-check (&rest props)
+    (apply #'gen-check props))
+
+  (defmacro check (&rest props)
+    (let ((filter (plist-get props :filter)))
+      `(com-check ,@(when filter `(:filter #',filter)))))
+
+  (check :filter (lambda (errors))))
+#+END_SRC
+
+First time you evaluate it, it errors, but the second time it doesn't.
+
+Reducing it further:
+
+#+BEGIN_SRC elisp
+(progn
+  (defmacro m (f)
+    `(functionp #',f))
+
+  (m (lambda ())))
+#+END_SRC
+
+Ultimately, it comes to that.  If you evaluate this snippet once, it returns
+~nil~ the first time, and ~t~ the second time henceforth.
+
+If you remove the #', then all evaluations return ~t~.
+
+Removing the #' in Flycheck works... but not quite, because we now have macro
+calls which need to add the #' back.  Once that is done, then the original macro
+call in ~with-eval-after-load~ works as expected.
+
+Tricky!
