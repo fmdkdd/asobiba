@@ -18,9 +18,9 @@ type Environment<'a> = Vec<Value<'a>>;
 
 fn eval_with_env<'a>(t: &Term<'a>, e: &Environment<'a>) -> Value<'a> {
   match *t {
-    Term::Const(n)            => Value::Const(n),
-    Term::Var(n)              => e[e.len() - 1 - n].clone(),
-    Term::Lambda(ref t)       => Value::Closure((*t).clone(), e.clone()),
+    Term::Const(n)    => Value::Const(n),
+    Term::Var(n)      => e[e.len() - 1 - n].clone(),
+    Term::Lambda(c)   => Value::Closure(c.clone(), e.clone()),
     Term::Apply(a, b) => {
       let va = eval_with_env(a, &e);
       let vb = eval_with_env(b, &e);

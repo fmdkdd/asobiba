@@ -1,6 +1,9 @@
 // Entirely due to:
 // http://www.jonathanturner.org/2015/12/building-a-simple-jit-in-rust.html
 
+#![feature(test)]
+
+extern crate test;
 extern crate libc;
 
 extern {
@@ -90,7 +93,7 @@ fn emulate(code: &[u8]) -> u64 {
               v |= (code[pc] as u64) << (8 * b);
               pc += 1;
             }
-
+            println!("rcx {}", v);
             rcx = v;
           },
 
@@ -147,23 +150,80 @@ fn emulate(code: &[u8]) -> u64 {
   rax
 }
 
+#[cfg(test)]
+mod tests {
+  use test::Bencher;
+  use super::*;
+
+  const loop_code : [u8; 27] =
+    [ 0x48, 0xB9, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs rcx, 0xFF00
+      0x48, 0xFF, 0xC9,                                           // dec rcx
+      0x48, 0x83, 0xF9, 0x00,                                     // cmp rcx, 0x0
+      0x75, 0xF7,                                                 // jne 0xa
+      0x48, 0xC7, 0xC0, 0x03, 0x00, 0x00, 0x00,                   // mov rax, 0x3
+      0xC3 ];                                                     // ret
+
+  // mov rax, 0x3
+  const mov_code : [u8; 8] = [0x48, 0xC7, 0xC0, 0x03, 0x00, 0x00, 0x00, 0xC3];
+
+  #[test]
+  fn test_jit_simple() {
+    assert_eq!(jit_code(&mov_code)(), 3);
+  }
+
+  #[test]
+  fn test_emu_simple() {
+    assert_eq!(emulate(&mov_code), 3);
+  }
+
+  #[test]
+  fn test_emu_loop() {
+    assert_eq!(emulate(&loop_code), 3);
+  }
+
+  #[test]
+  fn test_jit_loop() {
+    assert_eq!(jit_code(&loop_code)(), 3);
+  }
+
+
+  #[bench]
+  fn bench_jit(b: &mut Bencher) {
+    let fun = jit_code(&mov_code);
+    b.iter(|| fun());
+  }
+
+  #[bench]
+  fn bench_emu(b: &mut Bencher) {
+    b.iter(|| emulate(&mov_code));
+  }
+
+  #[bench]
+  fn bench_emu_loop(b: &mut Bencher) {
+    b.iter(|| emulate(&loop_code));
+  }
+
+  #[bench]
+  fn bench_jit_loop(b: &mut Bencher) {
+    b.iter(|| emulate(&loop_code));
+  }
+
+}
+
 
 fn main() {
-  // Return 3
-  // let code = [0x48, 0xC7, 0xC0, 0x03, 0x00, 0x00, 0x00];
-
   // Return 3 after looping for a second or two
-  let code = [ 0x48, 0xB9, 0x00, 0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, // movabs rcx, 0xFF000000
+  let code = [ 0x48, 0xB9, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // movabs rcx, 0xFF000000
                0x48, 0xFF, 0xC9,                                           // dec rcx
                0x48, 0x83, 0xF9, 0x00,                                     // cmp rcx, 0x0
                0x75, 0xF7,                                                 // jne a
                0x48, 0xC7, 0xC0, 0x03, 0x00, 0x00, 0x00,                   // mov rax, 0x3
                0xC3 ];                                                     // ret
 
-  // let fun = jit_code(&code);
-  // let r = fun();
+  let fun = jit_code(&code);
+  let r = fun();
 
-  let r = emulate(&code);
+  //let r = emulate(&code);
 
   println!("{}", r);
 }
