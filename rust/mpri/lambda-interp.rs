@@ -1,59 +1,58 @@
-// Lambda-calculus interpreter with
-// environments, closures and de Bruijn indices
+// Lambda-calculus interpreter with environments, closures and de Bruijn indices
 
-#[derive(Clone)]
-enum Term {
+#[derive(PartialEq, Eq, Clone, Debug)]
+enum Term<'a> {
   Const(usize),
   Var(usize),
-  Lambda(Box<Term>),
-  Apply(Box<Term>, Box<Term>),
+  Lambda(&'a Term<'a>),
+  Apply(&'a Term<'a>, &'a Term<'a>),
 }
 
-#[derive(Clone)]
-enum Value {
+#[derive(PartialEq, Eq, Clone, Debug)]
+enum Value<'a> {
   Const(usize),
-  Closure(Box<Term>, Environment)
+  Closure(Term<'a>, Environment<'a>)
 }
 
-type Environment = Vec<Value>;
+type Environment<'a> = Vec<Value<'a>>;
 
-fn eval(t: &Term, e: &Environment) -> Value {
-  match t {
-    &Term::Const(n)  => Value::Const(n),
-    &Term::Var(n)    => e[e.len() - 1 - n].clone(),
-    &Term::Lambda(ref t) => Value::Closure(t.clone(), e.clone()),
-    &Term::Apply(ref a, ref b) => {
-      let va = eval(&a, e);
-      let vb = eval(&b, e);
+fn eval_with_env<'a>(t: &Term<'a>, e: &Environment<'a>) -> Value<'a> {
+  match *t {
+    Term::Const(n)            => Value::Const(n),
+    Term::Var(n)              => e[e.len() - 1 - n].clone(),
+    Term::Lambda(ref t)       => Value::Closure((*t).clone(), e.clone()),
+    Term::Apply(a, b) => {
+      let va = eval_with_env(a, &e);
+      let vb = eval_with_env(b, &e);
       match va {
         Value::Closure(c, ee) => {
           let mut e2 = ee.clone();
           e2.push(vb);
-          eval(&c, &e2)
+          eval_with_env(&c, &e2)
         },
-        _ => panic!("Not a closure"),
+        _ => panic!("Cannot apply a non-closure"),
       }
     },
   }
 }
 
-fn print(v: &Value) -> String {
-  match v {
-    &Value::Const(n) => format!("{}", n),
-    &Value::Closure(ref c, ref e) => "closure".into(),
-  }
+fn eval<'a>(t: &Term<'a>) -> Value<'a> {
+  eval_with_env(t, &Vec::new())
+}
+
+#[test]
+fn expressions() {
+  use Term::*;
+  assert_eq!(eval(&Const(42)), Value::Const(42));
+  assert_eq!(eval(&Lambda(&Const(42))), Value::Closure(Const(42), vec![]));
+  assert_eq!(eval(&Apply(&Lambda(&Var(0)),
+                         &Const(42))),
+             Value::Const(42));
 }
 
 fn main() {
   use Term::*;
-
-  println!("{}", print(&eval(&Apply(Box::new(Lambda(Box::new(Var(0)))),
-                                    Box::new(Const(42))),
-                             &Vec::new())
-  ));
-
-  // println!("{}", print(&eval(&Lambda(Box::new(Apply(Box::new(Lambda(Box::new(Apply(Box::new(Var(0)),
-  //                                                                              Box::new(Var(1)))))),
-  //                                                 Box::new(Var(0))))),
-  //                            &Vec::new())));
+  println!("{:?}", eval(&Apply(&Lambda(&Apply(&Lambda(&Apply(&Var(0), &Var(1))),
+                                              &Var(0))),
+                               &Lambda(&Var(0)))));
 }
