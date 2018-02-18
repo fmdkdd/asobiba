@@ -13617,3 +13617,41 @@ constant.
 
 It would be interesting to see how these numbers compare for a more complex
 language.
+
+After watching [[https://youtu.be/knqlWboqf_U][this video]] on partial evaluation, I wanted to include that in the
+comparison.  However, I'm not sure that I will see the same improvements.
+Returning a closure will indeed skip the overhead of decoding and reordering,
+but I don't know how much the compiler can specialize from all these nested
+closures.
+
+I added partial evaluation, and also added benches from a term that's directly
+in the source.
+
+Results without optimizations:
+
+: test bench_interp              ... bench:       8,515 ns/iter (+/- 116)
+: test bench_interp_static       ... bench:       8,547 ns/iter (+/- 37)
+: test bench_jit                 ... bench:         409 ns/iter (+/- 4)
+: test bench_jit_static          ... bench:         412 ns/iter (+/- 6)
+: test bench_partial_eval        ... bench:       5,644 ns/iter (+/- 49)
+: test bench_partial_eval_static ... bench:       5,683 ns/iter (+/- 86)
+: test bench_vm                  ... bench:      64,943 ns/iter (+/- 467)
+: test bench_vm_static           ... bench:      64,974 ns/iter (+/- 451)
+
+With optimizations:
+
+: test bench_interp              ... bench:       3,582 ns/iter (+/- 106)
+: test bench_interp_static       ... bench:       3,556 ns/iter (+/- 155)
+: test bench_jit                 ... bench:         369 ns/iter (+/- 16)
+: test bench_jit_static          ... bench:         360 ns/iter (+/- 8)
+: test bench_partial_eval        ... bench:       4,042 ns/iter (+/- 50)
+: test bench_partial_eval_static ... bench:       4,022 ns/iter (+/- 35)
+: test bench_vm                  ... bench:       4,191 ns/iter (+/- 34)
+: test bench_vm_static           ... bench:       4,242 ns/iter (+/- 68)
+
+So: without optimizations, the partial evaluator is faster than the
+interpreter.  With optimizations, the compiler does a better job on the
+interpreter than on the closure returned by the partial evaluator.
+
+But the JIT is still one order of magnitude faster, and that's by generating
+straightforward machine code.  No optimizations in there.

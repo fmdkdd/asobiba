@@ -138,6 +138,15 @@ fn gen(depth: usize) -> Term {
   }
 }
 
+// Print a Term for construction using boxes
+fn print_term(t: &Term) -> String {
+  match t {
+    &Term::N(n) => format!("Box::new(Term::N({}))", n),
+    &Term::Add(ref a, ref b) => format!("Box::new(Term::Add({},{}))", print_term(a), print_term(b)),
+    &Term::Sub(ref a, ref b) => format!("Box::new(Term::Sub({},{}))", print_term(a), print_term(b)),
+  }
+}
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Term interpreter
 
@@ -302,25 +311,81 @@ fn print_machine_code(code: &[u8]) -> String {
   code.iter().map(|x| format!("{:02x}", x)).collect::<Vec<String>>().join(" ")
 }
 
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Interpreter with partial evaluation
+
+fn partial_eval(t: &Term) -> Box<Fn() -> usize> {
+  match t {
+    &Term::N(n)              => Box::new(move || n),
+    &Term::Add(ref a, ref b) => {
+      let ca = partial_eval(a);
+      let cb = partial_eval(b);
+      Box::new(move || ca().wrapping_add(cb()))
+    },
+    &Term::Sub(ref a, ref b) => {
+      let ca = partial_eval(a);
+      let cb = partial_eval(b);
+      Box::new(move || ca().wrapping_sub(cb()))
+    },
+  }
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Benches
+
 use test::Bencher;
 
-const PROG : &'static str = r#"(- (+ (+ 996 (+ (+ (+ (+ (- (- (- 989 (+ 988 (- 987 (+ 986 986)))) (- (+ (+ (- (+ (- 984 984) (- (- (+ (- (+ 980 (+ 979 (+ 978 (+ 977 977)))) (+ (- 979 979) 980)) 982) 983) (+ (+ 982 982) 983))) (- 985 (- (+ 983 (- 982 982)) (+ 983 (- (+ (- (- 979 (- 978 978)) (- (- 978 978) (- 978 978))) 981) (- (- 980 980) (- 980 980))))))) (+ (- (+ (+ 983 (+ 982 (+ 981 (+ 980 980)))) (- 983 (+ 982 982))) 985) (+ 985 985))) (- 987 987)) (+ 988 (- (+ 986 986) (- (+ (- 984 984) 985) 986))))) 991) (+ 991 (- (- (+ (+ 987 987) (- 987 987)) 989) 990))) (+ 992 (+ 991 (+ (+ (- 988 (+ (- 986 986) (+ (+ 985 (- (+ (+ 982 (- 981 981)) 983) (- 983 983))) (- 985 (- 984 984))))) 989) 990)))) (- 993 (- (+ 991 991) 992))) (- 994 994))) (+ (- (- 994 994) 995) (+ 995 (+ (- (+ 992 992) (- 992 992)) (+ 993 (- 992 (+ (+ 990 990) 991))))))) (+ (+ 996 996) (- (+ (- (+ 993 993) (- (+ (- (- 990 (+ 989 (+ (- 987 (+ 986 (- (- (- (- 982 (+ 981 (- (+ (- 978 (- 977 977)) (+ 978 (+ (- 976 976) (+ (- 975 (+ (+ (+ 972 972) (- (- 971 (+ (+ 969 (+ 968 (- (- (- 965 (+ 964 964)) (+ 965 (- (+ (+ (+ (- (- 959 (+ (- (- 956 956) (- 956 956)) (+ (- (- 955 955) 956) 957))) (- 959 959)) 961) (+ 961 961)) 963) 964))) 967))) (- (+ (- (+ 966 (- 965 965)) (+ 966 (+ (+ (+ (+ 962 962) 963) 964) 965))) (+ (+ 966 (+ (+ 964 964) (+ (+ 963 (+ (- 961 961) (+ (+ 960 960) (+ (+ 959 (- 958 (+ (+ (+ (+ (- 953 953) 954) (+ (+ 953 953) 954)) (+ 955 (- 954 (+ (+ 952 (+ (+ (+ 949 949) (- (- (+ (- (+ (+ 944 944) 945) 946) 947) 948) 949)) 951)) (- (+ (+ 950 (- 949 949)) (- (+ 949 949) (+ (+ (- 947 (- (- (- (+ 943 (- 942 (- 941 941))) 944) 945) 946)) 948) 949))) (+ (- (- 949 (- (+ 947 947) 948)) (- 949 (+ 948 (- (+ 946 (+ 945 945)) 947)))) (- 950 950))))))) (+ 956 (+ (+ 954 (- (- 952 952) (+ 952 952))) (+ (- (- (- 951 (+ 950 (- 949 (- 948 948)))) (+ (+ (+ (+ 948 (+ (- 946 (- 945 (+ 944 944))) 947)) 949) 950) 951)) (+ (- (+ 950 (+ 949 949)) 951) 952)) 954)))))) 960)))) 964))) 967)) (+ (+ 967 967) 968)))) 972)) (- 973 973))) (+ (+ 974 (+ (+ 972 (- 971 971)) 973)) (- (- (+ 972 972) 973) 974)))))) 980))) 983) (+ (+ (+ 981 981) (+ 981 981)) (- (- (+ 980 980) 981) 982))) (- (+ (+ (- (+ 980 980) 981) (- (- (+ 979 (- 978 978)) (- (+ (- 977 (+ 976 (- (+ 974 (- (+ (- 971 (- (- 969 (- (+ (- (+ 965 (- (+ (+ (- 961 961) (- 961 961)) 963) 964)) (+ 965 965)) 967) 968)) 970)) (- 971 971)) 973)) 975))) 978) 979)) 981)) 983) (- (+ 982 982) (- 982 982)))))) 988))) (- 990 990)) (+ (+ (+ (+ (+ 987 (+ (- 985 (+ 984 984)) 986)) 988) 989) 990) 991)) 993)) 995) 996)))"#;
+const PROG_STR : &'static str = r#"(- (+ (+ 996 (+ (+ (+ (+ (- (- (- 989 (+ 988 (- 987 (+ 986 986)))) (- (+ (+ (- (+ (- 984 984) (- (- (+ (- (+ 980 (+ 979 (+ 978 (+ 977 977)))) (+ (- 979 979) 980)) 982) 983) (+ (+ 982 982) 983))) (- 985 (- (+ 983 (- 982 982)) (+ 983 (- (+ (- (- 979 (- 978 978)) (- (- 978 978) (- 978 978))) 981) (- (- 980 980) (- 980 980))))))) (+ (- (+ (+ 983 (+ 982 (+ 981 (+ 980 980)))) (- 983 (+ 982 982))) 985) (+ 985 985))) (- 987 987)) (+ 988 (- (+ 986 986) (- (+ (- 984 984) 985) 986))))) 991) (+ 991 (- (- (+ (+ 987 987) (- 987 987)) 989) 990))) (+ 992 (+ 991 (+ (+ (- 988 (+ (- 986 986) (+ (+ 985 (- (+ (+ 982 (- 981 981)) 983) (- 983 983))) (- 985 (- 984 984))))) 989) 990)))) (- 993 (- (+ 991 991) 992))) (- 994 994))) (+ (- (- 994 994) 995) (+ 995 (+ (- (+ 992 992) (- 992 992)) (+ 993 (- 992 (+ (+ 990 990) 991))))))) (+ (+ 996 996) (- (+ (- (+ 993 993) (- (+ (- (- 990 (+ 989 (+ (- 987 (+ 986 (- (- (- (- 982 (+ 981 (- (+ (- 978 (- 977 977)) (+ 978 (+ (- 976 976) (+ (- 975 (+ (+ (+ 972 972) (- (- 971 (+ (+ 969 (+ 968 (- (- (- 965 (+ 964 964)) (+ 965 (- (+ (+ (+ (- (- 959 (+ (- (- 956 956) (- 956 956)) (+ (- (- 955 955) 956) 957))) (- 959 959)) 961) (+ 961 961)) 963) 964))) 967))) (- (+ (- (+ 966 (- 965 965)) (+ 966 (+ (+ (+ (+ 962 962) 963) 964) 965))) (+ (+ 966 (+ (+ 964 964) (+ (+ 963 (+ (- 961 961) (+ (+ 960 960) (+ (+ 959 (- 958 (+ (+ (+ (+ (- 953 953) 954) (+ (+ 953 953) 954)) (+ 955 (- 954 (+ (+ 952 (+ (+ (+ 949 949) (- (- (+ (- (+ (+ 944 944) 945) 946) 947) 948) 949)) 951)) (- (+ (+ 950 (- 949 949)) (- (+ 949 949) (+ (+ (- 947 (- (- (- (+ 943 (- 942 (- 941 941))) 944) 945) 946)) 948) 949))) (+ (- (- 949 (- (+ 947 947) 948)) (- 949 (+ 948 (- (+ 946 (+ 945 945)) 947)))) (- 950 950))))))) (+ 956 (+ (+ 954 (- (- 952 952) (+ 952 952))) (+ (- (- (- 951 (+ 950 (- 949 (- 948 948)))) (+ (+ (+ (+ 948 (+ (- 946 (- 945 (+ 944 944))) 947)) 949) 950) 951)) (+ (- (+ 950 (+ 949 949)) 951) 952)) 954)))))) 960)))) 964))) 967)) (+ (+ 967 967) 968)))) 972)) (- 973 973))) (+ (+ 974 (+ (+ 972 (- 971 971)) 973)) (- (- (+ 972 972) 973) 974)))))) 980))) 983) (+ (+ (+ 981 981) (+ 981 981)) (- (- (+ 980 980) 981) 982))) (- (+ (+ (- (+ 980 980) 981) (- (- (+ 979 (- 978 978)) (- (+ (- 977 (+ 976 (- (+ 974 (- (+ (- 971 (- (- 969 (- (+ (- (+ 965 (- (+ (+ (- 961 961) (- 961 961)) 963) 964)) (+ 965 965)) 967) 968)) 970)) (- 971 971)) 973)) 975))) 978) 979)) 981)) 983) (- (+ 982 982) (- 982 982)))))) 988))) (- 990 990)) (+ (+ (+ (+ (+ 987 (+ (- 985 (+ 984 984)) 986)) 988) 989) 990) 991)) 993)) 995) 996)))"#;
+
+fn build_prog() -> Term {
+  Term::Sub(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(996)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(989)),Box::new(Term::Add(Box::new(Term::N(988)),Box::new(Term::Sub(Box::new(Term::N(987)),Box::new(Term::Add(Box::new(Term::N(986)),Box::new(Term::N(986)))))))))),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(984)),Box::new(Term::N(984)))),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(980)),Box::new(Term::Add(Box::new(Term::N(979)),Box::new(Term::Add(Box::new(Term::N(978)),Box::new(Term::Add(Box::new(Term::N(977)),Box::new(Term::N(977)))))))))),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(979)),Box::new(Term::N(979)))),Box::new(Term::N(980)))))),Box::new(Term::N(982)))),Box::new(Term::N(983)))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(982)),Box::new(Term::N(982)))),Box::new(Term::N(983)))))))),Box::new(Term::Sub(Box::new(Term::N(985)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(983)),Box::new(Term::Sub(Box::new(Term::N(982)),Box::new(Term::N(982)))))),Box::new(Term::Add(Box::new(Term::N(983)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(979)),Box::new(Term::Sub(Box::new(Term::N(978)),Box::new(Term::N(978)))))),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(978)),Box::new(Term::N(978)))),Box::new(Term::Sub(Box::new(Term::N(978)),Box::new(Term::N(978)))))))),Box::new(Term::N(981)))),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(980)),Box::new(Term::N(980)))),Box::new(Term::Sub(Box::new(Term::N(980)),Box::new(Term::N(980)))))))))))))))),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(983)),Box::new(Term::Add(Box::new(Term::N(982)),Box::new(Term::Add(Box::new(Term::N(981)),Box::new(Term::Add(Box::new(Term::N(980)),Box::new(Term::N(980)))))))))),Box::new(Term::Sub(Box::new(Term::N(983)),Box::new(Term::Add(Box::new(Term::N(982)),Box::new(Term::N(982)))))))),Box::new(Term::N(985)))),Box::new(Term::Add(Box::new(Term::N(985)),Box::new(Term::N(985)))))))),Box::new(Term::Sub(Box::new(Term::N(987)),Box::new(Term::N(987)))))),Box::new(Term::Add(Box::new(Term::N(988)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(986)),Box::new(Term::N(986)))),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(984)),Box::new(Term::N(984)))),Box::new(Term::N(985)))),Box::new(Term::N(986)))))))))))),Box::new(Term::N(991)))),Box::new(Term::Add(Box::new(Term::N(991)),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(987)),Box::new(Term::N(987)))),Box::new(Term::Sub(Box::new(Term::N(987)),Box::new(Term::N(987)))))),Box::new(Term::N(989)))),Box::new(Term::N(990)))))))),Box::new(Term::Add(Box::new(Term::N(992)),Box::new(Term::Add(Box::new(Term::N(991)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(988)),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(986)),Box::new(Term::N(986)))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(985)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(982)),Box::new(Term::Sub(Box::new(Term::N(981)),Box::new(Term::N(981)))))),Box::new(Term::N(983)))),Box::new(Term::Sub(Box::new(Term::N(983)),Box::new(Term::N(983)))))))),Box::new(Term::Sub(Box::new(Term::N(985)),Box::new(Term::Sub(Box::new(Term::N(984)),Box::new(Term::N(984)))))))))))),Box::new(Term::N(989)))),Box::new(Term::N(990)))))))))),Box::new(Term::Sub(Box::new(Term::N(993)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(991)),Box::new(Term::N(991)))),Box::new(Term::N(992)))))))),Box::new(Term::Sub(Box::new(Term::N(994)),Box::new(Term::N(994)))))))),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(994)),Box::new(Term::N(994)))),Box::new(Term::N(995)))),Box::new(Term::Add(Box::new(Term::N(995)),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(992)),Box::new(Term::N(992)))),Box::new(Term::Sub(Box::new(Term::N(992)),Box::new(Term::N(992)))))),Box::new(Term::Add(Box::new(Term::N(993)),Box::new(Term::Sub(Box::new(Term::N(992)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(990)),Box::new(Term::N(990)))),Box::new(Term::N(991)))))))))))))))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(996)),Box::new(Term::N(996)))),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(993)),Box::new(Term::N(993)))),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(990)),Box::new(Term::Add(Box::new(Term::N(989)),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(987)),Box::new(Term::Add(Box::new(Term::N(986)),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(982)),Box::new(Term::Add(Box::new(Term::N(981)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(978)),Box::new(Term::Sub(Box::new(Term::N(977)),Box::new(Term::N(977)))))),Box::new(Term::Add(Box::new(Term::N(978)),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(976)),Box::new(Term::N(976)))),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(975)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(972)),Box::new(Term::N(972)))),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(971)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(969)),Box::new(Term::Add(Box::new(Term::N(968)),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(965)),Box::new(Term::Add(Box::new(Term::N(964)),Box::new(Term::N(964)))))),Box::new(Term::Add(Box::new(Term::N(965)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(959)),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(956)),Box::new(Term::N(956)))),Box::new(Term::Sub(Box::new(Term::N(956)),Box::new(Term::N(956)))))),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(955)),Box::new(Term::N(955)))),Box::new(Term::N(956)))),Box::new(Term::N(957)))))))),Box::new(Term::Sub(Box::new(Term::N(959)),Box::new(Term::N(959)))))),Box::new(Term::N(961)))),Box::new(Term::Add(Box::new(Term::N(961)),Box::new(Term::N(961)))))),Box::new(Term::N(963)))),Box::new(Term::N(964)))))))),Box::new(Term::N(967)))))))),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(966)),Box::new(Term::Sub(Box::new(Term::N(965)),Box::new(Term::N(965)))))),Box::new(Term::Add(Box::new(Term::N(966)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(962)),Box::new(Term::N(962)))),Box::new(Term::N(963)))),Box::new(Term::N(964)))),Box::new(Term::N(965)))))))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(966)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(964)),Box::new(Term::N(964)))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(963)),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(961)),Box::new(Term::N(961)))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(960)),Box::new(Term::N(960)))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(959)),Box::new(Term::Sub(Box::new(Term::N(958)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(953)),Box::new(Term::N(953)))),Box::new(Term::N(954)))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(953)),Box::new(Term::N(953)))),Box::new(Term::N(954)))))),Box::new(Term::Add(Box::new(Term::N(955)),Box::new(Term::Sub(Box::new(Term::N(954)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(952)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(949)),Box::new(Term::N(949)))),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(944)),Box::new(Term::N(944)))),Box::new(Term::N(945)))),Box::new(Term::N(946)))),Box::new(Term::N(947)))),Box::new(Term::N(948)))),Box::new(Term::N(949)))))),Box::new(Term::N(951)))))),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(950)),Box::new(Term::Sub(Box::new(Term::N(949)),Box::new(Term::N(949)))))),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(949)),Box::new(Term::N(949)))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(947)),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(943)),Box::new(Term::Sub(Box::new(Term::N(942)),Box::new(Term::Sub(Box::new(Term::N(941)),Box::new(Term::N(941)))))))),Box::new(Term::N(944)))),Box::new(Term::N(945)))),Box::new(Term::N(946)))))),Box::new(Term::N(948)))),Box::new(Term::N(949)))))))),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(949)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(947)),Box::new(Term::N(947)))),Box::new(Term::N(948)))))),Box::new(Term::Sub(Box::new(Term::N(949)),Box::new(Term::Add(Box::new(Term::N(948)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(946)),Box::new(Term::Add(Box::new(Term::N(945)),Box::new(Term::N(945)))))),Box::new(Term::N(947)))))))))),Box::new(Term::Sub(Box::new(Term::N(950)),Box::new(Term::N(950)))))))))))))))),Box::new(Term::Add(Box::new(Term::N(956)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(954)),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(952)),Box::new(Term::N(952)))),Box::new(Term::Add(Box::new(Term::N(952)),Box::new(Term::N(952)))))))),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(951)),Box::new(Term::Add(Box::new(Term::N(950)),Box::new(Term::Sub(Box::new(Term::N(949)),Box::new(Term::Sub(Box::new(Term::N(948)),Box::new(Term::N(948)))))))))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(948)),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(946)),Box::new(Term::Sub(Box::new(Term::N(945)),Box::new(Term::Add(Box::new(Term::N(944)),Box::new(Term::N(944)))))))),Box::new(Term::N(947)))))),Box::new(Term::N(949)))),Box::new(Term::N(950)))),Box::new(Term::N(951)))))),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(950)),Box::new(Term::Add(Box::new(Term::N(949)),Box::new(Term::N(949)))))),Box::new(Term::N(951)))),Box::new(Term::N(952)))))),Box::new(Term::N(954)))))))))))))),Box::new(Term::N(960)))))))))),Box::new(Term::N(964)))))))),Box::new(Term::N(967)))))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(967)),Box::new(Term::N(967)))),Box::new(Term::N(968)))))))))),Box::new(Term::N(972)))))),Box::new(Term::Sub(Box::new(Term::N(973)),Box::new(Term::N(973)))))))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(974)),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(972)),Box::new(Term::Sub(Box::new(Term::N(971)),Box::new(Term::N(971)))))),Box::new(Term::N(973)))))),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(972)),Box::new(Term::N(972)))),Box::new(Term::N(973)))),Box::new(Term::N(974)))))))))))))),Box::new(Term::N(980)))))))),Box::new(Term::N(983)))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(981)),Box::new(Term::N(981)))),Box::new(Term::Add(Box::new(Term::N(981)),Box::new(Term::N(981)))))),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(980)),Box::new(Term::N(980)))),Box::new(Term::N(981)))),Box::new(Term::N(982)))))))),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(980)),Box::new(Term::N(980)))),Box::new(Term::N(981)))),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(979)),Box::new(Term::Sub(Box::new(Term::N(978)),Box::new(Term::N(978)))))),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(977)),Box::new(Term::Add(Box::new(Term::N(976)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(974)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(971)),Box::new(Term::Sub(Box::new(Term::Sub(Box::new(Term::N(969)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(965)),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(961)),Box::new(Term::N(961)))),Box::new(Term::Sub(Box::new(Term::N(961)),Box::new(Term::N(961)))))),Box::new(Term::N(963)))),Box::new(Term::N(964)))))),Box::new(Term::Add(Box::new(Term::N(965)),Box::new(Term::N(965)))))),Box::new(Term::N(967)))),Box::new(Term::N(968)))))),Box::new(Term::N(970)))))),Box::new(Term::Sub(Box::new(Term::N(971)),Box::new(Term::N(971)))))),Box::new(Term::N(973)))))),Box::new(Term::N(975)))))))),Box::new(Term::N(978)))),Box::new(Term::N(979)))))),Box::new(Term::N(981)))))),Box::new(Term::N(983)))),Box::new(Term::Sub(Box::new(Term::Add(Box::new(Term::N(982)),Box::new(Term::N(982)))),Box::new(Term::Sub(Box::new(Term::N(982)),Box::new(Term::N(982)))))))))))))),Box::new(Term::N(988)))))))),Box::new(Term::Sub(Box::new(Term::N(990)),Box::new(Term::N(990)))))),Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::Add(Box::new(Term::N(987)),Box::new(Term::Add(Box::new(Term::Sub(Box::new(Term::N(985)),Box::new(Term::Add(Box::new(Term::N(984)),Box::new(Term::N(984)))))),Box::new(Term::N(986)))))),Box::new(Term::N(988)))),Box::new(Term::N(989)))),Box::new(Term::N(990)))),Box::new(Term::N(991)))))),Box::new(Term::N(993)))))),Box::new(Term::N(995)))),Box::new(Term::N(996)))))))
+}
 
 #[bench]
 fn bench_interp(b: &mut Bencher) {
-  let p = parse(PROG).unwrap();
+  let p = parse(PROG_STR).unwrap();
   b.iter(|| interp(&p))
 }
 
 #[bench]
 fn bench_vm(b: &mut Bencher) {
-  let p = compile(&parse(PROG).unwrap());
+  let p = compile(&parse(PROG_STR).unwrap());
   b.iter(|| run(&p))
 }
 
 #[bench]
 fn bench_jit(b: &mut Bencher) {
-  let fun = jit_code(&compile_machine(&parse(PROG).unwrap()));
+  let fun = jit_code(&compile_machine(&parse(PROG_STR).unwrap()));
+  b.iter(|| fun())
+}
+
+#[bench]
+fn bench_partial_eval(b: &mut Bencher) {
+  let fun = partial_eval(&parse(PROG_STR).unwrap());
+  b.iter(|| fun())
+}
+
+#[bench]
+fn bench_interp_static(b: &mut Bencher) {
+  let p = build_prog();
+  b.iter(|| interp(&p))
+}
+
+#[bench]
+fn bench_vm_static(b: &mut Bencher) {
+  let p = compile(&build_prog());
+  b.iter(|| run(&p))
+}
+
+#[bench]
+fn bench_jit_static(b: &mut Bencher) {
+  let fun = jit_code(&compile_machine(&build_prog()));
+  b.iter(|| fun())
+}
+
+#[bench]
+fn bench_partial_eval_static(b: &mut Bencher) {
+  let fun = partial_eval(&build_prog());
   b.iter(|| fun())
 }
 
@@ -337,15 +402,18 @@ fn test() {
                   0x04, 0x24, 0x58, 0x48, 0x29, 0x04, 0x24, 0x58, 0xc3],
              compile_machine(&p));
   assert_eq!(2, jit_code(&compile_machine(&p))());
+  assert_eq!(2, partial_eval(&p)());
 }
 
 fn main() {
-  unsafe {
-    srand(time(std::ptr::null()));
-  }
+  // unsafe {
+  //   srand(time(std::ptr::null()));
+  // }
 
-  let program = gen(1000);
-  println!("{}", program);
+  // let program = gen(1000);
+  // println!("{}", program);
+
+  println!("{}", print_term(&parse(PROG_STR).unwrap()));
 
   // let mut input = String::new();
   // io::stdin().read_line(&mut input).unwrap();
