@@ -93,7 +93,6 @@ fn emulate(code: &[u8]) -> u64 {
               v |= (code[pc] as u64) << (8 * b);
               pc += 1;
             }
-            println!("rcx {}", v);
             rcx = v;
           },
 
