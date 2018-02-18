@@ -9,25 +9,117 @@ extern {
   fn memset(s: *mut libc::c_void, c: libc::uint32_t, n: libc::size_t) -> *mut libc::c_void;
 }
 
+use std::io;
+use std::str::FromStr;
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Parser
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+enum Term {
+  N(usize),
+  Add(Box<Term>, Box<Term>),
+  Sub(Box<Term>, Box<Term>),
+}
+
+#[derive(Clone, Debug)]
+enum ParseError {
+  Unexpected(String),
+  ParseNumError(std::num::ParseIntError),
+}
+
+struct TokenStream<'a> {
+  tokens: Vec<&'a str>,
+  index: usize,
+}
+
+impl<'a> TokenStream<'a> {
+  fn new(tokens: Vec<&'a str>) -> Self {
+    TokenStream {
+      tokens: tokens,
+      index: 0,
+    }
+  }
+
+  fn advance(&mut self) -> &str {
+    let t = self.tokens[self.index];
+    self.index += 1;
+    t
+  }
+
+  fn peek(&self) -> &str {
+    self.tokens[self.index]
+  }
+
+  fn expect(&mut self, s: &str) -> Result<(), ParseError> {
+    let t = self.advance();
+    if t == s {
+      Ok(())
+    } else {
+      Err(ParseError::Unexpected(format!("Expected {}, got {}", s, t)))
+    }
+  }
+}
+
+fn parse(input: &str) -> Result<Term, ParseError> {
+  let t1 = input.replace("(", " ( ");
+  let t2 = t1.replace(")", " ) ");
+  let t3 = t2.split(" ")
+    .filter(|s| s.len() > 0)
+    .collect();
+  parse_expr(&mut TokenStream::new(t3))
+}
+
+fn parse_expr(t: &mut TokenStream) -> Result<Term, ParseError> {
+  if t.peek() == "(" {
+    t.expect("(")?;
+    let p = parse_op(t);
+    t.expect(")")?;
+    p
+  } else {
+    parse_num(t)
+  }
+}
+
+fn parse_op(t: &mut TokenStream) -> Result<Term, ParseError> {
+  // Ahemmm..
+  match t.advance().to_string().as_str() {
+    "+" => {
+      let a = parse_expr(t)?;
+      let b = parse_expr(t)?;
+      Ok(Term::Add(Box::new(a), Box::new(b)))
+    },
+    "-" => {
+      let a = parse_expr(t)?;
+      let b = parse_expr(t)?;
+      Ok(Term::Sub(Box::new(a), Box::new(b)))
+    },
+    x => Err(ParseError::Unexpected(format!("Expected '+' or '-', got {}", x))),
+  }
+}
+
+fn parse_num(t: &mut TokenStream) -> Result<Term, ParseError> {
+  match usize::from_str(t.advance()) {
+    Ok(n) => Ok(Term::N(n)),
+    Err(e) => Err(ParseError::ParseNumError(e)),
+  }
+}
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Term interpreter
 
-#[derive(PartialEq, Eq, Clone, Debug)]
-enum Term<'a> {
-  N(usize),
-  Add(&'a Term<'a>, &'a Term<'a>),
-  Sub(&'a Term<'a>, &'a Term<'a>),
-}
-
 type Value = usize;
 
-fn interp<'a>(t: &Term<'a>) -> Value {
-  match *t {
-    Term::N(n)      => n,
-    Term::Add(a, b) => interp(a) + interp(b),
-    Term::Sub(a, b) => interp(a) - interp(b),
+fn interp<'a>(t: &Term) -> Value {
+  match t {
+    &Term::N(n)      => n,
+    &Term::Add(ref a, ref b) => interp(a) + interp(b),
+    &Term::Sub(ref a, ref b) => interp(a) - interp(b),
   }
 }
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Bytecode compiler and interpreter
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug)]
 enum Op {
@@ -36,22 +128,19 @@ enum Op {
   Sub,
 }
 
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Bytecode compiler and interpreter
-
 type Bytecode = Vec<Op>;
 
-fn compile<'a>(t: &Term<'a>) -> Bytecode {
+fn compile<'a>(t: &Term) -> Bytecode {
   let mut bc = Vec::new();
 
-  match *t {
-    Term::N(n)      => bc.push(Op::N(n)),
-    Term::Add(a, b) => {
+  match t {
+    &Term::N(n)      => bc.push(Op::N(n)),
+    &Term::Add(ref a, ref b) => {
       bc.append(&mut compile(a));
       bc.append(&mut compile(b));
       bc.push(Op::Add)
     },
-    Term::Sub(a, b) => {
+    &Term::Sub(ref a, ref b) => {
       bc.append(&mut compile(a));
       bc.append(&mut compile(b));
       bc.push(Op::Sub)
@@ -186,7 +275,7 @@ use test::Bencher;
 fn bench_interp(b: &mut Bencher) {
   use Term::*;
 
-  let p = Sub(&N(5), &Add(&N(1), &N(2)));
+  let p = Sub(Box::new(N(5)), Box::new(Add(Box::new(N(1)), Box::new(N(2)))));
   b.iter(|| interp(&p))
 }
 
@@ -194,7 +283,7 @@ fn bench_interp(b: &mut Bencher) {
 fn bench_vm(b: &mut Bencher) {
   use Term::*;
 
-  let p = compile(&Sub(&N(5), &Add(&N(1), &N(2))));
+  let p = compile(&Sub(Box::new(N(5)), Box::new(Add(Box::new(N(1)), Box::new(N(2))))));
   b.iter(|| run(&p))
 }
 
@@ -202,29 +291,28 @@ fn bench_vm(b: &mut Bencher) {
 fn bench_jit(b: &mut Bencher) {
   use Term::*;
 
-  let fun = jit_code(&compile_machine(&Sub(&N(5), &Add(&N(1), &N(2)))));
+  let fun = jit_code(&compile_machine(&Sub(Box::new(N(5)), Box::new(Add(Box::new(N(1)), Box::new(N(2)))))));
   b.iter(|| fun())
 }
 
-fn main() {
+#[test]
+fn test() {
   use Term::*;
 
-  {
-    let p = Add(&N(1), &N(2));
-    println!("{}", interp(&p));
-    println!("{:?}", compile(&p));
-    println!("{}", run(&compile(&p)));
-    println!("{}", print_machine_code(&compile_machine(&p)));
-    println!("{}", jit_code(&compile_machine(&p))());
-  }
+  let p = parse("(- 5 (+ 1 2))").unwrap();
+  assert_eq!(Sub(Box::new(N(5)), Box::new(Add(Box::new(N(1)), Box::new(N(2))))), p);
+  assert_eq!(2, interp(&p));
+  assert_eq!(vec![Op::N(5), Op::N(1), Op::N(2), Op::Add, Op::Sub], compile(&p));
+  assert_eq!(2, run(&compile(&p)));
+  assert_eq!(vec![0x6a, 0x05, 0x6a, 0x01, 0x6a, 0x02, 0x58, 0x48, 0x01,
+                  0x04, 0x24, 0x58, 0x48, 0x29, 0x04, 0x24, 0x58, 0xc3],
+             compile_machine(&p));
+  assert_eq!(2, jit_code(&compile_machine(&p))());
+}
 
-  {
-    let p = Sub(&N(5), &Add(&N(1), &N(2)));
-    println!("{}", interp(&p));
-    println!("{:?}", compile(&p));
-    println!("{}", run(&compile(&p)));
-    println!("{}", print_machine_code(&compile_machine(&p)));
-    println!("{}", jit_code(&compile_machine(&p))());
-  }
-
+fn main() {
+  let mut input = String::new();
+  io::stdin().read_line(&mut input).unwrap();
+  let program = parse(&input).unwrap();
+  println!("{}", jit_code(&compile_machine(&program))());
 }
