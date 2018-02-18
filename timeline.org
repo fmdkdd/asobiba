@@ -13573,3 +13573,47 @@ calls which need to add the #' back.  Once that is done, then the original macro
 call in ~with-eval-after-load~ works as expected.
 
 Tricky!
+
+* [2018-02-18 dim.]
+** Comparing interpreter/VM and JIT                                  :jit:vm:
+On a simple language of arithmetic expressions.  Triggered by [[https://xavierleroy.org/mpri/2-4/machines.pdf][this course]] that
+states that we should usually get the following ratios:
+
+: interp: 25
+: vm    :  5
+: jit   :  1
+
+Here are the results I got on a reasonably long expression.  Without
+optimizations:
+
+: test bench_interp ... bench:       8,448 ns/iter (+/- 102)
+: test bench_vm     ... bench:      64,889 ns/iter (+/- 5,917)
+: test bench_jit    ... bench:         410 ns/iter (+/- 12)
+
+With optimizations:
+
+: test bench_interp ... bench:       4,030 ns/iter (+/- 138)
+: test bench_vm     ... bench:       4,165 ns/iter (+/- 104)
+: test bench_jit    ... bench:         362 ns/iter (+/- 3)
+
+Ratios for the optimized version are:
+
+: interp: 11
+: vm    : 12
+: jit   :  1
+
+I was surprised by the VM trash performance compared to the interpreter,
+especially without optimizations.  At first I was worried the compiler would
+take my expression and unroll the interpreter code for that specific program.
+
+I added a parser to construct the expression program from a string, and the
+ratios are the same.
+
+So, at best, it seems the VM is still less performant than the interpreter.
+
+The JIT does not benefit much from optimizations, which is to be expected.  If
+we actually optimized the generated machine code, it would just output a
+constant.
+
+It would be interesting to see how these numbers compare for a more complex
+language.

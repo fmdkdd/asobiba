@@ -7,10 +7,14 @@ extern crate libc;
 
 extern {
   fn memset(s: *mut libc::c_void, c: libc::uint32_t, n: libc::size_t) -> *mut libc::c_void;
+  fn rand() -> isize;
+  fn srand(seed: usize);
+  fn time(tloc: *const usize) -> usize;
 }
 
 use std::io;
 use std::str::FromStr;
+use std::fmt::Display;
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Parser
@@ -22,10 +26,20 @@ enum Term {
   Sub(Box<Term>, Box<Term>),
 }
 
+impl Display for Term {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result<> {
+    match self {
+      &Term::N(n) => write!(f, "{}", n),
+      &Term::Add(ref a, ref b) => write!(f, "(+ {} {})", a, b),
+      &Term::Sub(ref a, ref b) => write!(f, "(- {} {})", a, b),
+    }
+  }
+}
+
 #[derive(Clone, Debug)]
 enum ParseError {
   Unexpected(String),
-  ParseNumError(std::num::ParseIntError),
+  ParseNumError(String),
 }
 
 struct TokenStream<'a> {
@@ -99,9 +113,28 @@ fn parse_op(t: &mut TokenStream) -> Result<Term, ParseError> {
 }
 
 fn parse_num(t: &mut TokenStream) -> Result<Term, ParseError> {
-  match usize::from_str(t.advance()) {
+  let n = t.advance();
+  match usize::from_str(n) {
     Ok(n) => Ok(Term::N(n)),
-    Err(e) => Err(ParseError::ParseNumError(e)),
+    Err(_) => Err(ParseError::ParseNumError(format!("Can't parse num {}", n))),
+  }
+}
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Generate random somewhat long term
+
+fn gen(depth: usize) -> Term {
+  let n = unsafe {
+    rand()
+  };
+
+  let d = depth - 1;
+
+  match n % 4 {
+    0 | 1 => Term::N(d),
+    2 => Term::Add(Box::new(gen(d)), Box::new(gen(d))),
+    3 => Term::Sub(Box::new(gen(d)), Box::new(gen(d))),
+    _ => unreachable!(),
   }
 }
 
@@ -113,8 +146,8 @@ type Value = usize;
 fn interp<'a>(t: &Term) -> Value {
   match t {
     &Term::N(n)      => n,
-    &Term::Add(ref a, ref b) => interp(a) + interp(b),
-    &Term::Sub(ref a, ref b) => interp(a) - interp(b),
+    &Term::Add(ref a, ref b) => interp(a).wrapping_add(interp(b)),
+    &Term::Sub(ref a, ref b) => interp(a).wrapping_sub(interp(b)),
   }
 }
 
@@ -159,12 +192,12 @@ fn run(b: &Bytecode) -> Value {
       Op::Add  => {
         let b = stack.pop().unwrap();
         let a = stack.pop().unwrap();
-        stack.push(a + b);
+        stack.push(a.wrapping_add(b));
       },
       Op::Sub  => {
         let b = stack.pop().unwrap();
         let a = stack.pop().unwrap();
-        stack.push(a - b);
+        stack.push(a.wrapping_sub(b));
       }
     }
   }
@@ -271,27 +304,23 @@ fn print_machine_code(code: &[u8]) -> String {
 
 use test::Bencher;
 
+const PROG : &'static str = r#"(- (+ (+ 996 (+ (+ (+ (+ (- (- (- 989 (+ 988 (- 987 (+ 986 986)))) (- (+ (+ (- (+ (- 984 984) (- (- (+ (- (+ 980 (+ 979 (+ 978 (+ 977 977)))) (+ (- 979 979) 980)) 982) 983) (+ (+ 982 982) 983))) (- 985 (- (+ 983 (- 982 982)) (+ 983 (- (+ (- (- 979 (- 978 978)) (- (- 978 978) (- 978 978))) 981) (- (- 980 980) (- 980 980))))))) (+ (- (+ (+ 983 (+ 982 (+ 981 (+ 980 980)))) (- 983 (+ 982 982))) 985) (+ 985 985))) (- 987 987)) (+ 988 (- (+ 986 986) (- (+ (- 984 984) 985) 986))))) 991) (+ 991 (- (- (+ (+ 987 987) (- 987 987)) 989) 990))) (+ 992 (+ 991 (+ (+ (- 988 (+ (- 986 986) (+ (+ 985 (- (+ (+ 982 (- 981 981)) 983) (- 983 983))) (- 985 (- 984 984))))) 989) 990)))) (- 993 (- (+ 991 991) 992))) (- 994 994))) (+ (- (- 994 994) 995) (+ 995 (+ (- (+ 992 992) (- 992 992)) (+ 993 (- 992 (+ (+ 990 990) 991))))))) (+ (+ 996 996) (- (+ (- (+ 993 993) (- (+ (- (- 990 (+ 989 (+ (- 987 (+ 986 (- (- (- (- 982 (+ 981 (- (+ (- 978 (- 977 977)) (+ 978 (+ (- 976 976) (+ (- 975 (+ (+ (+ 972 972) (- (- 971 (+ (+ 969 (+ 968 (- (- (- 965 (+ 964 964)) (+ 965 (- (+ (+ (+ (- (- 959 (+ (- (- 956 956) (- 956 956)) (+ (- (- 955 955) 956) 957))) (- 959 959)) 961) (+ 961 961)) 963) 964))) 967))) (- (+ (- (+ 966 (- 965 965)) (+ 966 (+ (+ (+ (+ 962 962) 963) 964) 965))) (+ (+ 966 (+ (+ 964 964) (+ (+ 963 (+ (- 961 961) (+ (+ 960 960) (+ (+ 959 (- 958 (+ (+ (+ (+ (- 953 953) 954) (+ (+ 953 953) 954)) (+ 955 (- 954 (+ (+ 952 (+ (+ (+ 949 949) (- (- (+ (- (+ (+ 944 944) 945) 946) 947) 948) 949)) 951)) (- (+ (+ 950 (- 949 949)) (- (+ 949 949) (+ (+ (- 947 (- (- (- (+ 943 (- 942 (- 941 941))) 944) 945) 946)) 948) 949))) (+ (- (- 949 (- (+ 947 947) 948)) (- 949 (+ 948 (- (+ 946 (+ 945 945)) 947)))) (- 950 950))))))) (+ 956 (+ (+ 954 (- (- 952 952) (+ 952 952))) (+ (- (- (- 951 (+ 950 (- 949 (- 948 948)))) (+ (+ (+ (+ 948 (+ (- 946 (- 945 (+ 944 944))) 947)) 949) 950) 951)) (+ (- (+ 950 (+ 949 949)) 951) 952)) 954)))))) 960)))) 964))) 967)) (+ (+ 967 967) 968)))) 972)) (- 973 973))) (+ (+ 974 (+ (+ 972 (- 971 971)) 973)) (- (- (+ 972 972) 973) 974)))))) 980))) 983) (+ (+ (+ 981 981) (+ 981 981)) (- (- (+ 980 980) 981) 982))) (- (+ (+ (- (+ 980 980) 981) (- (- (+ 979 (- 978 978)) (- (+ (- 977 (+ 976 (- (+ 974 (- (+ (- 971 (- (- 969 (- (+ (- (+ 965 (- (+ (+ (- 961 961) (- 961 961)) 963) 964)) (+ 965 965)) 967) 968)) 970)) (- 971 971)) 973)) 975))) 978) 979)) 981)) 983) (- (+ 982 982) (- 982 982)))))) 988))) (- 990 990)) (+ (+ (+ (+ (+ 987 (+ (- 985 (+ 984 984)) 986)) 988) 989) 990) 991)) 993)) 995) 996)))"#;
+
 #[bench]
 fn bench_interp(b: &mut Bencher) {
-  use Term::*;
-
-  let p = Sub(Box::new(N(5)), Box::new(Add(Box::new(N(1)), Box::new(N(2)))));
+  let p = parse(PROG).unwrap();
   b.iter(|| interp(&p))
 }
 
 #[bench]
 fn bench_vm(b: &mut Bencher) {
-  use Term::*;
-
-  let p = compile(&Sub(Box::new(N(5)), Box::new(Add(Box::new(N(1)), Box::new(N(2))))));
+  let p = compile(&parse(PROG).unwrap());
   b.iter(|| run(&p))
 }
 
 #[bench]
 fn bench_jit(b: &mut Bencher) {
-  use Term::*;
-
-  let fun = jit_code(&compile_machine(&Sub(Box::new(N(5)), Box::new(Add(Box::new(N(1)), Box::new(N(2)))))));
+  let fun = jit_code(&compile_machine(&parse(PROG).unwrap()));
   b.iter(|| fun())
 }
 
@@ -311,8 +340,15 @@ fn test() {
 }
 
 fn main() {
-  let mut input = String::new();
-  io::stdin().read_line(&mut input).unwrap();
-  let program = parse(&input).unwrap();
-  println!("{}", jit_code(&compile_machine(&program))());
+  unsafe {
+    srand(time(std::ptr::null()));
+  }
+
+  let program = gen(1000);
+  println!("{}", program);
+
+  // let mut input = String::new();
+  // io::stdin().read_line(&mut input).unwrap();
+  // let program = parse(&input).unwrap();
+  // println!("{}", jit_code(&compile_machine(&program))());
 }
