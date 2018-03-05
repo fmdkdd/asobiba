@@ -42,16 +42,16 @@ function init() {
   shelf_canvas.canvas.height = n_books_per_shelf * 2
   shelf_canvas.ctxt = shelf_canvas.canvas.getContext('2d', {alpha: false})
   shelf_canvas.ctxt.lineWidth = 2
-  shelf_canvas.ctxt.fillStyle = '#ffffff'
-  shelf_canvas.ctxt.strokeStyle = '#8888bb'
+  shelf_canvas.ctxt.fillStyle = '#fff'
+  shelf_canvas.ctxt.strokeStyle = '#88f'
 
   quality_canvas.canvas = document.getElementById('quality')
   quality_canvas.canvas.width = 200
   quality_canvas.canvas.height = 200
   quality_canvas.ctxt = quality_canvas.canvas.getContext('2d', {alpha: false})
   quality_canvas.ctxt.lineWidth = 2
-  quality_canvas.ctxt.fillStyle = '#ffffff'
-  quality_canvas.ctxt.strokeStyle = '#88bb88'
+  quality_canvas.ctxt.fillStyle = '#fff'
+  quality_canvas.ctxt.strokeStyle = '#8d8'
 }
 
 function loop() {
@@ -63,14 +63,16 @@ function loop() {
 
 function sim() {
   // Take one random book from a random shelf
-  let s = Math.floor(Math.random() * (shelves.length - 2)) + 1
-  let b = Math.floor(Math.random() * (shelves[s].length - 1))
+  let s = rand_weighted(shelves.slice(1).map(s => s.length)) + 1
+  // Lower quality books are more likely to be given away
+  let b = rand_weighted(shelves[s].map(b => 1 - qualities[b]))
   shelves[0].push(shelves[s][b])
   shelves[s].splice(b, 1)
 
   // Push one random book to a random shelf
-  s = Math.floor(Math.random() * (shelves.length - 2)) + 1
-  b = Math.floor(Math.random() * (shelves[0].length - 1))
+  s = rand_weighted(shelves.slice(1).map(s => -s.length)) + 1
+  // Higher quality books are more likely to be taken away
+  b = rand_weighted(shelves[0].map(b => qualities[b]))
   shelves[s].push(shelves[0][b])
   shelves[0].splice(b, 1)
 }
@@ -85,20 +87,20 @@ function refresh() {
   let ctxt = shelf_canvas.ctxt
   let canvas = shelf_canvas.canvas
   ctxt.fillRect(0,0,canvas.width,canvas.height)
-  const mid = canvas.height / 2
+  let mid = canvas.height / 2
   for (let x=0; x < shelves.length; ++x) {
     ctxt.beginPath()
     ctxt.moveTo(x*2+1, mid)
-    ctxt.lineTo(x*2+1, shelves[x].length - n_books_per_shelf + mid)
+    ctxt.lineTo(x*2+1, mid - (shelves[x].length - n_books_per_shelf))
     ctxt.stroke()
   }
 
   // Total quality on shared shelf
-  const total_quality = shelves[0].reduce((a,v) => a + qualities[v], 0)
-  document.getElementById('total-quality').innerHTML = total_quality
+  const q0 = shelves[0].reduce((a,v) => a + qualities[v], 0)
+  document.getElementById('total-quality').innerHTML = Math.round(q0)
 
   // Quality over time
-  quality_ring[quality_idx] = total_quality
+  quality_ring[quality_idx] = q0
   quality_idx = (quality_idx + 1) % quality_ring.length
 
   ctxt = quality_canvas.ctxt
@@ -110,4 +112,32 @@ function refresh() {
     ctxt.lineTo(x*2, canvas.height - Math.floor(quality_ring[(quality_idx + x) % quality_ring.length]))
   }
   ctxt.stroke()
+
+  mid = canvas.height / 2
+  for (let x=0; x < shelves.length; ++x) {
+    const q = shelves[x].reduce((a,v) => a + qualities[v], 0)
+    ctxt.beginPath()
+    ctxt.moveTo(x*2+1, mid)
+    ctxt.lineTo(x*2+1, mid - (q - q0))
+    ctxt.stroke()
+  }
+}
+
+// Return a random index from an array of weights
+function rand_weighted(weights) {
+  // Sum all weights
+  const sum = weights.reduce((a,v) => a + v)
+
+  // Make an array of probabilities that sum to 1
+  const probs = weights.map(w => w / sum)
+
+  // Make a wheel of fortune from the successive probs
+  let running_prob = 0
+  const wheel = probs.map(p => running_prob += p)
+
+  // Pick a number!
+  const n = Math.random()
+
+  // Find the the number in the wheel, and return its index
+  return wheel.findIndex(p => n < p)
 }
