@@ -13655,3 +13655,29 @@ interpreter than on the closure returned by the partial evaluator.
 
 But the JIT is still one order of magnitude faster, and that's by generating
 straightforward machine code.  No optimizations in there.
+
+* [2018-03-05 lun.]
+** Testing an hypothesis on shared books                                :sim:
+Someone put up a shelf at the school where people are supposed to leave books
+for others to take.  It has been a while now, and I can see that some books
+leave, while some stay.  It got me thinking: will this shelf, in the long run,
+contain only books that no-one want?  Or, at the least, will the quality of
+books decline and plateau?  Or does the quality of books it contains fluctuate
+over time?
+
+If we model books as positive integers, the shelf and people can both be seen as
+a lists of numbers (books).  A person taking a book from the shared shelf is
+then equivalent to moving a number from one list to another.  Furthermore, we
+can assign a quality as a real number from 0 to 1 to each book.  Over time, if
+people randomly exchange books with the shared shelf, then, what happens?
+
+There are quite a few variables involved:
+
+- The number of books.  In real life this is not constant, but increasing.
+- The number of people.  Same as above.
+- The probability of taking a book from the self.
+- The probability of leaving a book on the self.
+- The distribution of book qualities
+
+The probabilities of taking or leaving a book can be unique to each (person,
+book) couple, modeling individual preferences.
