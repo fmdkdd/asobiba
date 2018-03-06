@@ -3,7 +3,7 @@ extern crate nil_checker;
 use nil_checker::parser::TokenStream;
 
 fn main() {
-      let mut t = TokenStream::new(r#"
+  let mut t = TokenStream::new(r#"
 (defun flycheck-command-checker-print-doc (checker)
   "Print additional documentation for a command CHECKER."
   (let ((executable (flycheck-checker-default-executable checker))

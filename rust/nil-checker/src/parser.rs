@@ -98,9 +98,12 @@ impl<'a> TokenStream<'a> {
   }
 
   fn expect(&mut self, c: char) {
+    let pos = self.input.pos_of_next_char;
     match self.input.next() {
-      None                        => panic!("Expected '{}' but found end of input instead"),
-      Some(actual) if actual != c => panic!("Expected '{}' but found '{}' instead", c, actual),
+      None                        => panic!("{}:{}: Expected '{}' but found end of input instead",
+                                            pos.line, pos.column, c),
+      Some(actual) if actual != c => panic!("{}:{}: Expected '{}' but found '{}' instead",
+                                            pos.line, pos.column, c, actual),
       _                           => {},
     }
   }
@@ -161,16 +164,19 @@ impl<'a> TokenStream<'a> {
       // Have to put that there because self.input is borrowed in the match
       // above
       let mut next = self.input.next().unwrap();
+      let pos = self.input.pos_of_next_char;
 
       // Backslash escapes the next character
       if next == '\\' {
         match self.input.peek() {
-          None        => panic!("Unterminated string literal"),
+          None        => panic!("{}:{}: Unterminated string literal",
+                                pos.line, pos.column),
           Some(&'"')  => next = '"',
           Some(&'n')  => next = '\n',
           Some(&'t')  => next = '\t',
           Some(&'\\') => next = '\\',
-          Some(c)     => panic!("Invalid escape character: '{}'", c),
+          Some(c)     => panic!("{}:{}: Invalid escape character: '{}'",
+                                pos.line, pos.column, c),
         }
         // Discard the character after the backslash
         self.input.next();
@@ -212,7 +218,9 @@ impl<'a> TokenStream<'a> {
       // above
       s.push(self.input.next().unwrap());
     }
-    s.parse::<i64>().expect(&format!("Failed to parse decimal number: '{}'", s))
+    let pos = self.input.pos_of_next_char;
+    s.parse::<i64>().expect(&format!("{}:{}: Failed to parse decimal number: '{}'",
+                                     pos.line, pos.column, s))
   }
 
   fn read_identifier(&mut self) -> String {
@@ -372,7 +380,10 @@ impl<'a> Parser<'a> {
   fn expect(&mut self, kind: &TokenKind) -> Token {
     let t = self.input.next();
     if t.kind != *kind  {
-      panic!("Expected token '{:?}', but got '{:?}'", kind, t.kind);
+      panic!("{}:{}-{}:{}: Expected token '{:?}', but got '{:?}'",
+             t.start.line, t.start.column,
+             t.end.line, t.end.column,
+             kind, t.kind);
     }
     t
   }
@@ -386,7 +397,10 @@ impl<'a> Parser<'a> {
         end: token.end,
       }
     } else {
-      panic!("Expected number, got '{:?}'", token.kind);
+      panic!("{}:{}-{}:{}: Expected number, got '{:?}'",
+             token.start.line, token.start.column,
+             token.end.line, token.end.column,
+             token.kind);
     }
   }
 
@@ -399,7 +413,10 @@ impl<'a> Parser<'a> {
         end: token.end,
       }
     } else {
-      panic!("Expected string, got '{:?}'", token.kind);
+      panic!("{}:{}-{}:{}: Expected string, got '{:?}'",
+             token.start.line, token.start.column,
+             token.end.line, token.end.column,
+             token.kind);
     }
   }
 
@@ -412,7 +429,10 @@ impl<'a> Parser<'a> {
         end: token.end,
       }
     } else {
-      panic!("Expected string, got '{:?}'", token.kind);
+      panic!("{}:{}-{}:{}: Expected string, got '{:?}'",
+             token.start.line, token.start.column,
+             token.end.line, token.end.column,
+             token.kind);
     }
   }
 
@@ -458,7 +478,10 @@ impl<'a> Parser<'a> {
         end: end,
       }
     } else {
-      panic!("Expected comment, got '{:?}'", first_comment.kind);
+      panic!("{}:{}-{}:{}: Expected comment, got '{:?}'",
+             first_comment.start.line, first_comment.start.column,
+             first_comment.end.line, first_comment.end.column,
+             first_comment.kind);
     }
   }
 
@@ -485,8 +508,8 @@ impl<'a> Parser<'a> {
   fn parse_node(&mut self) -> Node {
     use self::TokenKind::*;
 
-    let kind = self.input.peek().kind.clone();
-    match kind {
+    let token = self.input.peek().clone();
+    match token.kind {
       LeftParen  => self.parse_sexp(),
       Backquote  => self.parse_operator(&Backquote),
       Quote      => self.parse_operator(&Quote),
@@ -496,7 +519,9 @@ impl<'a> Parser<'a> {
       String(_)  => self.parse_string(),
       Ident(_)   => self.parse_symbol(),
       Number(_)  => self.parse_number(),
-      _          => panic!("Unexpected token: '{:?}'", kind),
+      _          => panic!("{}:{}-{}:{}: Unexpected token: '{:?}'",
+                           token.start.line, token.start.column,
+                           token.end.line, token.end.column, token.kind),
     }
   }
 }
