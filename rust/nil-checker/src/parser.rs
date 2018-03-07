@@ -157,13 +157,13 @@ impl<'a> TokenStream<'a> {
     let mut s = String::new();
     loop {
       match self.input.peek() {
-        None                         => return s,
-        Some(&'"')                   => break,
-        Some(_)                      => {},
+        None       => return s,
+        Some(&'"') => break,
+        Some(_)    => {},
       }
       // Have to put that there because self.input is borrowed in the match
       // above
-      let mut next = self.input.next().unwrap();
+      let next = self.input.next().unwrap();
       let pos = self.input.pos_of_next_char;
 
       // Backslash escapes the next character
@@ -171,17 +171,20 @@ impl<'a> TokenStream<'a> {
         match self.input.peek() {
           None        => panic!("{}:{}: Unterminated string literal",
                                 pos.line, pos.column),
-          Some(&'"')  => next = '"',
-          Some(&'n')  => next = '\n',
-          Some(&'t')  => next = '\t',
-          Some(&'\\') => next = '\\',
+          Some(&'"')      => s.push('"'),
+          Some(&'n')      => s.push('\n'),
+          Some(&'t')      => s.push('\t'),
+          Some(&'r')      => s.push('\r'),
+          Some(&'\\')     => s.push('\\'),
+          Some(&'(')      => s.push('('),
+          Some(&')')      => s.push(')'),
+          Some(&'\u{0a}') => (), // newline
           Some(c)     => panic!("{}:{}: Invalid escape character: '{}'",
                                 pos.line, pos.column, c),
         }
         // Discard the character after the backslash
         self.input.next();
       }
-      s.push(next);
     }
     // Discard end quote
     self.expect('"');
@@ -295,15 +298,15 @@ impl<'a> TokenStream<'a> {
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct ParseTree {
-  root: Vec<Node>,
-  symbol_table: Vec<String>,
+  pub roots: Vec<Node>,
+  pub symbol_table: Vec<String>,
 }
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Node {
-  kind: NodeKind,
-  start: TextPosition,
-  end: TextPosition,
+  pub kind: NodeKind,
+  pub start: TextPosition,
+  pub end: TextPosition,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -362,7 +365,7 @@ impl<'a> Parser<'a> {
     }
 
     ParseTree {
-      root: nodes,
+      roots: nodes,
       symbol_table: symbol_vector,
     }
   }
@@ -614,7 +617,7 @@ def"#);
   fn parse_atom() {
     let mut p = Parser::new("atom");
     let t = p.parse();
-    assert_eq!(t.root, vec![
+    assert_eq!(t.roots, vec![
       Node {
         kind  : NodeKind::Symbol(0),
         start : TextPosition { pos: 0, line: 1, column: 0 },
@@ -645,7 +648,7 @@ def"#);
         start : TextPosition { pos: 0, line: 1, column: 0 },
         end   : TextPosition { pos: 7, line: 1, column: 7 },
       },
-    ], t.root);
+    ], t.roots);
   }
 
   #[test]
@@ -656,7 +659,7 @@ def"#);
     assert_eq!(vec!["foo", "a"], t.symbol_table);
 
     // Check symbols first
-    if let NodeKind::Sexp(ref nodes) = t.root[0].kind {
+    if let NodeKind::Sexp(ref nodes) = t.roots[0].kind {
       assert_eq!(NodeKind::Symbol(0), nodes[0].kind);
       assert_eq!(NodeKind::Symbol(1), nodes[1].kind);
       assert_eq!(NodeKind::Symbol(0), nodes[2].kind);
@@ -691,7 +694,7 @@ def"#);
         start : TextPosition { pos: 0,  line: 1, column: 0  },
         end   : TextPosition { pos: 12, line: 1, column: 12 },
       },
-    ], t.root);
+    ], t.roots);
   }
 
   #[test]
@@ -734,7 +737,7 @@ atom
         start : TextPosition { pos: 18, line: 3, column: 0 },
         end   : TextPosition { pos: 21, line: 3, column: 3 },
       },
-    ], t.root);
+    ], t.roots);
   }
 
   #[test]
@@ -751,9 +754,9 @@ atom
 
     assert_eq!(vec!["foo", "a"], t.symbol_table);
 
-    println!("{:?}", t.root[0].kind);
+    println!("{:?}", t.roots[0].kind);
 
-    if let NodeKind::Sexp(ref nodes) = t.root[0].kind {
+    if let NodeKind::Sexp(ref nodes) = t.roots[0].kind {
       assert_eq!(NodeKind::Symbol(0), nodes[0].kind);
       if let NodeKind::Backquote(ref quoted) = nodes[1].kind {
         if let NodeKind::Sexp(ref quoted_sexp) = quoted.kind {
