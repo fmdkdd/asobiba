@@ -10,18 +10,18 @@ struct Constraint {
 }
 
 struct Checker<'a> {
-  parseTree: &'a ParseTree,
+  parse_tree: &'a ParseTree,
 }
 
 impl<'a> Checker<'a> {
   fn new(p: &'a ParseTree) -> Self {
     Checker {
-      parseTree: p,
+      parse_tree: p,
     }
   }
 
   fn emit(&self) -> Vec<Constraint> {
-    self.parseTree.roots.iter().flat_map(Self::emit_node).collect()
+    self.parse_tree.roots.iter().flat_map(Self::emit_node).collect()
   }
 
   // Emit type constraints
