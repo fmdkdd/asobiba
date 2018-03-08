@@ -157,7 +157,9 @@ impl<'a> TokenStream<'a> {
     let mut s = String::new();
     loop {
       match self.input.peek() {
-        None       => return s,
+        None       => panic!("{}:{}: Unterminated string literal (EOF)",
+                             self.input.pos_of_next_char.line,
+                             self.input.pos_of_next_char.column),
         Some(&'"') => break,
         Some(_)    => {},
       }
@@ -169,7 +171,7 @@ impl<'a> TokenStream<'a> {
       // Backslash escapes the next character
       if next == '\\' {
         match self.input.peek() {
-          None        => panic!("{}:{}: Unterminated string literal",
+          None        => panic!("{}:{}: Unterminated string literal (EOF)",
                                 pos.line, pos.column),
           Some(&'"')      => s.push('"'),
           Some(&'n')      => s.push('\n'),
@@ -604,6 +606,11 @@ b" "#);
     }
   }
 
+  #[test]
+  #[should_panic]
+  fn error_unterminated_string() {
+    let mut t = TokenStream::new(r#" " "#);
+    t.next();
   }
 
   #[test]
