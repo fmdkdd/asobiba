@@ -184,6 +184,8 @@ impl<'a> TokenStream<'a> {
         }
         // Discard the character after the backslash
         self.input.next();
+      } else {
+        s.push(next);
       }
     }
     // Discard end quote
@@ -594,6 +596,14 @@ docstring"
       let mut t = TokenStream::new(r#" "a\nb" "#);
       assert_eq!(TokenKind::String("a\nb".to_string()), t.next().kind);
     }
+
+    {
+      let mut t = TokenStream::new(r#" "a\
+b" "#);
+      assert_eq!(TokenKind::String("ab".to_string()), t.next().kind);
+    }
+  }
+
   }
 
   #[test]
