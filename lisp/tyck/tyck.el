@@ -159,7 +159,7 @@ MSG and ARGS are passed to `format'."
   "Return the type of EXPR, a Lisp expression."
   (let ((env (copy-hash-table tyck-default-env))
         (constraints))
-    (list (tyck-type (macroexpand-all expr) env constraints)
+    (list (tyck-type expr env constraints)
           env
           constraints)))
 

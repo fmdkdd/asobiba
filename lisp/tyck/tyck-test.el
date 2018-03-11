@@ -14,7 +14,11 @@
 (defmacro tyck-type-test (name &rest body)
   "Define an ERT test NAME.
 
-Expect TYPE to be equal to the inferred type of EXPR."
+BODY is a list of clauses to be tested, each clause can be of the
+form:
+
+  (ok TYPE EXPR)  assert that EXPR has the inferred type TYPE
+  (err EXPR)      assert that EXPR cannot be typed"
   (declare (indent 1))
   `(ert-deftest ,name ()
      ,@(mapcar (lambda (b)
@@ -53,8 +57,14 @@ Expect TYPE to be equal to the inferred type of EXPR."
 (tyck-type-test if
   (ok (string list) (if 0 "a" (list))))
 
-(tyck-type-test macro
-  (ok (number unit) (when t 1)))
+(ert-deftest macro ()
+  :expected-result :failed
+  (should (equal '(number unit) (tyck-type-of '(when t 1)))))
+
+(tyck-type-test defun
+  (ok (fun (number number) number)
+      (defun foo (a b)
+        (+ a b))))
 
 (provide 'tyck-test)
 ;;; tyck-test.el ends here
