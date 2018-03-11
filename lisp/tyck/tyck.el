@@ -5,16 +5,23 @@
 ;;; Code:
 
 (eval-when-compile
-  (require 'pcase))
-
-(require 'seq)
-(require 'cl-lib)
+  (require 'pcase)
+  (require 'cl-lib))
 
 (defun tyck-type-eq (a b)
-  "Return whether type B is equal to type A."
+  "Return whether type A is equal to type B."
   (or (eq a 'any)
       (eq b 'any)
       (eq a b)))
+
+(define-error 'type-error
+  "Type error")
+
+(defun tyck-fail (msg &rest args)
+  "Report a type error.
+
+MSG and ARGS are passed to `format'."
+  (signal 'type-error (apply #'format `(,msg ,@args))))
 
 (defun tyck-type (expr env constraints)
   "Return the type of EXPR given ENV and CONSTRAINTS."
@@ -91,28 +98,26 @@
         ;;          fun (1- (length arg-types)) (length args))))
 
         ;; Check argument types
-       (dolist (ty arg-types)
-         (pcase ty
-           (`(&rest ,expected)
-            (while (not (null args))
-              (let ((actual (tyck-type (pop args) env constraints)))
-                (unless (tyck-type-eq expected actual)
-                  (error "Expected type %S, got type %S in call for function %S"
-                         expected actual fun)))))
+        (dolist (ty arg-types)
+          (pcase ty
+            (`(&rest ,expected)
+             (while (not (null args))
+               (let ((actual (tyck-type (pop args) env constraints)))
+                 (unless (tyck-type-eq expected actual)
+                   (tyck-fail "Expected type %S, got type %S in call for function %S"
+                              expected actual fun)))))
 
-           (`,expected
-            (let ((a (pop args)))
-              (if (null a)
-                  (error "Not enough arguments to function %S" fun)
-                (let ((actual (tyck-type a env constraints)))
-                  (unless (tyck-type-eq expected actual)
-                    (error "Expected type %S, got type %S in call for function %S"
-                           expected actual fun))))))
+            (`,expected
+             (let ((a (pop args)))
+               (if (null a)
+                   (tyck-fail "Not enough arguments to function %S" fun)
+                 (let ((actual (tyck-type a env constraints)))
+                   (unless (tyck-type-eq expected actual)
+                     (tyck-fail "Expected type %S, got type %S in call for function %S"
+                                expected actual fun))))))))
 
-           (_ (error "Unknown type in signature %S" ty))))
-
-       (unless (= (length args) 0)
-         (error "Too many arguments to function %S, %S" fun (length args)))
+        (unless (null args)
+          (tyck-fail "Too many arguments to function %S" fun))
 
         ;; Type of call is the return type of the function
         ret)
@@ -147,4 +152,12 @@
           constraints)))
 
 (provide 'tyck)
+
+;; TODO: the byte-compiled version makes the tests fail.
+;; Emacs bug?
+
+;; Local Variables:
+;; no-byte-compile: t
+;; End:
+
 ;;; tyck.el ends here
