@@ -53,5 +53,8 @@ Expect TYPE to be equal to the inferred type of EXPR."
 (tyck-type-test if
   (ok (string list) (if 0 "a" (list))))
 
+(tyck-type-test macro
+  (ok (number unit) (when t 1)))
+
 (provide 'tyck-test)
 ;;; tyck-test.el ends here
