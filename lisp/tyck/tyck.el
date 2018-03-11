@@ -72,6 +72,18 @@ MSG and ARGS are passed to `format'."
            (setq ty (tyck-type b env constraints)))
          ty)))
 
+    (`(if ,cond ,then . ,else)
+     (tyck-type cond env constraints)
+     (let ((then-ty (tyck-type then env constraints))
+           (else-ty 'unit))
+       (dolist (b else)
+         (setq else-ty (tyck-type b env constraints)))
+
+       ;; Type of IF is the union of THEN and ELSE types
+       (if (eq then-ty else-ty)
+           then-ty
+         (list then-ty else-ty))))
+
     ((or
       `(or . ,conds)
       `(and . ,conds))

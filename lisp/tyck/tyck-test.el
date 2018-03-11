@@ -9,7 +9,7 @@
 
 (defun tyck-should-type (type expr)
   "Test that TYPE is the inferred type of EXPR."
-  (should (eq type (car (tyck-type-of expr)))))
+  (should (equal type (car (tyck-type-of expr)))))
 
 (defmacro tyck-type-test (name &rest body)
   "Define an ERT test NAME.
@@ -49,6 +49,9 @@ Expect TYPE to be equal to the inferred type of EXPR."
                (setq list (cdr list))
                (setq i (1+ i)))
              list)))
+
+(tyck-type-test if
+  (ok (string list) (if 0 "a" (list))))
 
 (provide 'tyck-test)
 ;;; tyck-test.el ends here
