@@ -84,6 +84,15 @@ MSG and ARGS are passed to `format'."
            then-ty
          (list then-ty else-ty))))
 
+    (`(defun ,name ,arglist . ,body)
+
+     (let ((ty))
+       (dolist (b body)
+         (setq ty (tyck-type b env constraints)))
+       ty)
+     )
+
+
     ((or
       `(or . ,conds)
       `(and . ,conds))
