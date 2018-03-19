@@ -8,14 +8,24 @@
   (require 'pcase)
   (require 'cl-lib))
 
-(defun tyck-type-eq (a b)
-  "Return whether type A is equal to type B."
-  (or (eq a 'any)
-      (eq b 'any)
-      (eq a b)))
-
 (define-error 'type-error
   "Type error")
+
+(defvar-local tyck--constraints nil)
+
+(defun tyck-type-eq (a b)
+  "Return whether type A is equal to type B."
+  (cond
+   ((eq a 'any) t)
+   ((eq b 'any) t)
+   ((and (listp a) (eq (car a) 'type-var))
+    (cl-pushnew `(= ,a ,b) tyck--constraints :test #'equal)
+    t)
+   ((and (listp b) (eq (car b) 'type-var))
+    (cl-pushnew `(= ,b ,a) tyck--constraints :test #'equal)
+    t)
+   ((eq a b) t)
+   (t nil)))
 
 (defun tyck-fail (msg &rest args)
   "Report a type error.
@@ -23,7 +33,7 @@
 MSG and ARGS are passed to `format'."
   (signal 'type-error (apply #'format `(,msg ,@args))))
 
-(defun tyck-type (expr env constraints)
+(defun tyck-type (expr env)
   "Return the type of EXPR given ENV and CONSTRAINTS."
   (pcase expr
 
@@ -32,30 +42,29 @@ MSG and ARGS are passed to `format'."
     (`(progn . ,bodies)
      (let ((ty))
        (dolist (b bodies)
-         (setq ty (tyck-type b env constraints)))
+         (setq ty (tyck-type b env)))
        ty))
 
     (`(let ,bindings . ,bodies)
-     (progn
-       (let ((newenv (copy-hash-table env)))
+     (let ((newenv (copy-hash-table env)))
 
-         ;; Type bindings
-         (dolist (b bindings)
-           (pcase b
-             (`(,var ,def)
-              (puthash var (tyck-type def env constraints) newenv))
-             (_ (error "Malformed let binding %S" b))))
+       ;; Type bindings
+       (dolist (b bindings)
+         (pcase b
+           (`(,var ,def)
+            (puthash var (tyck-type def env) newenv))
+           (_ (error "Malformed let binding %S" b))))
 
-         ;; Return type is the type of the last body
-         ;; TODO: we could desugar that into a progn
-         (let ((ty))
-           (dolist (b bodies)
-             (setq ty (tyck-type b newenv constraints)))
-           ty))))
+       ;; Return type is the type of the last body
+       ;; TODO: we could desugar that into a progn
+       (let ((ty))
+         (dolist (b bodies)
+           (setq ty (tyck-type b newenv)))
+         ty)))
 
     (`(setq ,sym ,val)
      ;; TODO: handle multiple affectations
-     (let ((ty (tyck-type val env constraints)))
+     (let ((ty (tyck-type val env)))
        (puthash sym ty env)
        ty))
 
@@ -63,42 +72,57 @@ MSG and ARGS are passed to `format'."
      (progn
        ;; Type of cond doesn't really matter, only for side effects (like changing
        ;; types in the environment), or type errors.
-       (tyck-type cond env constraints)
+       (tyck-type cond env)
 
        ;; Return type is the type of the last body
        ;; TODO: could desugar into progn
        (let ((ty))
          (dolist (b bodies)
-           (setq ty (tyck-type b env constraints)))
+           (setq ty (tyck-type b env)))
          ty)))
 
     (`(if ,cond ,then . ,else)
-     (tyck-type cond env constraints)
-     (let ((then-ty (tyck-type then env constraints))
+     (tyck-type cond env)
+     (let ((then-ty (tyck-type then env))
            (else-ty 'unit))
        (dolist (b else)
-         (setq else-ty (tyck-type b env constraints)))
+         (setq else-ty (tyck-type b env)))
 
        ;; Type of IF is the union of THEN and ELSE types
        (if (eq then-ty else-ty)
            then-ty
          (list then-ty else-ty))))
 
-    (`(defun ,name ,arglist . ,body)
+    (`(defun ,name ,arglist . ,bodies)
 
-     (let ((ty))
-       (dolist (b body)
-         (setq ty (tyck-type b env constraints)))
-       ty)
-     )
+     ;; Create a type variable for each argument, and try
+     ;; to type the body with that.
+     (let ((newenv (copy-hash-table env))
+           (arg-types)
+           (return-type))
+       (dolist (arg arglist)
+         (puthash arg (list 'type-var (make-symbol "type-var")) newenv))
 
+       (dolist (b bodies)
+         (setq return-type (tyck-type b newenv)))
+
+       ;; Gather arg types
+
+       (dolist (arg arglist)
+         (push (gethash arg newenv) arg-types))
+
+       ;; Return type is a function from all args to the return type
+       (let ((fun-type `(fun ,(nreverse arg-types) ,return-type)))
+         ;; Populate environment
+         (puthash name fun-type env)
+         fun-type)))
 
     ((or
       `(or . ,conds)
       `(and . ,conds))
      (let ((types))
        (dolist (e conds)
-         (cl-pushnew (tyck-type e env constraints) types))
+         (cl-pushnew (tyck-type e env) types))
        (if (= 1 (length types))
            (car types)
          types)))
@@ -106,7 +130,7 @@ MSG and ARGS are passed to `format'."
     ;; Functions
 
     (`(,fun . ,args)
-     (pcase (tyck-type fun env constraints)
+     (pcase (tyck-type fun env)
        (`(fun ,arg-types ,ret)
 
         ;; TODO: Check arity up front
@@ -123,7 +147,7 @@ MSG and ARGS are passed to `format'."
           (pcase ty
             (`(&rest ,expected)
              (while (not (null args))
-               (let ((actual (tyck-type (pop args) env constraints)))
+               (let ((actual (tyck-type (pop args) env)))
                  (unless (tyck-type-eq expected actual)
                    (tyck-fail "Expected type %S, got type %S in call for function %S"
                               expected actual fun)))))
@@ -132,7 +156,7 @@ MSG and ARGS are passed to `format'."
              (let ((a (pop args)))
                (if (null a)
                    (tyck-fail "Not enough arguments to function %S" fun)
-                 (let ((actual (tyck-type a env constraints)))
+                 (let* ((actual (tyck-type a env)))
                    (unless (tyck-type-eq expected actual)
                      (tyck-fail "Expected type %S, got type %S in call for function %S"
                                 expected actual fun))))))))
@@ -167,10 +191,10 @@ MSG and ARGS are passed to `format'."
 (defun tyck-type-of (expr)
   "Return the type of EXPR, a Lisp expression."
   (let ((env (copy-hash-table tyck-default-env))
-        (constraints))
-    (list (tyck-type expr env constraints)
-          env
-          constraints)))
+        (tyck--constraints nil))
+    (list (tyck-type expr env)
+          ;env
+          tyck--constraints)))
 
 (provide 'tyck)
 
