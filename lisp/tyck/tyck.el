@@ -27,6 +27,52 @@
    ((eq a b) t)
    (t nil)))
 
+(defun tyck-subst1 (a b sym)
+  (if (equal sym a)
+      b
+    sym))
+
+(defun tyck-subst (a b constraints)
+  (mapcar
+   (lambda (cstr)
+     (pcase cstr
+       (`(= ,left ,right)
+        `(= ,(tyck-subst1 a b left)
+            ,(tyck-subst1 a b right)))
+
+       (_ (error "Malformed constraint %S" cstr))))
+   constraints))
+
+(defun tyck-apply-substs (type substs)
+  (let ((result type))
+    (dolist (sub substs)
+      (pcase sub
+        (`(,left -> ,right)
+         (when (eq left type)
+            (setq result right)))
+
+        (_ (error "Malformed substitution %S" sub))))
+    result))
+
+(defun tyck-unify (constraints)
+  (if (null constraints)
+      '()
+    (let ((head (car constraints))
+          (tail (cdr constraints)))
+      (pcase head
+        (`(= ,left ,right)
+
+         (cond
+          ((eq left right)
+           (tyck-unify tail))
+          ((and (listp left) (eq (car left) 'type-var))
+           (cons `(,left -> ,right) (tyck-unify (tyck-subst left right tail))))
+          ((and (listp right) (eq (car right) 'type-var))
+           (cons `(,right -> ,left) (tyck-unify (tyck-subst right left tail))))
+          (t (error "Failed to unify %S" head))))
+
+        (_ (error "Malformed constraints %S" head))))))
+
 (defun tyck-fail (msg &rest args)
   "Report a type error.
 
@@ -101,15 +147,16 @@ MSG and ARGS are passed to `format'."
            (arg-types)
            (return-type))
        (dolist (arg arglist)
-         (puthash arg (list 'type-var (make-symbol "type-var")) newenv))
+         (puthash arg (list 'type-var (make-symbol (symbol-name arg))) newenv))
 
        (dolist (b bodies)
          (setq return-type (tyck-type b newenv)))
 
        ;; Gather arg types
-
        (dolist (arg arglist)
-         (push (gethash arg newenv) arg-types))
+         (push (tyck-apply-substs (gethash arg newenv)
+                                  (tyck-unify tyck--constraints))
+               arg-types))
 
        ;; Return type is a function from all args to the return type
        (let ((fun-type `(fun ,(nreverse arg-types) ,return-type)))
@@ -194,7 +241,7 @@ MSG and ARGS are passed to `format'."
         (tyck--constraints nil))
     (list (tyck-type expr env)
           ;env
-          tyck--constraints)))
+          (tyck-unify tyck--constraints))))
 
 (provide 'tyck)
 

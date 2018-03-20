@@ -66,5 +66,13 @@ form:
       (defun foo (a b)
         (+ a b))))
 
+(tyck-type-test defun-call
+  (ok number (progn
+               (defun foo (a b) (+ a b))
+               (foo 1 2)))
+  (err (progn
+         (defun foo (a b) (+ a b))
+         (foo 1 "b"))))
+
 (provide 'tyck-test)
 ;;; tyck-test.el ends here
