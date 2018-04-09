@@ -4565,7 +4565,7 @@ Then, they take the actual game screenshot, look at the corners again, get the
 pixels, and lookup the hashmap to get the card values back.
 
 Now they know exactly how the cards are laid out, and just need to solve it.
-The solving is not that simple, but the gist of it is a bread search in the
+The solving is not that simple, but the gist of it is a breadth search in the
 solution space, where the goal is to have no cards left in the lower area.
 
 * [2016-11-22 mar.]
