@@ -13681,3 +13681,16 @@ There are quite a few variables involved:
 
 The probabilities of taking or leaving a book can be unique to each (person,
 book) couple, modeling individual preferences.
+
+* [2018-05-04 ven.]
+** Github added HTTPS for custom domains                         :github:dns:
+[[https://blog.github.com/2018-05-01-github-pages-custom-domains-https/][At last!]]
+
+I've simply updated my A records to point to their new IP addresses.  Now I get
+HTTPS and CDN.  No need for Netlify.
+
+I've also added a 301 redirection from www.0xc0de.fr, since using the CNAME
+record breaks SSL.
+
+And since you can enforce redirection to HTTPS, I don't even need to update all
+my URLs!
