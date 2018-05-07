@@ -13694,3 +13694,111 @@ record breaks SSL.
 
 And since you can enforce redirection to HTTPS, I don't even need to update all
 my URLs!
+
+* [2018-05-07 lun.]
+** Running Flycheck integration tests with Docker           :flycheck:docker:
+*** The plan
+So, I've been working on running these damn integration tests on our CI once and
+for all.
+
+My first attempt with a Vagrantfile only allowed us to run the whole suite on
+local machines, not on Travis.
+
+My second attempt, a few weeks ago, was to create an ~install-deps.sh~ script
+that essentially does what the provision script of the Vagrantfile did.  The
+idea would be to use this script on Travis to install all tools, and to use it
+to provision the VM locally.
+
+It's not working as well as I hoped.  Travis has an old 14.04 Ubuntu image, and
+I guess they will stick to it at least until expiration (at least 19.04).  So,
+if I install GHC from that, I get an old version.  If I want a newer one, I must
+ditch the package manager.  If I do that for each tool... the provision script
+becomes a nightmare to maintain.
+
+Ideally, I want to run with /the same tools/ on Travis and locally.  Or at
+least, get a way of reproducing the Travis build locally without too much
+hassle.
+
+Travis does not allow us to run VMs using Vagrant.  However, it does let us run
+Docker images.
+
+If I create a Docker image containing all the tools, then, in theory, Travis
+should be able to pull it and run the integration tests from there.  Then,
+anyone can do the same thing locally.
+
+The upshot is: less mucking with Travis, since the whole CI build would be
+reproducible locally in Docker.  And, of course, integration tests on CI.
+
+I'm afraid that some tools will still be hassle to install on Docker.  However,
+having /some/ integration tests not running on CI is better than /most of them/
+not running.
+
+Now, as I understand it, Docker images are immutable.  That means that once
+built, anyone pulling the image would have the exact same versions of the tools.
+[[*Using%20Docker%20for%20testing%20Flycheck][Initially]], it bugged me.  Having to rebuild the Docker image to update all the
+tools seemed like a hassle.
+
+However, I think it can be a benefit.  Immutable images means that the only
+thing that changes between CI runs is /flycheck/.  If the CI breaks, then it's
+assuredly because of changes in our code.  Fewer false positives (Travis may
+still have some hiccups though).
+
+Then, I /think/ we can run a cron job on Travis to build the image, say, daily
+or weekly.  In that job, we would /also/ run the test suite, and push the new
+versions if everything is green.  If there is a failure, then /we know/ it's
+because of new versions of tools (or Emacs snapshot), and not because of changes
+in Flycheck.
+
+So, the immutability of Docker images will help us seggregate our CI failures.
+
+In order to do all that, I should:
+
+1. Check that Travis can run our Docker image
+2. Check that Travis can /build/ our Docker image and push it to hub
+3. Check that Docker can build an image with all our tools
+
+From what I understand of these technologies, the above should be feasible.
+
+The largest unknown is that I need to run the CI on different Emacs versions.  I
+think it means having as many Docker images as there are Emacs versions, as
+[[https://hub.docker.com/r/silex/emacs/][here]].  Hopefully, there's a way to do that without heavy duplication between
+Dockerfiles.
+
+*** The execution
+[[https://github.com/Silex/docker-emacs][These images]] look like good starts.  They are based on 16.04; I would have
+preferred latest Debian.  We will quickly see if that's an issue.
+
+So, after a few hours of tweaking... it seems the experiment is a success!
+
+Travis can build and run the image just as well as I can locally.  There is no
+difference between the two environments.  Exact same results for ~make integ~.
+
+Since pushing a Docker registry is documented in Travis, I suppose that should
+mostly be a matter of creating an account and following the doc.
+
+The Docker image with around half the tools is 4GB.  Much smaller than the
+20GB VirtualBox VM I had previously.  Startup is quite faster as well, once the
+image is built.
+
+Concerning the multiple Emacs versions, one solution is to have multiple
+Dockerfiles, with one tag per Emacs version (as done in the base
+silex/docker-emacs images).  Of course, only the base tag would change, so we
+can use ~cat~ or something to generate the actual Dockerfiles.
+
+Then build and push that to the hub in a cron job.
+
+There's still work ahead, but so far this solution ticks all the boxes.  The
+only downside so far is having to use 16.04 as base.  But, I'm getting the
+impression that for tools where the latest versions is most commonly used,
+only a rolling release will do.  Even the latest Debian will contain outdated
+Rust and Go versions soon enough.
+
+But basing the whole thing on Arch would require compiling Coq from
+scratch... not a fan.  Verilator didn't work as well.
+
+We'll see how difficult it is to get all the tools in the Dockerfile.
+
+One thing I've noticed is that there are Docker images for many larger tools
+already.  Unfortunately, I cannot include or merge them in mine.  However, I can
+easily lift their instructions for my build.  That saves some time figuring
+these out.
