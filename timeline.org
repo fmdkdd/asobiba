@@ -8888,7 +8888,7 @@ And,
 
 : aplay -l
 
-hang without showing any output.
+hung without showing any output.
 
 This EliteBook laptop does not seem to have any model number marked anywhere.
 
@@ -13802,3 +13802,135 @@ One thing I've noticed is that there are Docker images for many larger tools
 already.  Unfortunately, I cannot include or merge them in mine.  However, I can
 easily lift their instructions for my build.  That saves some time figuring
 these out.
+
+* [2018-05-08 mar.]
+** Fixing Flycheck integration tests                               :flycheck:
+For the longest time, the JS tests have been annoying me by outputting empty
+lines.  I finally pinpointed the culprit: empty ~(message nil)~ calls, which in
+interactive mode will clear the echo area, but in batch will add a newline.
+
+One solution is to set inhibit-message to t.
+
+Using python-flake8 from APT works, but it the version looks a tad out of date.
+
+Using it from pip is better.  However, pylint has some additional errors that
+are truncated by ERT...
+
+#+BEGIN_SRC elisp
+(list-elt 10
+  (array-elt 4
+    (different-atoms ... ...)))
+#+END_SRC
+
+Seriously, how is this useful for debugging?
+
+Found the culprit, in ert-run-tests-batch:
+
+#+BEGIN_SRC elisp
+(let ((print-escape-newlines t)
+      (print-level 10)
+      (print-length 30))
+  (ert--pp-with-indentation-and-newline
+   (ert-test-result-with-condition-condition result)))
+#+END_SRC
+
+This is not even configurable.  You leave me no choice:
+
+#+BEGIN_SRC elisp
+(advice-add 'ert--pp-with-indentation-and-newline :around
+            (lambda (orig &rest args)
+              (let ((print-length nil)
+                    (print-level nil))
+                (apply orig args))))
+#+END_SRC
+
+In the long run, we may want to customize that runner with a nicer
+pretty-printer and color.
+
+But at least, now it doesn't get in the way of fixing bugs.
+
+Argh, spent 10 minutes trying to figure out why the markdown tests where
+suddenly failing with no errors, although they were running fine just a moment
+before.
+
+I added proselint to the Docker image, and proselint has priority in
+markdown-mode if installed.
+
+So two things: first, maybe our tests should make sure that the checker being
+tested is actually the one being run.  Second: proselint should come after
+markdownlint.
+
+* [2018-05-09 mer.]
+** Getting most tools in the Dockerfile                            :flycheck:
+So, yesterday I was at:
+
+: Ran 171 tests, 129 results as expected, 42 skipped
+
+I think I can get that last number down a little.  There are easy picks, and
+then there are largely-used checkers that we need to run tests for.
+
+Obscure checkers that I can't install will have to wait.
+
+Hmm, erlang-rebar3 is behaving mysteriously.  First, checks fail with a very
+strange error name.  Adding debugging statement in Flycheck makes these error
+names disappear.
+
+Then it nearly passes all the tests, it just fails on projects due to the errors
+from other files showing up.  I add these in the expected errors, and now it
+crashes on all tests...
+
+Off you go.
+
+** Multi-stage builds are a game-changing                            :docker:
+[[https://docs.docker.com/develop/develop-images/multistage-build/][Multi-stage builds]] allows one to pull from an image, do whatever you want (e.g.,
+compile these pesky Haskell linters using their own GHC version), then create a
+new container one another image and pull what you want from the first container.
+
+The second container only contains what has been copied, and not all that has
+been installed in the first one.  The first one is completely discarded.
+
+I see at least two ways of exploiting this.  First, it means that I don't need
+to base my Dockerfile containing the tools on the emacs image.  I can base it on
+debian/ubuntu/arch, and install all the tools.  That's it, that's the
+flycheck-tools image.
+
+Then, to run the tests, I build images based on flycheck-tools that extract the
+Emacs installation from the different emacs images by copying /usr/local.
+That's flycheck-tools-emacs25, flycheck-tools-emacs26, etc.
+
+Although, I'm doubtful that I can be based on ubuntu 18.04 and just use an Emacs
+compiled for 16.04.  If the dependencies are not the same, it will likely
+break.  I can easily test it however.
+
+So yes it breaks if I just copy the Emacs binary.  However, I can add a ~FROM
+silex/emacs:25~ at the end (which comes will all the Emacs dependencies) and do
+the reverse: copy the tools, with their eventual runtime dependencies.
+
+If anything breaks, I can use ubuntu:16.04 as the starting image for building
+the tools.  Problem solved.
+
+The second thing I can use multi-stage builds for is to build the final image
+without pip, unzip, gem, etc.  I only need whatever is needed to /run/ the
+tools, and not build them or compile them.  Moreover, it means I don't need to
+be scared of installing multiple GHC versions via stack just for building
+linters.  It will certainly take more time to build the image, but the
+flycheck-tools image is built only once for several Emacs versions, and not for
+each integration test run.
+
+But wait, there is more!  With multi-stage, I can pick /tools/ from existing
+Docker images.  That means I don't even have to waste time build them on the CI,
+and write the commands that do.  Just COPY --from=hadolint.
+
+Okay, so after many hours, I'm still not done, but progressing.
+
+I've opted to ditch the silex:emacs images, as 1) they are built on an old ubuntu,
+2) I need to build Emacs after my flycheck-tools image anyway, and 3) I want a
+lean Emacs binary with few runtime dependencies.
+
+Compiling Emacs is not much more complex than other tools... so it's not a
+hassle.  For bonus points, I can create a lean-emacs image, from which I can
+then pull in a flycheck-integ-test image, which builds on the flycheck-tools
+one.
+
+That way, I never need to update the emacs images of stable releases, just the
+snapshot.
