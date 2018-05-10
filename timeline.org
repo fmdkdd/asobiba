@@ -13934,3 +13934,18 @@ one.
 
 That way, I never need to update the emacs images of stable releases, just the
 snapshot.
+
+* [2018-05-10 jeu.]
+** Running integration tests on several Emacs with Docker   :docker:flycheck:
+It works!
+
+And I didn't even have to generate one Dockerfile per Emacs version using
+templates.  Docker supports variables, on top of environment variables from sh.
+
+There is /one/ downside: older Emacs versions, like 24.5 and 25.1 segfault when
+dumping Emacs.  I've tried with CANNOT_DUMP=yes, and Emacs fails to build.
+
+There is a workaround though: we can install emacs24-nox, as it's still in the
+Ubuntu repositories.  It would just slightly complicate the script.
+
+Maybe building them on Travis will have different results... one can hope.
