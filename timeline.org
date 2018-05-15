@@ -13949,3 +13949,25 @@ There is a workaround though: we can install emacs24-nox, as it's still in the
 Ubuntu repositories.  It would just slightly complicate the script.
 
 Maybe building them on Travis will have different results... one can hope.
+
+* [2018-05-11 ven.]
+** Building Emacs 24.5 with Docker                    :docker:emacs:flycheck:
+So, building them on Travis makes no change.  Somehow, I prefer that, because it
+means using Docker means builds do /behave/ the same on different machines.
+
+But!  24.5 and 24.4 succeed with ubuntu 16:04.  And they can be run under 18:04
+without troubles apparently.  So, I can do that.
+
+* [2018-05-15 mar.]
+** Sound troubles                             :arch:pulseaudio:alsa:timidity:
+So, I plugged speakers into the jack in the back of my PC.  They work fine under
+Windows.  Under Arch... no sound.  Using DeadBeef, I was able to play some sound
+directly using the ALSA device, but not using PulseAudio.
+
+Sound under Linux is very confusing, with ALSA being both a kernel thing and a
+userland tool, and PulseAudio being "on top of ALSA" but somehow also showing in
+~aplay~, ...  Anyway.  After some annoying tracking down and debugging, where
+disabling the HDMI sound card did nothing, turns out the culprit was timidity!
+Installing that steals ALSA, and pulseaudio cannot use it.
+
+The fix is described [[https://wiki.archlinux.org/index.php/Timidity#Daemon][here]].  Now both work.
