@@ -13971,3 +13971,284 @@ disabling the HDMI sound card did nothing, turns out the culprit was timidity!
 Installing that steals ALSA, and pulseaudio cannot use it.
 
 The fix is described [[https://wiki.archlinux.org/index.php/Timidity#Daemon][here]].  Now both work.
+
+* [2018-06-04 lun.]
+** Rationale for writing a book on emulation                 :emulators:book:
+The missing text on how to write an emulator.
+
+I have seen many people asking for help on how to write an emulator.
+
+The topic is enticing.  They want to, partly driven by nostalgia (for older
+systems) or bravado (for the latest ones), partly by the technical challenge.
+There is something magical when finally seeing a game load for the first time,
+after having working on your own emulator for weeks or even months.
+
+But they don't know where to start.
+
+They ask many questions: which platform to emulate?  What programming language
+to use?  What to start emulating, the CPU, the graphics?  Which ROM is the best
+to start with?  Can you test each part independently?  How do you know if the
+emulator is /truely correct/?  How do you know which parts of ROM are code, and
+which are data?
+
+Now, most of the time, people give CHIP8 as answer to the first question.  There
+are tons of tutorials on CHIP8.  The spec is tiny; few instructions,
+straightforward to implement.  Still a full machine.  You get all the thrills of
+writing an emulator with fewer headaches.
+
+But the other questions have no definite answers.  Well, in truth because there
+are no definite answers.  But newbies /need/ definite answers in order to
+progress.  They need solid ground to build upon.  Then, later, when they
+eventually realize that actually it wasn't all that clear-cut and you could have
+done otherwise; it's okay.
+
+So a book providing clear guidelines to follow would be a boon to them.  "I want
+to write an emulator!  -> Follow this book, then come back when you've finished
+it".  The book makes decisions for you, guides you through writing your first
+emulator, and teaches you what you need to emulate other systems.
+
+Now, I do not know everything about emulation.  I've written or helped on a few
+emulators: CHIP8, GB, NES, MD.  All 2D systems from the 8bit to 16bit era.  My
+emulators are not the most accurate, nor the most performant, nor the
+better-tested; my code is not the most modular, nor the most readable, nor the
+best enginereed.  But I've seen enough to guide someone through writing their
+first couple of emulators.
+
+This book is not for everyone.  People who have a background in electrical
+engineering, or in low-level embedded programming, have, I think, fewer
+difficulties jumping into emulator development.  They will grok the technical
+documentation easily, without needing an introduction to how CPU pipelines work,
+or how chips communicate using data lines on a global clock.
+
+Not having an EE background, I spent a lot of time reading the technical
+documentation for early consoles, wrapping my head around how clocks and cycles
+interacted, around the jargon of "level-triggered signals".
+
+There's reading and understanding the technical documentation, and then there's
+implementing it in code.
+
+Knowing what an opcode does or where a data line goes won't immediately give you
+clues as how best to implement them.  There are straightforward ways, then there
+are sophisticated ways.
+
+One tricky, and crucial thing, is timing.  If you don't know how to time the
+overall emulator (emulating all components), you might get no results at all.
+No video or audio feedback.  If, on the other hand, you learn to think correctly
+about timing from the start, you will save you many hours of debugging
+headaches.
+
+Talking about audio.  This is one of the less documented area.  In fact, I'm
+sure many people leave audio out of their first emulator because they have no
+clue about how to implement it.  For video in 2D systems, everyone knows it's a
+2D array of pixels.  You give each pixel a color, you refresh the display 60Hz
+and that's it.  Unlike video, audio has no a universal mental model.
+
+Most people will know sound is made of waves, but that gives them no clue on how
+to emulate the audio chip of a GB.  So having a book that touches every area of
+the system is great.
+
+Now, the system to pick is interesting.  Starting with CHIP8 is a now brainer.
+It's small, but real.  It has many pedagogical virtues.  Unfortunately, it is
+too small to understand how to deal with larger real systems like the GB, the
+NES or the MD.  The CHIP8 CPU has few opcodes, so there's no need for templates
+or macros or code generation.  The CHIP8 audio is a single beep, so no
+opportunity to talk about oscillators, envelopes, LFSR noise, and mixing
+multiple voices.
+
+And of course, real systems are problematic to use in a book due the dubious
+legality of talking about them in technical details.  Patents have expired, but
+copyright hasn't.
+
+Ideally, we want a stepping stone.  A system that has the characteristics of
+real 2D consoles from the 8bit era, without the legal hazard.
+
+I could design a fantasy system, strongly inspired by the consoles of the 8bit
+era.  It would have a CPU with 256 opcodes, a sprites- and tiles-based video
+system, an audio system with pulse channels and even synth channels.
+
+It would have no irregularities, no weird bugs or corner cases, no legal hazard.
+However, it wouldn't be a real system.  People often want to write a GB or NES
+emulator, not to emulate a fantasy system they have never heard of.  And more
+importantly, a fantasy system would have /no games written for it/.
+
+Testing different games and making sure the emulator runs more and more of them
+is an interesting aspect of emulator development.  This fantasy system would
+have none of that.  Unless of course I, or other people, also write a game
+catalogue for it.  But this is probably out of my time budget for this project.
+
+And it's harder to convince people to read and use the book if what they really
+want is a guide for writing a /GB/ emulator specifically.
+
+* [2018-06-05 mar.]
+** In search of legal systems to emulate                    :emulators:boook:
+So, [[https://www.nintendo.com/corp/legal.jsp][Nintendo's position on emulation]] is rather straightforward:
+
+#+BEGIN_QUOTE
+How Does Nintendo Feel About the Emergence of Video Game Emulators?
+
+The introduction of emulators created to play illegally copied Nintendo software
+represents the greatest threat to date to the intellectual property rights of
+video game developers. As is the case with any business or industry, when its
+products become available for free, the revenue stream supporting that industry
+is threatened. Such emulators have the potential to significantly damage a
+worldwide entertainment software industry which generates over $15 billion
+annually, and tens of thousands of jobs.
+
+What Does Nintendo Think of the Argument that Emulators are Actually Good for
+Nintendo Because it Promotes the Nintendo Brand to PC Users and Leads to More
+Sales?
+
+Distribution of an emulator developed to play illegally copied Nintendo software
+hurts Nintendo's goodwill, the millions of dollars invested in research &
+development and marketing by Nintendo and its licensees. Substantial damages are
+caused to Nintendo and its licensees. It is irrelevant whether or not someone
+profits from the distribution of an emulator. The emulator promotes the play of
+illegal ROMs , NOT authentic games. Thus, not only does it not lead to more
+sales, it has the opposite effect and purpose.
+
+How Come Nintendo Does Not Take Steps Towards Legitimizing Nintendo Emulators?
+
+Emulators developed to play illegally copied Nintendo software promote
+piracy. That's like asking why doesn't Nintendo legitimize piracy. It doesn't
+make any business sense. It's that simple and not open to debate.
+#+END_QUOTE
+
+Needless to say, I'm not writing a book on how to build emulators for Nintendo
+consoles in this climate.
+
+
+[[https://www.pcgamer.com/the-ethics-of-emulation-how-creators-the-community-and-the-law-view-console-emulators/][This article]] seems to resume the current status of the legality of writing
+emulators.  Basically: reverse engineering is protected under fair use.  So, if
+you can prove all your code was obtained by reverse engineering the hardware,
+you are fine.  As of now.  Under US copyright law.
+
+If you have looked at the code of other emulators... then you better show that
+to the best of your knowledge, this code was obtained purely by
+reverse-engineering.  That's more tricky of course, since emulators are seldom
+written in a vacuum.
+
+If you have looked at official code that is running on the console, and directly
+copied that, then that's clear-cut copyright violation.
+
+So, what about going off documentation?
+
+The article states that writing code from official copyrighted documentation is
+illegal.  Dolphin emulator writers have a policy of not using anything which
+looks remotely close to being obtained through illegal channels.  Better safe
+than sorry I guess.
+
+But this does not seem to follow from copyright law as described.  US copyright
+law clearly states (as reminded in the article) that procedures and processes are
+not copyrightable.  Only their expression is protected.
+
+#+BEGIN_QUOTE
+in no case does copyright protection for an original work of authorship extend
+to any idea, procedure, process, system, method of operation, concept,
+principle, or discovery, regardless of the form in which it is described,
+explained, illustrated, or embodied in such work."
+#+END_QUOTE
+
+So, if you read a document that describes how VRAM is initialized in a certain
+system that's clearly a process.  When you translate that into code, there are
+many equivalent ways to do the initalization.  Maybe one of them will look like
+the expression of the process in the document.  But others may be completely
+different.  It might be hard to convince a judge of this distinction, but at
+least you have a solution in this case.
+
+I guess also that verbatim copying of any large part of protected documentation
+is a bad idea.
+
+On the other hand, with a document that was written after reverse-engineering
+the system you should be clear.  Well, of course, that document is also
+protected by copyright, and its owners can sue you.  To my knowledge, not many
+documents describing the workings of the GB/NES/MD have a permissive license.
+The authors freely shared them, and compiled from other such document, because
+that is part of the culture.  Explicit waiving of copyright was probably seen as
+unnecessary.  But such is the world we live in.
+
+[[https://www.afjv.com/news/5894_technique-et-legalite-des-emulateurs-de-jeux-video.htm][This article]] on French copyright and emulation is rather bleak.  French
+copyright law has the same exception on reverse engineering, but only if you are
+a "legitimate user of the system", and the reverse engineering was done "for
+interoperability purposes".  Intellectual curiosity does not seem to be in
+scope.
+
+The [[https://www.legifrance.gouv.fr/affichCodeArticle.do;jsessionid=51628CBF73CDA8A9F7F54DFE28625FE5.tplgfr40s_2?cidTexte=LEGITEXT000006069414&idArticle=LEGIARTI000006278919&dateTexte=20180605&categorieLien=cid#LEGIARTI000006278919][L122-6 article]] itself is preposterous.  The way I read it, and unless
+there's an exception somewhere, all reproductions of a software falls under
+copyright.  Downloading, loading in memory and execution are /explicitely/
+mentioned.  So, without a proper license grant from the owner, even downloading
+some binary is illegal.  Same for the source code.
+
+Ah but it seems there's indeed an exception when the acts (of downloading,
+executing, etc.) are made for the purpose of using the software:
+
+#+BEGIN_QUOTE
+Les actes prévus aux 1° et 2° de l'article L. 122-6 ne sont pas soumis à
+l'autorisation de l'auteur lorsqu'ils sont nécessaires pour permettre
+l'utilisation du logiciel, conformément à sa destination, par la personne ayant
+le droit de l'utiliser, y compris pour corriger des erreurs.
+#+END_QUOTE
+
+That's [[https://www.legifrance.gouv.fr/affichCodeArticle.do;jsessionid=51628CBF73CDA8A9F7F54DFE28625FE5.tplgfr40s_2?cidTexte=LEGITEXT000006069414&idArticle=LEGIARTI000028345224&dateTexte=20180605&categorieLien=cid#LEGIARTI000028345224][L122-6-1]].
+
+And oh well that's interesting:
+
+#+BEGIN_QUOTE
+La personne ayant le droit d'utiliser le logiciel peut sans l'autorisation de
+l'auteur observer, étudier ou tester le fonctionnement ou la sécurité de ce
+logiciel afin de déterminer les idées et principes qui sont à la base de
+n'importe quel élément du logiciel lorsqu'elle effectue toute opération de
+chargement, d'affichage, d'exécution, de transmission ou de stockage du logiciel
+qu'elle est en droit d'effectuer.
+#+END_QUOTE
+
+That seems to allow reverse engineering with the only constraint being that you
+are... allowed to do it?  Presumably, it's okay unless you have agreed to a EULA
+that forbids it.
+
+Not sure how EULAs apply to second-hand hardware.  If I get my NES from the flea
+market, there are no EULAs.  Plug, put cartridge, play.  So according to that,
+I'm free to take it apart and reverse engineer how everything works down to the
+atom, without asking anyone's permission.
+
+But!  There's more:
+
+#+BEGIN_QUOTE
+La reproduction du code du logiciel ou la traduction de la forme de ce code
+n'est pas soumise à l'autorisation de l'auteur lorsque la reproduction ou la
+traduction au sens du 1° ou du 2° de l'article L. 122-6 est indispensable pour
+obtenir les informations nécessaires à l'interopérabilité d'un logiciel créé de
+façon indépendante avec d'autres logiciels, sous réserve que soient réunies les
+conditions suivantes :
+
+[very narrow set of restrictions follow]
+#+END_QUOTE
+
+That's what the article above was referring to.  But I do not agree this applies
+to reverse engineering.  It clearly states that it applies to /the reproduction
+or translation of the code/.  I.e., exact reproduction of the object code or
+direct translations of it in other languages is illegal, but reverse engineering
+is the behavior without lifting the code is.
+
+Since reverse engineering is legal, documents created from reverse engineering
+surely are not tainted.  Copyright does apply to /their/ verbatim reproduction,
+but, again, I can't see how taking the info and processes from documentation and
+expressing them in code can be considered copyright infringement.  At very best,
+it falls under patent law, but patents before 1998 have all expired.
+
+So, I understand that looking at official documentation is frowned upon, but my
+interpretation is that unless parts of the code can be shown to be exactly as
+expressed in the documentation, it does not fall under copyright.  It may fall
+under patent law, but for older systems, that is not an issue.
+
+Also, intention matters.  Commercial distribution of a competing product would
+be judged quite differently than pedagogical material.
+
+** Related work                                              :emulators:book:
+While looking for the legality status of emulation, I found [[https://jeux.developpez.com/tutoriels/programmer-emulateur-console/][a very thorough
+tutorial on writing a CHIP8 emulator]].  In French, curiously.
+
+Also the [[https://github.com/chip16/chip16][CHIP16 specification]] could be a good fit for a first system.  The audio
+is ADSR, closer to what the GB has, but without the quirks.  Since it's a
+community project, there are already several games that have been written for
+it.  And no legal hazard, although the specification has no explicitly license,
+but it's not a behemoth with an army of lawyers.
