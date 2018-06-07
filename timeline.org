@@ -14252,3 +14252,35 @@ is ADSR, closer to what the GB has, but without the quirks.  Since it's a
 community project, there are already several games that have been written for
 it.  And no legal hazard, although the specification has no explicitly license,
 but it's not a behemoth with an army of lawyers.
+
+* [2018-06-07 jeu.]
+** Adding an UI to the GYM player                             :gym:emulation:
+I wanted to toy with FFT to make a visualizer for each channel of audio for the
+GYM player.
+
+Spent a lot of time setting up imGui with SDL, but got it working.
+
+Unfortunately, the way I'm generating the audio to play is not adequate to
+visualization.  I'm emulating the GYM data as fast as possible, and queuing the
+audio samples to SDL.
+
+When the emulation is done, I just wait with usleep(100) until the queue is
+empty.  Since I've added an UI, I'm doing all that work in a separate thread.
+
+But this is not very useful for debugging.  For instance, I can lift code from
+megado to show the PSG registers.  The UI refreshes at 60Hz, but the emulating
+45sec of audio is done in 5sec.  Looking at the registers this is not very
+telling.
+
+And, since I'm queuing audio to SDL, there is no way to get the audio back.
+
+I could modify the playing function to generate enough samples for 16ms, and
+show the state of that, more or less like it is done in megado.  But it would
+make timing the audio trickier than before.
+
+I found another, arguably better use of imGui for the YM2612 and PSG: a sound
+generator!  I can make buttons send commands to the sound chip registers, and
+expirement with them.
+
+This requires continuously emulating the sound chips, but at least I'll know
+from the start this time.
