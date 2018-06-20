@@ -14284,3 +14284,39 @@ expirement with them.
 
 This requires continuously emulating the sound chips, but at least I'll know
 from the start this time.
+
+* [2018-06-20 mer.]
+** Looking into the lsp-java situation                     :lsp:java:eclipse:
+Can I ditch Eclipse for editing and browsing Java code?
+
+I'm fairly sure that even the LSP won't contain everything that Eclipse is able
+to do, so I think the best solution for me would to have an Emacs plugin that is
+able to talk to a running GUI Eclipse which I can use as a fallback when things
+go south.
+
+If I can do most of my editing and browsing in Emacs, than that's already a
+win.  I'll probably have to use Eclipse for debugging and so on, but that's
+okay.  As long as I don't have to suffer the inferior editing and terrible
+window management of Eclipse...
+
+*** lsp-java
+First contender.  Setup is easy enough.  Navigation with
+~lsp-goto-type-definition~ doesn't seem to work, but ~xref-find-definitions~
+does.
+
+Navigation breaks when trying to jump to things that are not in the types which
+are not in the current project however.
+
+lsp-ui is a mess, putting overlays all over the place, and even in other
+buffers...
+
+The project does not build correctly (probably that jdt-lsp thing is not able to
+build Eclipse plugins?).
+
+Browsing javadoc on types and methods is barebones.
+
+At this point, I feel the LSP is just slightly better than GNU Global, because
+the latter is not able to make the difference between a variable and a method of
+the same name (which is to say, it isn't better than grep).
+
+The situation is dire.
