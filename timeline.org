@@ -14320,3 +14320,26 @@ the latter is not able to make the difference between a variable and a method of
 the same name (which is to say, it isn't better than grep).
 
 The situation is dire.
+
+* [2018-06-21 jeu.]
+** Working on YM2612 toy and envelope                         :ym2612:megado:
+Well, adding the YM2612 registers to the sound toy was easy.  I got a nice kick
+out of it.
+
+But then I found out that the envelope was still not properly emulated... which
+greatly limits the possibilities!
+
+So I tried to remedy that.  But then I remember why it's such a pain in the
+neck: the information is scattered /everywhere/.  There is no single document
+gathering the workings of the YM2612 internals.  The best place to look is in
+other emu source code, which kind of defeat the purpose.  And it's full of weird
+corner cases and bugs, like sometimes there's a cut-off value at 62 and nobody
+knows why, but that's the behavior of the chip.  And I don't even know if
+whether the corner case has a noticeable impact on the sound or not.
+
+What's fun is when you take the documentation and try to implement based on
+that.  So, I have an idea of how to implement an ADSR envelope based on the
+counters that you can specify in the YM2612.  But then the doc never mentions
+precise timing for how fast the attack phase should increment the sound.  So I
+tweak constants until I find something that approximates what it should sound
+like.  This I can do.
