@@ -12,13 +12,12 @@ extern crate strfmt;
 mod parser;
 
 use docopt::Docopt;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::io::{BufRead, BufReader, BufWriter};
 use std::fs::File;
 use std::str::FromStr;
-use strfmt::strfmt;
 
-use parser::{Mnemonic, ParsedOpcode, ParsedOperand};
+use parser::{Condition, Mnemonic, ParsedOpcode, ParsedOperand};
 
 #[derive(Debug)]
 enum ArgType {
@@ -74,188 +73,192 @@ fn emit_disassembler<W>(ops: &[ParsedOpcode], writer: &mut W) where W : std::io:
   }
 }
 
-// Used for function name
-fn emit_full_arg(arg: &Option<ParsedOperand>) -> String {
-  use ParsedOperand::*;
 
-  match arg {
-    &Some(Bit(b)) => format!("b_{}", b),
-    &Some(Register(ref src)) => format!("{}", src).to_lowercase(),
-    &Some(Immediate) => format!("n"),
-    &Some(ImmediateExtended) => format!("nn"),
-    &Some(ZeroPage(n)) => format!("z_{}", n),
-    &Some(AddressRelative) => format!("reladd"),
-    &Some(AddressImmediate) => format!("immadd"),
-    &Some(AddressExtended) => format!("extadd"),
-    &Some(AddressIndexed(ref src)) => format!("{}_d", src).to_lowercase(),
-    &Some(AddressRegister(ref src)) => format!("{}_ind", src).to_lowercase(),
-    &Some(Conditional(ref cond)) => format!("{:?}", cond).to_lowercase(),
+mod func_utils {
+  use parser::ParsedOperand;
 
-    &None => "".to_string(),
+  // Used for function name
+  pub fn label(arg: &Option<ParsedOperand>) -> String {
+    use ParsedOperand::*;
 
-    _ => unreachable!(),
+    match arg {
+      &Some(Bit(b)) => format!("b_{}", b),
+      &Some(Register(ref src)) => format!("{}", src).to_lowercase(),
+      &Some(Immediate) => format!("n"),
+      &Some(ImmediateExtended) => format!("nn"),
+      &Some(ZeroPage(n)) => format!("z_{}", n),
+      &Some(AddressRelative) => format!("reladd"),
+      &Some(AddressImmediate) => format!("immadd"),
+      &Some(AddressExtended) => format!("extadd"),
+      &Some(AddressIndexed(ref src)) => format!("{}_d", src).to_lowercase(),
+      &Some(AddressRegister(ref src)) => format!("{}_ind", src).to_lowercase(),
+      &Some(Conditional(ref cond)) => format!("{:?}", cond).to_lowercase(),
+
+      &None => "".to_string(),
+
+      _ => unreachable!(),
+    }
   }
-}
 
-// Used for reading the operand
-fn emit_src_arg(arg: &Option<ParsedOperand>) -> String {
-  use ParsedOperand::*;
+  // Used for reading the operand
+  pub fn read(arg: &Option<ParsedOperand>) -> String {
+    use ParsedOperand::*;
 
-  let decl = "uint16_t src =";
+    let decl = "uint16_t src =";
 
-  match arg {
-    &Some(Bit(b)) => format!("{} {}", decl, b),
-    &Some(Register(ref src)) => format!("{} z->{}", decl, src).to_lowercase(),
-    &Some(Immediate) => format!("{} z->pc++", decl),
-    &Some(ImmediateExtended) => format!(r#"uint16_t lo = z->pc++;
+    match arg {
+      &Some(Bit(b)) => format!("{} {}", decl, b),
+      &Some(Register(ref src)) => format!("{} z->{}", decl, src).to_lowercase(),
+      &Some(Immediate) => format!("{} z->pc++", decl),
+      &Some(ImmediateExtended) => format!(r#"uint16_t lo = z->pc++;
   uint16_t hi = z->pc++;
   {} hi << 8 | lo;"#, decl),
-    &Some(ZeroPage(n)) => format!("{} = z->ram[{}]", decl, n),
-    &Some(AddressRelative) => format!(r#"int8_t dis = z->pc++;
+      &Some(ZeroPage(n)) => format!("{} = z->ram[{}]", decl, n),
+      &Some(AddressRelative) => format!(r#"int8_t dis = z->pc++;
   {} z->ram[z->pc + dis]"#, decl),
-    &Some(AddressImmediate) => format!("{} = z->ram[z->pc++]", decl),
-    &Some(AddressExtended) => format!(r#"uint16_t lo = z->pc++;
+      &Some(AddressImmediate) => format!("{} = z->ram[z->pc++]", decl),
+      &Some(AddressExtended) => format!(r#"uint16_t lo = z->pc++;
   uint16_t hi = z->pc++;
   {} z->ram[hi << 8 | lo]"#, decl),
-    &Some(AddressIndexed(ref src)) => format!("{} z->ram[z->{} + (int8_t) z->pc++]",
-                                              decl, src).to_lowercase(),
-    &Some(AddressRegister(ref src)) => format!("{} z->{}", decl, src).to_lowercase(),
+      &Some(AddressIndexed(ref src)) => format!("{} z->ram[z->{} + (int8_t) z->pc++]",
+                                                decl, src).to_lowercase(),
+      &Some(AddressRegister(ref src)) => format!("{} z->{}", decl, src).to_lowercase(),
 
-    _ => "".to_string(),
+      _ => unreachable!(),
+    }
   }
-}
 
-// Used for writing to the operand
-fn emit_dst_arg(arg: &Option<ParsedOperand>) -> String {
-  use ParsedOperand::*;
+  // Used for writing to the operand
+  pub fn lval(arg: &Option<ParsedOperand>) -> String {
+    use ParsedOperand::*;
 
-  match arg {
-    &Some(Register(ref src)) => format!("z->{}", src).to_lowercase(),
-    &Some(ZeroPage(n)) => format!("z->ram[{}]", n),
-    &Some(AddressRelative) => format!(r#"int8_t dis = z->pc++;
+    match arg {
+      &Some(Register(ref src)) => format!("z->{}", src).to_lowercase(),
+      &Some(ZeroPage(n)) => format!("z->ram[{}]", n),
+      &Some(AddressRelative) => format!(r#"int8_t dis = z->pc++;
   z->ram[z->pc + dis]"#),
-    &Some(AddressImmediate) => format!("z->ram[z->pc++]"),
-    &Some(AddressExtended) => format!(r#"uint16_t lo = z->pc++;
+      &Some(AddressImmediate) => format!("z->ram[z->pc++]"),
+      &Some(AddressExtended) => format!(r#"uint16_t lo = z->pc++;
   uint16_t hi = z->pc++;
   z->ram[hi << 8 | lo]"#),
-    &Some(AddressIndexed(ref src)) => format!("z->ram[z->{} + (int8_t) z->pc++]", src).to_lowercase(),
-    &Some(AddressRegister(ref src)) => format!("z->ram[z->{}]", src).to_lowercase(),
+      &Some(AddressIndexed(ref src)) => format!("z->ram[z->{} + (int8_t) z->pc++]", src).to_lowercase(),
+      &Some(AddressRegister(ref src)) => format!("z->ram[z->{}]", src).to_lowercase(),
 
-    _ => "".to_string(),
-  }
-}
-
-fn emit_cc_arg(arg: &Option<ParsedOperand>) -> String {
-  use ParsedOperand::*;
-
-  match arg {
-    &Some(Conditional(ref cond)) => {
-      match cond {
-        _ => format!("bool cc = 0"),
-      }
+      _ => unreachable!(),
     }
+  }
 
-    _ => "".to_string(),
+  pub fn cc(arg: &Option<ParsedOperand>) -> String {
+    use ParsedOperand::*;
+    use Condition::*;
+
+    match arg {
+      &Some(Conditional(ref cond)) => {
+        match cond {
+          NZ => format!("z->zf == 0"),
+          Z => format!("z->zf == 1"),
+          NC => format!("z->cf == 0"),
+          Cy => format!("z->cf == 1"),
+
+          // TODO: other flags
+          _ => format!("true"),
+        }
+      }
+
+      &None => format!("true"),
+
+      _ => unreachable!(),
+    }
   }
 }
 
 fn emit_op_table<W>(ops: &[ParsedOpcode], wop: &mut W, wfun: &mut W) where W : std::io::Write {
   use Mnemonic::*;
+  use func_utils::*;
 
   let mut defined = HashSet::new();
 
   for o in ops {
-    let mut fname = "";
-    let mut body = "";
+    let mut fname;
+    let mut body;
     let mut cycles = 4;
-    let mut not_yet = false;
-    let mut src = &o.src;
-    let mut dst = &o.dst;
+    let mut arg1 = &o.dst;
+    let mut arg2 = &o.src;
 
     match &o.name {
       &ADD => {
-        fname = "z80_op_add_{dst}_{src}";
-        body = "{src};\n  {dst} += src;"
+        let dst = arg1;
+        let src = arg2;
+        fname = format!("z80_op_add_{}_{}", label(dst), label(src));
+        body = format!("{};\n  {} += src;", read(src), lval(dst));
       }
 
       &LD => {
-        fname = "z80_op_ld_{dst}_{src}";
-        body = "{src};\n  {dst} = src;";
+        let dst = arg1;
+        let src = arg2;
+        fname = format!("z80_op_ld_{}_{}", label(dst), label(src));
+        body = format!("{};\n  {} = src;", read(src), lval(dst));
       }
 
       &PUSH => {
-        // swap src and dst because PUSH only has one arg
-        src = &o.dst;
-        dst = &o.src;
-        fname = "z80_op_push_{src}";
-        body = r#"{src};
+        let reg = arg1;
+        fname = format!("z80_op_push_{}", label(reg));
+        body = format!("{};
   z->ram[z->sp-2] = src & 0x00FF;
   z->ram[z->sp-1] = src >> 8;
-  z->sp -= 2;"#;
+  z->sp -= 2;
+", read(reg));
       }
 
       &POP => {
-        fname = "z80_op_pop_{dst}";
-        body = r#"uint16_t hi = z->ram[z->sp+1];
+        let reg = arg1;
+        fname = format!("z80_op_pop_{}", label(reg));
+        body = format!("uint16_t hi = z->ram[z->sp+1];
   uint16_t lo = z->ram[z->sp];
-  {dst} = hi << 8 | lo;
-  z->sp += 2;"#;
+  {} = hi << 8 | lo;
+  z->sp += 2;
+", lval(reg));
       }
 
       &JP => {
         println!("{:?} {:?} {:?}", o.name, o.dst, o.src);
 
-        if let None = o.src {
-          src = &o.dst;
-          dst = &o.src;
-        }
+        let (cond, nn) = if arg2.is_none() { (&None, arg1) }
+                         else { (arg1, arg2) };
 
         // Need to be able to say:
         // - test arg1 as condition
         // - read from arg2
 
-        fname = "z80_op_jp_{dst}_{src}";
-        body = r#"if ({cc}) {{
-    {src};
+        fname = format!("z80_op_jp_{}_{}", label(cond), label(nn));
+        body = format!("if ({}) {{
+    {};
     z->pc = src;
   }}
-"#;
+", cc(cond), read(nn));
       }
 
-      _ => not_yet = true
+      _ => {
+        fname = format!("z80_op_nop");
+        body = format!("");
+      }
     };
 
-    if !not_yet {
-      let mut full_vars = HashMap::new();
-      full_vars.insert("dst".to_string(), emit_full_arg(dst));
-      full_vars.insert("src".to_string(), emit_full_arg(src));
-      let fname_str = strfmt(fname, &full_vars).unwrap();
+    // Add it to the ops table
+    writeln!(wop, "[0x{:04x}] = {},", o.pattern.code, &fname).unwrap();
 
-      let mut vars = HashMap::new();
-      vars.insert("dst".to_string(), emit_dst_arg(dst));
-      vars.insert("src".to_string(), emit_src_arg(src));
-      vars.insert("cc".to_string(), emit_cc_arg(dst));
-
-      // Write the specialized function definition
-      if !defined.contains(&fname_str) {
-        writeln!(wfun, r#"
+    // and write the specialized function definition
+    if !defined.contains(&fname) {
+      writeln!(wfun, r#"
 uint8_t {n}(Z80 *z) {{
   {b}
   return {c};
 }}"#,
-                 n = fname_str,
-                 b = strfmt(body, &vars).unwrap(),
-                 c = cycles).unwrap();
+               n = fname,
+               b = body,
+               c = cycles).unwrap();
 
-        defined.insert(fname_str);
-      }
-
-      // And add it to the ops table
-      writeln!(wop, "[0x{:04x}] = {},",
-               o.pattern.code,
-               strfmt(fname, &full_vars).unwrap()).unwrap();
-    } else {
-       writeln!(wop, "[0x{:04x}] = z80_op_nop,", o.pattern.code).unwrap();
+      defined.insert(fname);
     }
   }
 }
