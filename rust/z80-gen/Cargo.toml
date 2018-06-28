@@ -4,7 +4,10 @@ version = "0.1.0"
 authors = ["fmdkdd"]
 
 [dependencies]
-regex = "1.0"
-lazy_static = "1.0"
-enum_derive = "0.1"
 custom_derive = "0.1"
+docopt = "1.0"
+enum_derive = "0.1"
+lazy_static = "1.0"
+regex = "1.0"
+serde = "1.0"
+serde_derive = "1.0"

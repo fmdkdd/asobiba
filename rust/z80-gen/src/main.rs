@@ -4,11 +4,14 @@
 #[macro_use] extern crate custom_derive;
 #[macro_use] extern crate enum_derive;
 #[macro_use] extern crate lazy_static;
+#[macro_use] extern crate serde_derive;
+extern crate docopt;
 extern crate regex;
 
 mod parser;
 
-use std::io::{BufRead, BufReader};
+use docopt::Docopt;
+use std::io::{BufRead, BufReader, BufWriter};
 use std::fs::File;
 use std::str::FromStr;
 
@@ -43,7 +46,7 @@ fn emit_disassembler_arg(arg: &ParsedOperand) -> (String, ArgType) {
   }
 }
 
-fn emit_disassembler(ops: &[ParsedOpcode]) {
+fn emit_disassembler<W>(ops: &[ParsedOpcode], mut writer: W) where W : std::io::Write {
   // For each opcode, we emit a struct that gives the necessary data for a
   // common function to produce a disassembly string
   for o in ops {
@@ -62,20 +65,46 @@ fn emit_disassembler(ops: &[ParsedOpcode]) {
       arg2_type = t;
     }
 
-    println!("[0x{:04x}] = {{ {}, \"{:?} {}\", {:?}, {:?} }},",
+    writeln!(writer, "[0x{:04x}] = {{ {}, \"{:?} {}\", {:?}, {:?} }},",
              o.pattern.code, o.length, o.name, args,
-             arg1_type, arg2_type);
+             arg1_type, arg2_type).unwrap();
   }
 }
 
-fn emit_op_table(ops: &[ParsedOpcode]) {
+fn emit_op_table<W>(ops: &[ParsedOpcode], mut writer: W) where W : std::io::Write {
   for o in ops {
-    println!("[0x{:04x}] = z80_op_nop,", o.pattern.code);
+    writeln!(writer, "[0x{:04x}] = z80_op_nop,", o.pattern.code).unwrap();
   }
+}
+
+const USAGE: &'static str = "
+A Z80 emulator code generator.
+
+Usage:
+  z80-gen -d <disassembly> -c <cpu> <opsfile>
+  z80-gen -h
+
+Options:
+  -h, --help              Show this help.
+  -d <disassembly>        Write the disassembly table to this file.
+  -c <cpu>                Write opcode tables to this file.
+";
+
+#[derive(Deserialize)]
+struct Args {
+  arg_opsfile: String,
+  flag_d: String,
+  flag_c: String,
 }
 
 fn main() {
-  let f = File::open("z80_ops.txt").expect("Can't open z80_ops.txt file");
+  // Process args
+  let args: Args = Docopt::new(USAGE)
+    .and_then(|d| d.deserialize())
+    .unwrap_or_else(|e| e.exit());
+
+  let f = File::open(&args.arg_opsfile)
+    .expect(&format!("Can't open {} file", &args.arg_opsfile));
   let b = BufReader::new(f);
   let parsed_ops: Result<Vec<ParsedOpcode>, String> = b.lines()
     .map(|l| ParsedOpcode::from_str(&l.unwrap()))
@@ -98,7 +127,9 @@ fn main() {
     //   println!("{:?}", o);
     // }
 
-    emit_disassembler(&good_ops);
-    //emit_op_table(&good_ops);
+    emit_disassembler(&good_ops, BufWriter::new(File::create(&args.flag_d)
+                                                .expect(&format!("Can't open {} file", &args.flag_d))));
+    emit_op_table(&good_ops, BufWriter::new(File::create(&args.flag_c)
+                                            .expect(&format!("Can't open {} file", &args.flag_c))));
   }
 }
