@@ -14343,3 +14343,56 @@ counters that you can specify in the YM2612.  But then the doc never mentions
 precise timing for how fast the attack phase should increment the sound.  So I
 tweak constants until I find something that approximates what it should sound
 like.  This I can do.
+
+* [2018-06-28 jeu.]
+** Generating the Z80 code                                       :z80:megado:
+After much wrangling with strings, I managed to generate all ADD and LD
+instructions rather simply with:
+
+#+BEGIN_SRC rust
+&ADD => {
+  fname = "z80_op_add_{dst}_{src}";
+  body = "{src};\n  {dst} += src;"
+}
+
+&LD => {
+  fname = "z80_op_ld_{dst}_{src}";
+  body = "{src};\n  {dst} = src;";
+}
+#+END_SRC
+
+Of course ADD still needs to handle flags, but that's a start.  Now the Z80
+registers are actually moving!
+
+DST and SRC are fragments of C code that do the right thing, depending on the
+addressing mode used by the opcode.
+
+My aim here was to be as DRY as possible.  Alas, this approach is not flexible
+enough.  The PUSH opcodes already make his awkward:
+
+#+BEGIN_SRC rust
+      &PUSH => {
+        src = &o.dst;
+        dst = &o.src;
+        fname = "z80_op_push_{src}";
+        body = r#"{src};
+  z->ram[z->sp-2] = src & 0x00FF;
+  z->ram[z->sp-1] = src >> 8;
+  z->sp -= 2;"#;
+      }
+#+END_SRC
+
+Here I have to swap SRC and DST because PUSH only has one argument, and only the
+SRC can used to get a value.
+
+And then there's ~JP cc, nn~.  This one has two arguments alright, but the first
+one is a condition, so it's a value to be read, and ~nn~ is /also/ a value to be
+read.  So you cannot use DST here, you really want two SRC.
+
+And of course, there's also ~JP nn~, where the first argument is a read.
+
+So, ultimately, the opcode are the ones who determine how the opcode arguments
+should be treated: read from, written to, tested against a value...
+
+I think I can salvage this approach by adding new template words beside SRC and
+DST, like CC for condition.

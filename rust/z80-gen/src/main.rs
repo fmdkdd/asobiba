@@ -121,9 +121,7 @@ fn emit_src_arg(arg: &Option<ParsedOperand>) -> String {
                                               decl, src).to_lowercase(),
     &Some(AddressRegister(ref src)) => format!("{} z->{}", decl, src).to_lowercase(),
 
-    &None => "".to_string(),
-
-    _ => unreachable!(),
+    _ => "".to_string(),
   }
 }
 
@@ -142,19 +140,22 @@ fn emit_dst_arg(arg: &Option<ParsedOperand>) -> String {
   z->ram[hi << 8 | lo]"#),
     &Some(AddressIndexed(ref src)) => format!("z->ram[z->{} + (int8_t) z->pc++]", src).to_lowercase(),
     &Some(AddressRegister(ref src)) => format!("z->ram[z->{}]", src).to_lowercase(),
+
+    _ => "".to_string(),
+  }
+}
+
+fn emit_cc_arg(arg: &Option<ParsedOperand>) -> String {
+  use ParsedOperand::*;
+
+  match arg {
     &Some(Conditional(ref cond)) => {
       match cond {
         _ => format!("bool cc = 0"),
       }
     }
 
-    &None => "".to_string(),
-
-    _ => {
-      println!("{:?}", arg);
-
-      unreachable!()
-    }
+    _ => "".to_string(),
   }
 }
 
@@ -203,13 +204,20 @@ fn emit_op_table<W>(ops: &[ParsedOpcode], wop: &mut W, wfun: &mut W) where W : s
 
       &JP => {
         println!("{:?} {:?} {:?}", o.name, o.dst, o.src);
-        src = &o.dst;
-        dst = &o.src;
+
+        if let None = o.src {
+          src = &o.dst;
+          dst = &o.src;
+        }
+
+        // Need to be able to say:
+        // - test arg1 as condition
+        // - read from arg2
+
         fname = "z80_op_jp_{dst}_{src}";
-        body = r#"{dst};
-  if (cc) {{
+        body = r#"if ({cc}) {{
     {src};
-    z->pc = {src};
+    z->pc = src;
   }}
 "#;
       }
@@ -226,6 +234,7 @@ fn emit_op_table<W>(ops: &[ParsedOpcode], wop: &mut W, wfun: &mut W) where W : s
       let mut vars = HashMap::new();
       vars.insert("dst".to_string(), emit_dst_arg(dst));
       vars.insert("src".to_string(), emit_src_arg(src));
+      vars.insert("cc".to_string(), emit_cc_arg(dst));
 
       // Write the specialized function definition
       if !defined.contains(&fname_str) {
