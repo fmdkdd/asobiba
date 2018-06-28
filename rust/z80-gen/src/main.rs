@@ -101,26 +101,25 @@ fn emit_full_arg(arg: &Option<ParsedOperand>) -> String {
 fn emit_src_arg(arg: &Option<ParsedOperand>) -> String {
   use ParsedOperand::*;
 
-  let decl = "uint8_t src =";
+  let decl = "uint16_t src =";
 
   match arg {
     &Some(Bit(b)) => format!("{} {}", decl, b),
     &Some(Register(ref src)) => format!("{} z->{}", decl, src).to_lowercase(),
     &Some(Immediate) => format!("{} z->pc++", decl),
     &Some(ImmediateExtended) => format!(r#"uint16_t lo = z->pc++;
-uint16_t hi = z->pc++;
-{} hi << 8 | lo;"#, decl),
+  uint16_t hi = z->pc++;
+  {} hi << 8 | lo;"#, decl),
     &Some(ZeroPage(n)) => format!("{} = z->ram[{}]", decl, n),
     &Some(AddressRelative) => format!(r#"int8_t dis = z->pc++;
-{} z->ram[z->pc + dis]"#, decl),
+  {} z->ram[z->pc + dis]"#, decl),
     &Some(AddressImmediate) => format!("{} = z->ram[z->pc++]", decl),
     &Some(AddressExtended) => format!(r#"uint16_t lo = z->pc++;
-uint16_t hi = z->pc++;
-{} z->ram[hi << 8 | lo]"#, decl),
+  uint16_t hi = z->pc++;
+  {} z->ram[hi << 8 | lo]"#, decl),
     &Some(AddressIndexed(ref src)) => format!("{} z->ram[z->{} + (int8_t) z->pc++]",
                                               decl, src).to_lowercase(),
     &Some(AddressRegister(ref src)) => format!("{} z->{}", decl, src).to_lowercase(),
-    &Some(Conditional(ref cond)) => format!("{} z->{:?}", decl, cond).to_lowercase(),
 
     &None => "".to_string(),
 
@@ -136,13 +135,18 @@ fn emit_dst_arg(arg: &Option<ParsedOperand>) -> String {
     &Some(Register(ref src)) => format!("z->{}", src).to_lowercase(),
     &Some(ZeroPage(n)) => format!("z->ram[{}]", n),
     &Some(AddressRelative) => format!(r#"int8_t dis = z->pc++;
-z->ram[z->pc + dis]"#),
+  z->ram[z->pc + dis]"#),
     &Some(AddressImmediate) => format!("z->ram[z->pc++]"),
     &Some(AddressExtended) => format!(r#"uint16_t lo = z->pc++;
-uint16_t hi = z->pc++;
-z->ram[hi << 8 | lo]"#),
+  uint16_t hi = z->pc++;
+  z->ram[hi << 8 | lo]"#),
     &Some(AddressIndexed(ref src)) => format!("z->ram[z->{} + (int8_t) z->pc++]", src).to_lowercase(),
     &Some(AddressRegister(ref src)) => format!("z->ram[z->{}]", src).to_lowercase(),
+    &Some(Conditional(ref cond)) => {
+      match cond {
+        _ => format!("bool cc = 0"),
+      }
+    }
 
     &None => "".to_string(),
 
@@ -162,18 +166,52 @@ fn emit_op_table<W>(ops: &[ParsedOpcode], wop: &mut W, wfun: &mut W) where W : s
   for o in ops {
     let mut fname = "";
     let mut body = "";
-    let mut cycles = 1;
+    let mut cycles = 4;
     let mut not_yet = false;
+    let mut src = &o.src;
+    let mut dst = &o.dst;
 
     match &o.name {
       &ADD => {
         fname = "z80_op_add_{dst}_{src}";
-        body = "{src};\n{dst} += src;"
+        body = "{src};\n  {dst} += src;"
       }
 
       &LD => {
         fname = "z80_op_ld_{dst}_{src}";
-        body = "{src};\n{dst} = src;";
+        body = "{src};\n  {dst} = src;";
+      }
+
+      &PUSH => {
+        // swap src and dst because PUSH only has one arg
+        src = &o.dst;
+        dst = &o.src;
+        fname = "z80_op_push_{src}";
+        body = r#"{src};
+  z->ram[z->sp-2] = src & 0x00FF;
+  z->ram[z->sp-1] = src >> 8;
+  z->sp -= 2;"#;
+      }
+
+      &POP => {
+        fname = "z80_op_pop_{dst}";
+        body = r#"uint16_t hi = z->ram[z->sp+1];
+  uint16_t lo = z->ram[z->sp];
+  {dst} = hi << 8 | lo;
+  z->sp += 2;"#;
+      }
+
+      &JP => {
+        println!("{:?} {:?} {:?}", o.name, o.dst, o.src);
+        src = &o.dst;
+        dst = &o.src;
+        fname = "z80_op_jp_{dst}_{src}";
+        body = r#"{dst};
+  if (cc) {{
+    {src};
+    z->pc = {src};
+  }}
+"#;
       }
 
       _ => not_yet = true
@@ -181,13 +219,13 @@ fn emit_op_table<W>(ops: &[ParsedOpcode], wop: &mut W, wfun: &mut W) where W : s
 
     if !not_yet {
       let mut full_vars = HashMap::new();
-      full_vars.insert("dst".to_string(), emit_full_arg(&o.dst));
-      full_vars.insert("src".to_string(), emit_full_arg(&o.src));
+      full_vars.insert("dst".to_string(), emit_full_arg(dst));
+      full_vars.insert("src".to_string(), emit_full_arg(src));
       let fname_str = strfmt(fname, &full_vars).unwrap();
 
       let mut vars = HashMap::new();
-      vars.insert("dst".to_string(), emit_dst_arg(&o.dst));
-      vars.insert("src".to_string(), emit_src_arg(&o.src));
+      vars.insert("dst".to_string(), emit_dst_arg(dst));
+      vars.insert("src".to_string(), emit_src_arg(src));
 
       // Write the specialized function definition
       if !defined.contains(&fname_str) {
