@@ -8623,7 +8623,7 @@ So, no cargo check for the time being.
 
 * [2017-03-18 sam.]
 ** Comparing GME behavior for GBS emulation                             :gbs:
-Really can't get something decent working from the docs alone (should I've
+Really can't get something decent working from the docs alone (should've
 guessed... been down this road before).  So that leaves me two options: lifting
 code from working emulators, or getting a trace from emulators and using that as
 spec.
@@ -8725,7 +8725,6 @@ discrepancies.
 
 F6 is OR d8.  Hmm, bad copy paste on my end.  OR was doing xor.
 
-
 : 65a3 c9 cd AF:0300 BC:0000 DE:0000 HL:64ef SP:cffd
 : < f00e ff 00 AF:0300 BC:0000 DE:0000 HL:64ef SP:cfff
 : > f00d ff ff AF:0300 BC:0000 DE:0000 HL:64ef SP:cfff
@@ -8740,7 +8739,6 @@ At this point, I don't quite understand how GME deals with this idle_addr.
 Sometimes it stays for two loops at 0xF00D, sometimes for one loop.
 
 But, I can git diff the rest.
-
 
 :  6d4c 7e e1 AF:0000 BC:0011 DE:8074 HL:df9f SP:cfef
 : -6d4d e1 cb AF:0100 BC:0011 DE:8074 HL:df9f SP:cfef
