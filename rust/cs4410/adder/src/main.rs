@@ -8,28 +8,35 @@ use parser::{Node, NodeKind, ParseTree, Parser};
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Abstract syntax
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Prim1 {
   Add1,
   Sub1,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Expr {
   Number(i32),
-  Id(String),
+  Id(usize),
   Prim1(Prim1, Box<Expr>),
-  Let(Vec<(String, Expr)>, Box<Expr>),
+  Let(Vec<(usize, Expr)>, Box<Expr>),
 }
 
+#[derive(Debug, PartialEq)]
+struct AST {
+  prog: Expr,
+  symbols: Vec<String>,
+}
+
+// Helper for printing location of errors
 fn loc(n : &Node) -> String {
   format!("{}:{}", n.start.line, n.start.column)
 }
 
 // Turn a concrete syntax tree into an abstract one
-fn abstractify(cst: &ParseTree) -> Expr {
+fn abstractify(cst: &ParseTree) -> AST {
   // Valid adder programs have exactly one root
-  if cst.roots.len() == 0 {
+  if cst.roots.is_empty() {
     panic!("0:0: unexpected empty program");
   }
 
@@ -38,7 +45,10 @@ fn abstractify(cst: &ParseTree) -> Expr {
     panic!("{}: unexpected top-level expression", loc(n));
   }
 
-  build_expr(&cst.roots[0], &cst.symbol_table)
+  AST {
+    prog: build_expr(&cst.roots[0], &cst.symbol_table),
+    symbols: cst.symbol_table.clone(),
+  }
 }
 
 fn build_expr(n: &Node, symbols: &[String]) -> Expr {
@@ -46,15 +56,15 @@ fn build_expr(n: &Node, symbols: &[String]) -> Expr {
 
   match n.kind {
     Number(num) => Expr::Number(num as i32),
-    Symbol(s) => Expr::Id(symbols.get(s).unwrap().clone()),
+    Symbol(s) => Expr::Id(s),
 
     Sexp(ref nodes) => {
-      if nodes.len() == 0 {
+      if nodes.is_empty() {
         panic!("{}: expected 'let', 'add1' or 'sub1'", loc(n))
       }
 
       let name = match nodes[0].kind {
-        Symbol(s) => symbols.get(s).unwrap(),
+        Symbol(s) => &symbols[s],
 
         _ => panic!("{}: expected 'let', add1', or 'sub1'", loc(&nodes[0]))
       };
@@ -98,14 +108,14 @@ fn build_let(bindings: &Node, body: &Node, symbols: &[String]) -> Expr {
   }
 }
 
-fn build_binding(b: &Node, symbols: &[String]) -> (String, Expr) {
+fn build_binding(b: &Node, symbols: &[String]) -> (usize, Expr) {
   use NodeKind::*;
 
   if let Sexp(ref nodes) = b.kind {
     match nodes.as_slice() {
       [id, body] =>
         if let Symbol(s) = id.kind {
-          (symbols.get(s).unwrap().clone(), build_expr(body, symbols))
+          (s, build_expr(body, symbols))
         } else {
           panic!("{} invalid binding identifier", loc(id))
         }
@@ -115,6 +125,76 @@ fn build_binding(b: &Node, symbols: &[String]) -> (String, Expr) {
   } else {
     panic!("{}: expected a binding (id . expr)", loc(b))
   }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::{AST, abstractify, Parser};
+  use Expr::*;
+  use Prim1::*;
+
+  macro_rules! vec_of_strings {
+    ($($x:expr),*) => (vec![$($x.to_string()),*]);
+  }
+
+  #[test]
+  fn number() {
+    let input = "5";
+    let expected = AST {
+      prog: Number(5),
+      symbols: vec![],
+    };
+
+    let mut p = Parser::new(input);
+    let ast = abstractify(&p.parse());
+    assert_eq!(expected, ast);
+  }
+
+  #[test]
+  fn prim1() {
+    let input = "(sub1 (add1 (sub1 5)))";
+    let expected = AST {
+      prog: Prim1(Sub1, Box::new(Prim1(Add1, Box::new(Prim1(Sub1, Box::new(Number(5))))))),
+      symbols: vec_of_strings!("sub1", "add1"),
+    };
+
+    let mut p = Parser::new(input);
+    let ast = abstractify(&p.parse());
+    assert_eq!(expected, ast);
+  }
+
+  #[test]
+  fn let1() {
+    let input = "(let ((x 5))
+                   (add1 x))";
+    let expected = AST {
+      prog: Let(vec![(1, Number(5))],
+                Box::new(Prim1(Add1, Box::new(Id(1))))),
+      symbols: vec_of_strings!("let", "x", "add1"),
+    };
+
+    let mut p = Parser::new(input);
+    let ast = abstractify(&p.parse());
+    assert_eq!(expected, ast);
+  }
+
+  #[test]
+  fn let2() {
+    let input = "(let ((x 5)
+                       (y (sub1 x)))
+                   (sub1 y))";
+    let expected = AST {
+      prog: Let(vec![(1, Number(5)),
+                     (2, Prim1(Sub1, Box::new(Id(1))))],
+                Box::new(Prim1(Sub1, Box::new(Id(2))))),
+      symbols: vec_of_strings!("let", "x", "y", "sub1"),
+    };
+
+    let mut p = Parser::new(input);
+    let ast = abstractify(&p.parse());
+    assert_eq!(expected, ast);
+  }
+
 }
 
 
