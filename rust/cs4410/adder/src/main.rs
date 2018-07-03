@@ -217,6 +217,8 @@ enum Arg {
 #[derive(Debug)]
 enum Instr {
   Mov(Arg, Arg),
+  Inc(Arg),
+  Dec(Arg),
 }
 
 fn compile(ast: &AST) -> Vec<Instr> {
@@ -225,12 +227,25 @@ fn compile(ast: &AST) -> Vec<Instr> {
 
 fn compile_expr(e: &Expr) -> Vec<Instr> {
   use Instr::*;
+  use Prim1::*;
   use Arg::*;
   use Reg::*;
   use Expr::*;
 
   match e {
     Number(n) => vec![Mov(Reg(EAX), Const(*n))],
+
+    Prim1(Add1, ex) => {
+      let mut v = compile_expr(ex);
+      v.push(Inc(Reg(EAX)));
+      v
+    }
+
+    Prim1(Sub1, ex) => {
+      let mut v = compile_expr(ex);
+      v.push(Dec(Reg(EAX)));
+      v
+    }
 
     _ => unimplemented!(),
   }
@@ -270,9 +285,9 @@ impl Display for Instr {
     use Instr::*;
 
     match self {
-      Mov(dst, src) => write!(f, "mov {}, {}", dst, src),
-
-      //_ => unimplemented!(),
+      Mov(dst, src) => writeln!(f, "mov {}, {}", dst, src),
+      Inc(dst) => writeln!(f, "inc {}", dst),
+      Dec(dst) => writeln!(f, "dec {}", dst),
     }
   }
 }
