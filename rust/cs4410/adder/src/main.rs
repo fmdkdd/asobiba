@@ -202,6 +202,42 @@ mod tests {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Compiler
 
+#[derive(Debug)]
+enum Reg {
+  EAX,
+}
+
+#[derive(Debug)]
+enum Arg {
+  Const(i32),
+  Reg(Reg),
+}
+
+#[derive(Debug)]
+enum Instr {
+  Mov(Arg, Arg),
+}
+
+fn compile(ast: &AST) -> Vec<Instr> {
+  use Instr::*;
+  use Arg::*;
+  use Reg::*;
+
+  vec![Mov(Reg(EAX), Const(42))]
+}
+
+fn emit_asm(instrs: &[Instr]) -> String {
+  format!("section.text
+global entry_point
+entry_point:
+  {}
+  ret", instrs.iter().map(instr_to_asm).collect::<String>())
+}
+
+fn instr_to_asm(instr: &Instr) -> String {
+  "mov eax, 42".into()
+}
+
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // main
@@ -214,5 +250,7 @@ fn main() {
   let cst = p.parse();
   let ast = abstractify(&cst);
 
-  println!("{:?}", ast);
+  //println!("{:?}", ast);
+
+  println!("{}", emit_asm(&compile(&ast)));
 }
