@@ -1,4 +1,5 @@
 use std::io::{self, Read};
+use std::fmt::Display;
 
 mod parser;
 
@@ -219,11 +220,20 @@ enum Instr {
 }
 
 fn compile(ast: &AST) -> Vec<Instr> {
+  compile_expr(&ast.prog)
+}
+
+fn compile_expr(e: &Expr) -> Vec<Instr> {
   use Instr::*;
   use Arg::*;
   use Reg::*;
+  use Expr::*;
 
-  vec![Mov(Reg(EAX), Const(42))]
+  match e {
+    Number(n) => vec![Mov(Reg(EAX), Const(*n))],
+
+    _ => unimplemented!(),
+  }
 }
 
 fn emit_asm(instrs: &[Instr]) -> String {
@@ -231,12 +241,43 @@ fn emit_asm(instrs: &[Instr]) -> String {
 global entry_point
 entry_point:
   {}
-  ret", instrs.iter().map(instr_to_asm).collect::<String>())
+  ret", instrs.iter().map(|i| format!("{}", i)).collect::<String>())
 }
 
-fn instr_to_asm(instr: &Instr) -> String {
-  "mov eax, 42".into()
+impl Display for Reg {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    use Reg::*;
+
+    match self {
+      EAX => write!(f, "eax"),
+    }
+  }
 }
+
+impl Display for Arg {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    use Arg::*;
+
+    match self {
+      Const(n) => write!(f, "{}", n),
+      Reg(r) => write!(f, "{}", r),
+    }
+  }
+}
+
+impl Display for Instr {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    use Instr::*;
+
+    match self {
+      Mov(dst, src) => write!(f, "mov {}, {}", dst, src),
+
+      //_ => unimplemented!(),
+    }
+  }
+}
+
+
 
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
