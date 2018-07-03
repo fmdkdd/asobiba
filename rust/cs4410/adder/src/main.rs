@@ -247,6 +247,9 @@ fn compile_expr(e: &Expr) -> Vec<Instr> {
       v
     }
 
+    // @NEXT: Id should look up the stack, and Let should push on the stack
+    // Renumbering the symbols in the CST->AST translation will make this easier
+
     _ => unimplemented!(),
   }
 }
