@@ -14,7 +14,7 @@ make
 # the adder file)
 ret=0
 echo == Running tests...
-for file in `find build/ -executable -type f`; do
+for file in `find build/ -executable -type f | sort`; do
     bin=`basename "$file"`
     expect=`head -n1 "tests/$bin.adder" | cut -d: -f2`
     actual=`./$file`
