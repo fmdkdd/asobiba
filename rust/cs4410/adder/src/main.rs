@@ -223,8 +223,10 @@ enum Instr {
   Dec(Arg),
 }
 
+/// Return the stack index of symbol ID in ENV.
 fn lookup(id: usize, env: &[usize]) -> Option<usize> {
-  env.iter().position(|&n| n == id).map(|n| n+1)
+  // Look from the right in order to always get the /latest/ binding
+  env.iter().rposition(|&n| n == id).map(|n| n+1)
 }
 
 fn compile(ast: &AST) -> Vec<Instr> {
