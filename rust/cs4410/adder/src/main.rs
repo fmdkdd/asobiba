@@ -206,12 +206,14 @@ mod tests {
 #[derive(Debug)]
 enum Reg {
   EAX,
+  ESP,
 }
 
 #[derive(Debug)]
 enum Arg {
   Const(i32),
   Reg(Reg),
+  RegOffset(Reg, usize),
 }
 
 #[derive(Debug)]
@@ -221,11 +223,15 @@ enum Instr {
   Dec(Arg),
 }
 
-fn compile(ast: &AST) -> Vec<Instr> {
-  compile_expr(&ast.prog)
+fn lookup(id: usize, env: &[usize]) -> Option<usize> {
+  env.iter().position(|&n| n == id).map(|n| n+1)
 }
 
-fn compile_expr(e: &Expr) -> Vec<Instr> {
+fn compile(ast: &AST) -> Vec<Instr> {
+  compile_expr(&ast.prog, &ast.symbols, &mut vec![])
+}
+
+fn compile_expr(e: &Expr, symbols: &[String], env: &Vec<usize>) -> Vec<Instr> {
   use Instr::*;
   use Prim1::*;
   use Arg::*;
@@ -236,21 +242,34 @@ fn compile_expr(e: &Expr) -> Vec<Instr> {
     Number(n) => vec![Mov(Reg(EAX), Const(*n))],
 
     Prim1(Add1, ex) => {
-      let mut v = compile_expr(ex);
+      let mut v = compile_expr(ex, symbols,env);
       v.push(Inc(Reg(EAX)));
       v
     }
 
     Prim1(Sub1, ex) => {
-      let mut v = compile_expr(ex);
+      let mut v = compile_expr(ex, symbols, env);
       v.push(Dec(Reg(EAX)));
       v
     }
 
-    // @NEXT: Id should look up the stack, and Let should push on the stack
-    // Renumbering the symbols in the CST->AST translation will make this easier
+    Id(s) => match lookup(*s, env) {
+      Some(n) => vec![Mov(Reg(EAX), RegOffset(ESP, n))],
+      None => panic!("Identifier not bound '{}'", symbols[*s]),
+    }
 
-    _ => unimplemented!(),
+    Let(bindings, body) => {
+      let mut env2 = env.clone();
+      let mut v = Vec::new();
+      for (x, ex) in bindings {
+        v.append(&mut compile_expr(ex, symbols, env));
+        env2.push(*x);
+        v.push(Mov(RegOffset(ESP, env2.len()), Reg(EAX)));
+      }
+
+      v.append(&mut compile_expr(body, symbols, &mut env2));
+      v
+    }
   }
 }
 
@@ -268,6 +287,7 @@ impl Display for Reg {
 
     match self {
       EAX => write!(f, "eax"),
+      ESP => write!(f, "esp"),
     }
   }
 }
@@ -279,6 +299,7 @@ impl Display for Arg {
     match self {
       Const(n) => write!(f, "{}", n),
       Reg(r) => write!(f, "{}", r),
+      RegOffset(r, o) => write!(f, "[{} - 4*{}]", r, o),
     }
   }
 }
@@ -294,7 +315,6 @@ impl Display for Instr {
     }
   }
 }
-
 
 
 
