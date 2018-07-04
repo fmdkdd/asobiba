@@ -262,7 +262,7 @@ fn compile_expr(e: &Expr, symbols: &[String], env: &Vec<usize>) -> Vec<Instr> {
       let mut env2 = env.clone();
       let mut v = Vec::new();
       for (x, ex) in bindings {
-        v.append(&mut compile_expr(ex, symbols, env));
+        v.append(&mut compile_expr(ex, symbols, &env2));
         env2.push(*x);
         v.push(Mov(RegOffset(ESP, env2.len()), Reg(EAX)));
       }
@@ -328,8 +328,5 @@ fn main() {
   let mut p = Parser::new(&input);
   let cst = p.parse();
   let ast = abstractify(&cst);
-
-  //println!("{:?}", ast);
-
   println!("{}", emit_asm(&compile(&ast)));
 }

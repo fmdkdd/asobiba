@@ -1,0 +1,3 @@
+# expect: 6
+(let ((x 5))
+  (add1 x))
