@@ -3,6 +3,7 @@
 
 COMPILER := target/debug/adder
 TESTS := $(wildcard tests/*.adder)
+ASM := $(TESTS:tests/%.adder=build/%.s)
 BINS := $(TESTS:tests/%.adder=build/%)
 
 all: build $(BINS)
@@ -24,4 +25,4 @@ build/%.s: tests/%.adder $(COMPILER)
 
 .PHONY: clean
 clean:
-	rm build/main
+	rm -f $(BINS) $(ASM)
