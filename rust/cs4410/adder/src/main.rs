@@ -9,13 +9,13 @@ use parser::{Node, NodeKind, ParseTree, Parser};
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Abstract syntax
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Prim1 {
   Add1,
   Sub1,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Expr {
   Number(i32),
   Id(usize),
@@ -263,6 +263,16 @@ fn compile_expr(e: &Expr, symbols: &[String], env: &Vec<usize>) -> Vec<Instr> {
     Let(bindings, body) => {
       let mut env2 = env.clone();
       let mut v = Vec::new();
+
+      // Check for duplicate bindings first, which are forbidden by the
+      // language.
+      let mut b : Vec<usize> = bindings.iter().map(|&(id,_)| id).collect();
+      b.sort();
+      b.dedup();
+      if b.len() != bindings.len() {
+        panic!("Duplicate bindings in `let`");
+      }
+
       for (x, ex) in bindings {
         v.append(&mut compile_expr(ex, symbols, &env2));
         env2.push(*x);
