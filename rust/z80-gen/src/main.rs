@@ -83,7 +83,7 @@ mod func_utils {
 
     match arg {
       &Some(Bit(b)) => format!("b_{}", b),
-      &Some(Register(ref src)) => format!("{}", src).to_lowercase(),
+      &Some(Register(ref src)) => format!("{}", src).replace("'", "2").to_lowercase(),
       &Some(Immediate) => format!("n"),
       &Some(ImmediateExtended) => format!("nn"),
       &Some(ZeroPage(n)) => format!("z_{}", n),
@@ -104,25 +104,24 @@ mod func_utils {
   pub fn read(arg: &Option<ParsedOperand>) -> String {
     use ParsedOperand::*;
 
-    let decl = "uint16_t src =";
-
     match arg {
-      &Some(Bit(b)) => format!("{} {}", decl, b),
-      &Some(Register(ref src)) => format!("{} z->{}", decl, src).to_lowercase(),
-      &Some(Immediate) => format!("{} z->pc++", decl),
-      &Some(ImmediateExtended) => format!(r#"uint16_t lo = z->pc++;
-  uint16_t hi = z->pc++;
-  {} hi << 8 | lo;"#, decl),
-      &Some(ZeroPage(n)) => format!("{} = z->ram[{}]", decl, n),
-      &Some(AddressRelative) => format!(r#"int8_t dis = z->pc++;
-  {} z->ram[z->pc + dis]"#, decl),
-      &Some(AddressImmediate) => format!("{} = z->ram[z->pc++]", decl),
-      &Some(AddressExtended) => format!(r#"uint16_t lo = z->pc++;
-  uint16_t hi = z->pc++;
-  {} z->ram[hi << 8 | lo]"#, decl),
-      &Some(AddressIndexed(ref src)) => format!("{} z->ram[z->{} + (int8_t) z->pc++]",
-                                                decl, src).to_lowercase(),
-      &Some(AddressRegister(ref src)) => format!("{} z->{}", decl, src).to_lowercase(),
+      &Some(Bit(b)) => format!("src = {}", b),
+      &Some(Register(ref src)) => format!("src = z->{}", src).to_lowercase(),
+      &Some(Immediate) => format!("src = z->pc++"),
+      &Some(ImmediateExtended) => format!(r"lo = z->pc++;
+  hi = z->pc++;
+  src = hi << 8 | lo;"),
+      &Some(ZeroPage(n)) => format!("src = z->ram[{}]", n),
+      &Some(AddressRelative) => format!("dis = z->pc++;
+  src = z->ram[z->pc + dis]"),
+      &Some(AddressImmediate) => format!("src = z->ram[z->pc++]"),
+      &Some(AddressExtended) => format!("lo = z->pc++;
+  hi = z->pc++;
+  src = z->ram[hi << 8 | lo]"),
+      &Some(AddressIndexed(ref src)) =>
+        format!("src = z->ram[z->{} + (int8_t) z->pc++]", src).to_lowercase(),
+      &Some(AddressRegister(ref src)) =>
+        format!("src = z->ram[z->{}]", src).to_lowercase(),
 
       _ => unreachable!(),
     }
@@ -135,12 +134,12 @@ mod func_utils {
     match arg {
       &Some(Register(ref src)) => format!("z->{}", src).to_lowercase(),
       &Some(ZeroPage(n)) => format!("z->ram[{}]", n),
-      &Some(AddressRelative) => format!(r#"int8_t dis = z->pc++;
-  z->ram[z->pc + dis]"#),
+      &Some(AddressRelative) => format!("dis = z->pc++;
+  z->ram[z->pc + dis]"),
       &Some(AddressImmediate) => format!("z->ram[z->pc++]"),
-      &Some(AddressExtended) => format!(r#"uint16_t lo = z->pc++;
-  uint16_t hi = z->pc++;
-  z->ram[hi << 8 | lo]"#),
+      &Some(AddressExtended) => format!("lo = z->pc++;
+  hi = z->pc++;
+  z->ram[hi << 8 | lo]"),
       &Some(AddressIndexed(ref src)) => format!("z->ram[z->{} + (int8_t) z->pc++]", src).to_lowercase(),
       &Some(AddressRegister(ref src)) => format!("z->ram[z->{}]", src).to_lowercase(),
 
@@ -155,13 +154,14 @@ mod func_utils {
     match arg {
       &Some(Conditional(ref cond)) => {
         match cond {
-          NZ => format!("z->zf == 0"),
-          Z => format!("z->zf == 1"),
-          NC => format!("z->cf == 0"),
-          Cy => format!("z->cf == 1"),
-
-          // TODO: other flags
-          _ => format!("true"),
+          &NZ => format!("z->zf == 0"),
+          &Z => format!("z->zf == 1"),
+          &NC => format!("z->cf == 0"),
+          &Cy => format!("z->cf == 1"),
+          &PO => format!("z->pf == 1"),
+          &PE => format!("z->pf == 0"),
+          &P => format!("z->sf == 0"),
+          &M => format!("z->sf == 1"),
         }
       }
 
@@ -170,77 +170,109 @@ mod func_utils {
       _ => unreachable!(),
     }
   }
+
+  pub fn zf1(arg: &str) -> String {
+    format!("z->zf = {} == 0;", arg)
+  }
+
+  pub fn zf() -> String {
+    zf1("res")
+  }
+
+  pub fn nf(arg: u8) -> String {
+    format!("z->nf = {};", arg)
+  }
+
+  pub fn sf1(arg: &str) -> String {
+    format!("z->sf = {a} >> (8 * sizeof({a}) - 1);", a = arg)
+  }
+
+  pub fn sf() -> String {
+    sf1("res")
+  }
+
+  pub fn pf1(arg: &str) -> String {
+    format!("z->pf = {} & 1;", arg)
+  }
+
+  pub fn pf() -> String {
+    pf1("res")
+  }
+
+  pub fn vf1(arg: &str) -> String {
+    // TODO: what the hell is a 2-complement overflow?
+    format!("z->pf = {} & 1;", arg)
+  }
+
+  pub fn vf() -> String {
+    vf1("res")
+  }
+}
+
+macro_rules! flags {
+  ($($x:expr),*) => (vec![$($x),*].join("\n  "));
 }
 
 fn emit_op_table<W>(ops: &[ParsedOpcode], wop: &mut W, wfun: &mut W) where W : std::io::Write {
   use Mnemonic::*;
+  use ParsedOperand::*;
   use func_utils::*;
 
   let mut defined = HashSet::new();
 
   for o in ops {
-    let mut fname;
-    let mut body;
-    let mut cycles = 4;
-    let mut arg1 = &o.dst;
-    let mut arg2 = &o.src;
+    let mut cycles = 4; // TODO: compute cycles from addressing modes
+    let fname = format!("z80_op_{:?}_{}_{}", o.name, label(&o.dst), label(&o.src)).to_lowercase();
 
-    match &o.name {
-      &ADD => {
-        let dst = arg1;
-        let src = arg2;
-        fname = format!("z80_op_add_{}_{}", label(dst), label(src));
-        body = format!("{};\n  {} += src;", read(src), lval(dst));
+    let body = match (&o.name, &o.dst, &o.src) {
+      (&ADD, dst, src) => {
+        format!("{};
+  res = {} += src;
+  {}", read(src), lval(dst), flags!(zf(), nf(0), sf(), vf()))
       }
 
-      &LD => {
-        let dst = arg1;
-        let src = arg2;
-        fname = format!("z80_op_ld_{}_{}", label(dst), label(src));
-        body = format!("{};\n  {} = src;", read(src), lval(dst));
+      (&SUB, s, _) => {
+        format!("{};
+  res = {} -= src;
+  {}", read(s), "z->a", flags!(zf(), nf(1), sf(), pf()))
       }
 
-      &PUSH => {
-        let reg = arg1;
-        fname = format!("z80_op_push_{}", label(reg));
-        body = format!("{};
+      // (&INC, _, _) => {
+      //   fname = format!("z80_op_inc_{}", label(arg1));
+
+      // }
+
+      (&LD, dst, src) => {
+        format!("{};\n  {} = src;", read(src), lval(dst))
+      }
+
+      (&PUSH, reg, _) => {
+        format!("{};
   z->ram[z->sp-2] = src & 0x00FF;
   z->ram[z->sp-1] = src >> 8;
-  z->sp -= 2;
-", read(reg));
+  z->sp -= 2;", read(reg))
       }
 
-      &POP => {
-        let reg = arg1;
-        fname = format!("z80_op_pop_{}", label(reg));
-        body = format!("uint16_t hi = z->ram[z->sp+1];
-  uint16_t lo = z->ram[z->sp];
+      (&POP, reg, _) => {
+        format!("hi = z->ram[z->sp+1];
+  lo = z->ram[z->sp];
   {} = hi << 8 | lo;
-  z->sp += 2;
-", lval(reg));
+  z->sp += 2;", lval(reg))
       }
 
-      &JP => {
-        println!("{:?} {:?} {:?}", o.name, o.dst, o.src);
-
-        let (cond, nn) = if arg2.is_none() { (&None, arg1) }
-                         else { (arg1, arg2) };
-
-        // Need to be able to say:
-        // - test arg1 as condition
-        // - read from arg2
-
-        fname = format!("z80_op_jp_{}_{}", label(cond), label(nn));
-        body = format!("if ({}) {{
+      (&JP, cond @ &Some(Conditional(_)), nn @ &Some(_)) => {
+        format!("if ({}) {{
     {};
     z->pc = src;
-  }}
-", cc(cond), read(nn));
+  }}", cc(cond), read(nn))
+      }
+
+      (&JP, nn, &None) => {
+        format!("{};\n  z->pc = src;", read(nn))
       }
 
       _ => {
-        fname = format!("z80_op_nop");
-        body = format!("");
+        format!("")
       }
     };
 
@@ -251,12 +283,11 @@ fn emit_op_table<W>(ops: &[ParsedOpcode], wop: &mut W, wfun: &mut W) where W : s
     if !defined.contains(&fname) {
       writeln!(wfun, r#"
 uint8_t {n}(Z80 *z) {{
+  uint16_t src, res, lo, hi;
+  int8_t dis;
   {b}
   return {c};
-}}"#,
-               n = fname,
-               b = body,
-               c = cycles).unwrap();
+}}"#, n = fname, b = body, c = cycles).unwrap();
 
       defined.insert(fname);
     }
