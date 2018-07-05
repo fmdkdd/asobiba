@@ -108,20 +108,20 @@ mod func_utils {
       &Some(Bit(b)) => format!("src = {}", b),
       &Some(Register(ref src)) => format!("src = z->{}", src).to_lowercase(),
       &Some(Immediate) => format!("src = z->pc++"),
-      &Some(ImmediateExtended) => format!(r"lo = z->pc++;
+      &Some(ImmediateExtended) => format!("lo = z->pc++;
   hi = z->pc++;
-  src = hi << 8 | lo;"),
-      &Some(ZeroPage(n)) => format!("src = z->ram[{}]", n),
+  src = hi << 8 | lo"),
+      &Some(ZeroPage(n)) => format!("src = z80_read(z, {})", n),
       &Some(AddressRelative) => format!("dis = z->pc++;
-  src = z->ram[z->pc + dis]"),
-      &Some(AddressImmediate) => format!("src = z->ram[z->pc++]"),
+  src = z80_read(z, z->pc + dis)"),
+      &Some(AddressImmediate) => format!("src = z80_read(z->pc++)"),
       &Some(AddressExtended) => format!("lo = z->pc++;
   hi = z->pc++;
-  src = z->ram[hi << 8 | lo]"),
+  src = z80_read(z, hi << 8 | lo)"),
       &Some(AddressIndexed(ref src)) =>
-        format!("src = z->ram[z->{} + (int8_t) z->pc++]", src).to_lowercase(),
+        format!("src = z80_read(z, z->{} + (int8_t) z->pc++)", src).to_lowercase(),
       &Some(AddressRegister(ref src)) =>
-        format!("src = z->ram[z->{}]", src).to_lowercase(),
+        format!("src = z80_read(z, z->{})", src).to_lowercase(),
 
       _ => unreachable!(),
     }
@@ -133,15 +133,17 @@ mod func_utils {
 
     match arg {
       &Some(Register(ref src)) => format!("z->{}", src).to_lowercase(),
-      &Some(ZeroPage(n)) => format!("z->ram[{}]", n),
+      // TODO: hmm, can we treat lvalues and RAM addresses homogeneously?
+      &Some(ZeroPage(n)) => format!("out = {};\n  z80_write(z, {}, )", n),
       &Some(AddressRelative) => format!("dis = z->pc++;
-  z->ram[z->pc + dis]"),
-      &Some(AddressImmediate) => format!("z->ram[z->pc++]"),
+  z80_write(z, z->pc + dis, {}", val),
+      &Some(AddressImmediate) => format!("z80_write(z, z->pc++, {})", val),
       &Some(AddressExtended) => format!("lo = z->pc++;
   hi = z->pc++;
-  z->ram[hi << 8 | lo]"),
-      &Some(AddressIndexed(ref src)) => format!("z->ram[z->{} + (int8_t) z->pc++]", src).to_lowercase(),
-      &Some(AddressRegister(ref src)) => format!("z->ram[z->{}]", src).to_lowercase(),
+  out =
+  z80_write(z, hi << 8 | lo, {})", val),
+      &Some(AddressIndexed(ref src)) => format!("z80_write(z, z->{} + (int8_t) z->pc++, {})", src, val).to_lowercase(),
+      &Some(AddressRegister(ref src)) => format!("z80_write(z, z->{}, {})", src, val).to_lowercase(),
 
       _ => unreachable!(),
     }
@@ -207,6 +209,32 @@ mod func_utils {
   pub fn vf() -> String {
     vf1("res")
   }
+
+  pub fn yf1(arg: &str) -> String {
+    format!("z->yf = {} & (1 << 4);", arg)
+  }
+
+  pub fn yf() -> String {
+    yf1("res")
+  }
+
+  pub fn hf() -> String {
+    // TODO: need info about arguments?
+    format!("z->hf = 0;")
+  }
+
+  pub fn cf() -> String {
+    // TODO: need info about arguments?
+    format!("z->cf = 0;")
+  }
+
+  pub fn xf1(arg: &str) -> String {
+    format!("z->xf = {} & (1 << 2);", arg)
+  }
+
+  pub fn xf() -> String {
+    xf1("res")
+  }
 }
 
 macro_rules! flags {
@@ -228,20 +256,29 @@ fn emit_op_table<W>(ops: &[ParsedOpcode], wop: &mut W, wfun: &mut W) where W : s
       (&ADD, dst, src) => {
         format!("{};
   res = {} += src;
-  {}", read(src), lval(dst), flags!(zf(), nf(0), sf(), vf()))
+  {}", read(src), write(dst, src+1), flags!(sf(), zf(), yf(), hf(), xf(), vf(), nf(0), cf()))
       }
 
       (&SUB, s, _) => {
         format!("{};
   res = {} -= src;
-  {}", read(s), "z->a", flags!(zf(), nf(1), sf(), pf()))
+  {}", read(s), "z->a", flags!(sf(), zf(), yf(), hf(), xf(), vf(), nf(1), cf()))
       }
 
-      // (&INC, _, _) => {
-      //   fname = format!("z80_op_inc_{}", label(arg1));
+      (&INC, n, _) => {
+        format!("{};
+  res = {} += 1;
+  {}", read(n), lval(n), flags!(sf(), zf(), yf(), hf(), xf(), vf(), nf(0)))
+      }
 
-      // }
+      (&DEC, n, _) => {
+        format!("{};
+  res = {} -= 1;
+  {}", read(n), lval(n), flags!(sf(), zf(), yf(), hf(), xf(), vf(), nf(1)))
+      }
 
+      // TODO: this doesn't actually handle 16bit loads correctly,
+      // see op_ld_extadd_hl for instance
       (&LD, dst, src) => {
         format!("{};\n  {} = src;", read(src), lval(dst))
       }
