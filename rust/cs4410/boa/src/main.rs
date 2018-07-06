@@ -79,7 +79,7 @@ pub enum TokenKind {
   Equals,
   BinOp(BinOp),
   Keyword(Keyword),
-  Ident(String),
+  Ident(usize),
   Number(i64),
 }
 
@@ -104,6 +104,7 @@ pub struct TokenStream<'a> {
   input: CharStream<'a>,
   peeked_token: Option<Token>,
   saved_position: Option<TextPosition>,
+  symbols: Vec<String>,
 }
 
 impl<'a> TokenStream<'a> {
@@ -112,6 +113,7 @@ impl<'a> TokenStream<'a> {
       input: CharStream::new(input),
       peeked_token: None,
       saved_position: None,
+      symbols: Vec::new(),
     }
   }
 
@@ -187,7 +189,14 @@ impl<'a> TokenStream<'a> {
       "add1" => TokenKind::Keyword(Keyword::Add1),
       "sub1" => TokenKind::Keyword(Keyword::Sub1),
 
-      _ => TokenKind::Ident(s),
+      _ => TokenKind::Ident(
+        match self.symbols.iter().position(|sym| s == *sym) {
+          Some(idx) => idx,
+          None => {
+            self.symbols.push(s);
+            self.symbols.len() - 1
+          }
+        })
     }
   }
 
@@ -247,12 +256,15 @@ impl<'a> TokenStream<'a> {
 mod tests {
   use super::*;
 
-  fn test_lexer(input: &str, expected: &[TokenKind]) {
+  fn test_lexer(input: &str, expected: &[TokenKind], symbols: &[&str]) {
     let mut t = TokenStream::new(input);
+
     for token in expected {
       assert_eq!(*token, t.next().kind);
     }
     assert!(t.is_eof());
+
+    assert_eq!(t.symbols, symbols);
   }
 
   #[test]
@@ -273,7 +285,7 @@ mod tests {
       Number(7),
       EOF];
 
-    test_lexer("if sub1(1): 6 else: 7", &tokens);
+    test_lexer("if sub1(1): 6 else: 7", &tokens, &[]);
   }
 
   #[test]
@@ -294,7 +306,7 @@ mod tests {
       Number(5),
       RightParen,
       EOF];
-    test_lexer("(2 - 3) + (4 * 5)", &tokens);
+    test_lexer("(2 - 3) + (4 * 5)", &tokens, &[]);
   }
 
   #[test]
@@ -303,28 +315,32 @@ mod tests {
     use Keyword::*;
     use BinOp::*;
 
+    let symbols = [
+      "first", "second"
+    ];
+
     let tokens = [
       Keyword(Let),
-      Ident("first".to_string()),
+      Ident(0),
       Equals,
       Number(2),
       BinOp(Minus),
       Number(3),
       Keyword(In),
       Keyword(Let),
-      Ident("second".to_string()),
+      Ident(1),
       Equals,
       Number(4),
       BinOp(Mult),
       Number(5),
       Keyword(In),
-      Ident("first".to_string()),
+      Ident(0),
       BinOp(Plus),
-      Ident("second".to_string()),
+      Ident(1),
       EOF];
     test_lexer("let first = 2 - 3 in
                 let second = 4 * 5 in
-                first + second", &tokens);
+                first + second", &tokens, &symbols);
   }
 }
 
@@ -363,14 +379,6 @@ struct AST {
   root: Expr,
   symbols: Vec<String>,
 }
-
-
-
-
-
-
-
-
 
 
 
