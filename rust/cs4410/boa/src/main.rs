@@ -1,5 +1,6 @@
 // The Boa language is closer to ML than Lisp, so we discard the S-exp parser.
 
+use std::io::{self, Read};
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -361,7 +362,7 @@ enum Prim1 {
 enum Prim2 {
   Plus,
   Minus,
-  Times,
+  Mult,
 }
 
 #[derive(Debug)]
@@ -369,7 +370,7 @@ enum Expr {
   Number(i32),
   Id(usize),
   Prim1(Prim1, Box<Expr>),
-  Prim2(Prim2, Box<Expr>),
+  Prim2(Prim2, Box<Expr>, Box<Expr>),
   Let(Vec<(usize, Expr)>, Box<Expr>),
   If(Box<Expr>, Box<Expr>, Box<Expr>),
 }
@@ -380,9 +381,117 @@ struct AST {
   symbols: Vec<String>,
 }
 
+// Helper for printing location of errors
+fn loc(t : &Token) -> String {
+  format!("{}:{}", t.start.line, t.start.column)
+}
 
+fn expect(input: &mut TokenStream, kind: TokenKind) {
+  let t = input.next();
+  if t.kind != kind  {
+    panic!("{}: Expected token '{:?}', but got '{:?}'",
+           loc(&t), kind, t.kind);
+  }
+}
+
+fn parse(mut input: TokenStream) -> AST {
+  let root = parse_expr(&mut input);
+  AST {
+    root: root,
+    symbols: input.symbols,
+  }
+}
+
+fn parse_expr(mut input: &mut TokenStream) -> Expr {
+  use TokenKind::*;
+  use Keyword::*;
+
+  match input.peek().kind {
+    Keyword(Let) => {
+      input.next(); // eat the let
+
+      let bindings = parse_bindings(&mut input);
+      expect(input, Keyword(In));
+      let body = parse_expr(&mut input);
+      Expr::Let(bindings, Box::new(body))
+    }
+
+    _ => parse_binop_expr(input)
+  }
+}
+
+fn parse_bindings(input: &mut TokenStream) -> Vec<(usize, Expr)> {
+  let t = input.next();
+  let mut bindings = Vec::new();
+
+  if let TokenKind::Ident(s) = t.kind {
+    expect(input, TokenKind::Equals);
+    let expr = parse_expr(input);
+    bindings.push((s, expr));
+
+    if let TokenKind::Comma = input.peek().kind {
+      input.next(); // eat the comma
+      bindings.append(&mut parse_bindings(input));
+    }
+    bindings
+  } else {
+    panic!("{}: Expected identifier, got {:?}", loc(&t), t.kind);
+  }
+}
+
+fn parse_binop_expr(input: &mut TokenStream) -> Expr {
+  use TokenKind::*;
+  use Keyword::*;
+  use BinOp::*;
+
+  let t = input.peek().clone();
+  match t.kind {
+    Number(n) => { input.next(); Expr::Number(n as i32) }
+
+    Ident(s) => { input.next(); Expr::Id(s) }
+
+    Keyword(ref k @ Add1) | Keyword(ref k @ Sub1)=> {
+      input.next(); // eat the keyword
+      expect(input, LeftParen);
+      let expr = parse_expr(input);
+      expect(input, RightParen);
+      Expr::Prim1(match k {
+        Add1 => Prim1::Add1,
+        Sub1 => Prim1::Sub1,
+        _ => unreachable!(),
+      }, Box::new(expr))
+    }
+
+    LeftParen => {
+      input.next(); // eat the paren
+      let expr = parse_expr(input);
+      expect(input, RightParen);
+      expr
+    }
+
+    _ => {
+      // It's an expr!
+      let left = parse_expr(input);
+      let sym = input.next();
+      let right = parse_expr(input);
+
+      Expr::Prim2(match sym.kind {
+        BinOp(Plus) => Prim2::Plus,
+        BinOp(Minus) => Prim2::Minus,
+        BinOp(Mult) => Prim2::Mult,
+
+        _ => panic!("{}: Expected a binary operator, got '{:?}'",
+                    loc(&sym), sym.kind)
+      }, Box::new(left), Box::new(right))
+    }
+  }
+}
 
 
 fn main() {
-    println!("Hello, world!");
+  let stdin = io::stdin();
+  let mut input = String::new();
+  stdin.lock().read_to_string(&mut input).unwrap();
+  let ast = parse(TokenStream::new(&input));
+  println!("{:?}", ast);
 }
