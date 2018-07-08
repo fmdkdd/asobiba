@@ -402,7 +402,20 @@ fn parse(mut input: TokenStream) -> AST {
   }
 }
 
-fn parse_expr(mut input: &mut TokenStream) -> Expr {
+// Have to change the Boa grammar to be LL(1) and handle (unspecified) operator
+// precedence.  Let's go with standard precedence for binary operators.
+//
+// expr: 'let' bindings 'in' expr
+//     | 'if' expr ':' expr 'else:' expr
+//     | addition
+// addition: multiplication (('-' | '+') multiplication)*
+// multiplication: primary ('*' primary)*
+// primary: NUMBER | IDENTIFIER
+//        | ('add1' | 'sub1') '(' expr ')'
+//        | '(' expr ')'
+// bindings: IDENTIFIER '=' expr (',' bindings)*
+
+fn parse_expr(input: &mut TokenStream) -> Expr {
   use TokenKind::*;
   use Keyword::*;
 
@@ -410,13 +423,25 @@ fn parse_expr(mut input: &mut TokenStream) -> Expr {
     Keyword(Let) => {
       input.next(); // eat the let
 
-      let bindings = parse_bindings(&mut input);
+      let bindings = parse_bindings(input);
       expect(input, Keyword(In));
-      let body = parse_expr(&mut input);
+      let body = parse_expr(input);
       Expr::Let(bindings, Box::new(body))
     }
 
-    _ => parse_binop_expr(input)
+    Keyword(If) => {
+      input.next(); // eat the if
+
+      let cond = parse_expr(input);
+      expect(input, Colon);
+      let then = parse_expr(input);
+      expect(input, Keyword(Else));
+      expect(input, Colon);
+      let els = parse_expr(input);
+      Expr::If(Box::new(cond), Box::new(then), Box::new(els))
+    }
+
+    _ => parse_addition(input)
   }
 }
 
@@ -439,10 +464,57 @@ fn parse_bindings(input: &mut TokenStream) -> Vec<(usize, Expr)> {
   }
 }
 
-fn parse_binop_expr(input: &mut TokenStream) -> Expr {
+fn parse_addition(input: &mut TokenStream) -> Expr {
+  use TokenKind::*;
+  use BinOp::*;
+
+  let mut expr = parse_multiplication(input);
+
+  loop {
+    match input.peek().kind.clone() {
+      BinOp(op @ Plus) | BinOp(op @ Minus) => {
+        input.next(); // eat the operator
+
+        let right = parse_multiplication(input);
+        expr = Expr::Prim2(match op {
+          Plus => Prim2::Plus,
+          Minus => Prim2::Minus,
+          _ => unreachable!(),
+        }, Box::new(expr), Box::new(right))
+      }
+
+      _ => break
+    }
+  }
+
+  expr
+}
+
+fn parse_multiplication(input: &mut TokenStream) -> Expr {
+  use TokenKind::*;
+  use BinOp::*;
+
+  let mut expr = parse_primary(input);
+
+  loop {
+    match input.peek().kind.clone() {
+      BinOp(Mult) => {
+        input.next(); // eat the operator
+
+        let right = parse_primary(input);
+        expr = Expr::Prim2(Prim2::Mult, Box::new(expr), Box::new(right))
+      }
+
+      _ => break
+    }
+  }
+
+  expr
+}
+
+fn parse_primary(input: &mut TokenStream) -> Expr {
   use TokenKind::*;
   use Keyword::*;
-  use BinOp::*;
 
   let t = input.peek().clone();
   match t.kind {
@@ -469,20 +541,9 @@ fn parse_binop_expr(input: &mut TokenStream) -> Expr {
       expr
     }
 
-    _ => {
-      // It's an expr!
-      let left = parse_expr(input);
-      let sym = input.next();
-      let right = parse_expr(input);
-
-      Expr::Prim2(match sym.kind {
-        BinOp(Plus) => Prim2::Plus,
-        BinOp(Minus) => Prim2::Minus,
-        BinOp(Mult) => Prim2::Mult,
-
-        _ => panic!("{}: Expected a binary operator, got '{:?}'",
-                    loc(&sym), sym.kind)
-      }, Box::new(left), Box::new(right))
+    _ => unreachable!()
+  }
+}
     }
   }
 }
