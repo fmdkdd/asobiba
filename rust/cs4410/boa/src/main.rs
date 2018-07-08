@@ -352,20 +352,20 @@ mod tests {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Prim1 {
   Add1,
   Sub1,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Prim2 {
   Plus,
   Minus,
   Mult,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum Expr {
   Number(i32),
   Id(usize),
@@ -394,11 +394,11 @@ fn expect(input: &mut TokenStream, kind: TokenKind) {
   }
 }
 
-fn parse(mut input: TokenStream) -> AST {
-  let root = parse_expr(&mut input);
+fn parse(input: &mut TokenStream) -> AST {
+  let root = parse_expr(input);
   AST {
     root: root,
-    symbols: input.symbols,
+    symbols: input.symbols.clone(),
   }
 }
 
@@ -544,7 +544,56 @@ fn parse_primary(input: &mut TokenStream) -> Expr {
     _ => unreachable!()
   }
 }
-    }
+
+#[cfg(test)]
+mod parse_tests {
+  use super::*;
+
+  fn test_parser(input: &str, expected: &Expr, symbols: &[&str]) {
+    let mut t = TokenStream::new(input);
+    let ast = parse(&mut t);
+
+    assert!(t.is_eof());
+    assert_eq!(t.symbols, symbols);
+    assert_eq!(&ast.root, expected);
+  }
+
+  #[test]
+  fn ifexpr() {
+    use Expr::*;
+    use Prim1::*;
+
+    test_parser("if sub1(1): 6 else: 7",
+                &If(Box::new(Prim1(Sub1, Box::new(Number(1)))),
+                    Box::new(Number(6)),
+                    Box::new(Number(7))),
+                &[]);
+  }
+
+  #[test]
+  fn letexpr() {
+    use Expr::*;
+    use Prim2::*;
+
+    test_parser("let a = 2 - 3 in
+                 let b = 4 * 5 in
+                 a + b",
+                &Let(vec![(0, Prim2(Minus, Box::new(Number(2)), Box::new(Number(3))))],
+                     Box::new(Let(vec![(1, Prim2(Mult, Box::new(Number(4)), Box::new(Number(5))))],
+                                  Box::new(Prim2(Plus, Box::new(Id(0)), Box::new(Id(1))))))),
+                &["a", "b"]);
+  }
+
+  #[test]
+  fn parenexpr() {
+    use Expr::*;
+    use Prim2::*;
+
+    test_parser("2 + (3 + 4)",
+                &Prim2(Plus,
+                       Box::new(Number(2)),
+                       Box::new(Prim2(Plus, Box::new(Number(3)), Box::new(Number(4))))),
+                &[]);
   }
 }
 
@@ -553,6 +602,6 @@ fn main() {
   let stdin = io::stdin();
   let mut input = String::new();
   stdin.lock().read_to_string(&mut input).unwrap();
-  let ast = parse(TokenStream::new(&input));
+  let ast = parse(&mut TokenStream::new(&input));
   println!("{:?}", ast);
 }
