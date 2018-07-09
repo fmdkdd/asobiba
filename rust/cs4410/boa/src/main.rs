@@ -1,6 +1,7 @@
 // The Boa language is closer to ML than Lisp, so we discard the S-exp parser.
 
 use std::io::{self, Read};
+use std::fmt::Display;
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -351,7 +352,6 @@ mod tests {
 // Parser
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-
 #[derive(Debug, PartialEq)]
 enum Prim1 {
   Add1,
@@ -366,18 +366,18 @@ enum Prim2 {
 }
 
 #[derive(Debug, PartialEq)]
-enum Expr {
-  Number(i32),
-  Id(usize),
-  Prim1(Prim1, Box<Expr>),
-  Prim2(Prim2, Box<Expr>, Box<Expr>),
-  Let(Vec<(usize, Expr)>, Box<Expr>),
-  If(Box<Expr>, Box<Expr>, Box<Expr>),
+enum Expr<T> {
+  Number(i32, T),
+  Id(usize, T),
+  Prim1(Prim1, Box<Expr<T>>, T),
+  Prim2(Prim2, Box<Expr<T>>, Box<Expr<T>>, T),
+  Let(Vec<(usize, Expr<T>)>, Box<Expr<T>>, T),
+  If(Box<Expr<T>>, Box<Expr<T>>, Box<Expr<T>>, T),
 }
 
 #[derive(Debug)]
-struct AST {
-  root: Expr,
+struct AST<T> {
+  root: Expr<T>,
   symbols: Vec<String>,
 }
 
@@ -394,7 +394,7 @@ fn expect(input: &mut TokenStream, kind: TokenKind) {
   }
 }
 
-fn parse(input: &mut TokenStream) -> AST {
+fn parse(input: &mut TokenStream) -> AST<()> {
   let root = parse_expr(input);
   AST {
     root: root,
@@ -415,7 +415,7 @@ fn parse(input: &mut TokenStream) -> AST {
 //        | '(' expr ')'
 // bindings: IDENTIFIER '=' expr (',' bindings)*
 
-fn parse_expr(input: &mut TokenStream) -> Expr {
+fn parse_expr(input: &mut TokenStream) -> Expr<()> {
   use TokenKind::*;
   use Keyword::*;
 
@@ -426,7 +426,7 @@ fn parse_expr(input: &mut TokenStream) -> Expr {
       let bindings = parse_bindings(input);
       expect(input, Keyword(In));
       let body = parse_expr(input);
-      Expr::Let(bindings, Box::new(body))
+      Expr::Let(bindings, Box::new(body), ())
     }
 
     Keyword(If) => {
@@ -438,14 +438,14 @@ fn parse_expr(input: &mut TokenStream) -> Expr {
       expect(input, Keyword(Else));
       expect(input, Colon);
       let els = parse_expr(input);
-      Expr::If(Box::new(cond), Box::new(then), Box::new(els))
+      Expr::If(Box::new(cond), Box::new(then), Box::new(els), ())
     }
 
     _ => parse_addition(input)
   }
 }
 
-fn parse_bindings(input: &mut TokenStream) -> Vec<(usize, Expr)> {
+fn parse_bindings(input: &mut TokenStream) -> Vec<(usize, Expr<()>)> {
   let t = input.next();
   let mut bindings = Vec::new();
 
@@ -464,7 +464,7 @@ fn parse_bindings(input: &mut TokenStream) -> Vec<(usize, Expr)> {
   }
 }
 
-fn parse_addition(input: &mut TokenStream) -> Expr {
+fn parse_addition(input: &mut TokenStream) -> Expr<()> {
   use TokenKind::*;
   use BinOp::*;
 
@@ -480,7 +480,7 @@ fn parse_addition(input: &mut TokenStream) -> Expr {
           Plus => Prim2::Plus,
           Minus => Prim2::Minus,
           _ => unreachable!(),
-        }, Box::new(expr), Box::new(right))
+        }, Box::new(expr), Box::new(right), ())
       }
 
       _ => break
@@ -490,7 +490,7 @@ fn parse_addition(input: &mut TokenStream) -> Expr {
   expr
 }
 
-fn parse_multiplication(input: &mut TokenStream) -> Expr {
+fn parse_multiplication(input: &mut TokenStream) -> Expr<()> {
   use TokenKind::*;
   use BinOp::*;
 
@@ -502,7 +502,7 @@ fn parse_multiplication(input: &mut TokenStream) -> Expr {
         input.next(); // eat the operator
 
         let right = parse_primary(input);
-        expr = Expr::Prim2(Prim2::Mult, Box::new(expr), Box::new(right))
+        expr = Expr::Prim2(Prim2::Mult, Box::new(expr), Box::new(right), ())
       }
 
       _ => break
@@ -512,15 +512,15 @@ fn parse_multiplication(input: &mut TokenStream) -> Expr {
   expr
 }
 
-fn parse_primary(input: &mut TokenStream) -> Expr {
+fn parse_primary(input: &mut TokenStream) -> Expr<()> {
   use TokenKind::*;
   use Keyword::*;
 
   let t = input.peek().clone();
   match t.kind {
-    Number(n) => { input.next(); Expr::Number(n as i32) }
+    Number(n) => { input.next(); Expr::Number(n as i32, ()) }
 
-    Ident(s) => { input.next(); Expr::Id(s) }
+    Ident(s) => { input.next(); Expr::Id(s, ()) }
 
     Keyword(ref k @ Add1) | Keyword(ref k @ Sub1)=> {
       input.next(); // eat the keyword
@@ -531,7 +531,7 @@ fn parse_primary(input: &mut TokenStream) -> Expr {
         Add1 => Prim1::Add1,
         Sub1 => Prim1::Sub1,
         _ => unreachable!(),
-      }, Box::new(expr))
+      }, Box::new(expr), ())
     }
 
     LeftParen => {
@@ -549,7 +549,7 @@ fn parse_primary(input: &mut TokenStream) -> Expr {
 mod parse_tests {
   use super::*;
 
-  fn test_parser(input: &str, expected: &Expr, symbols: &[&str]) {
+  fn test_parser(input: &str, expected: &Expr<()>, symbols: &[&str]) {
     let mut t = TokenStream::new(input);
     let ast = parse(&mut t);
 
@@ -564,9 +564,9 @@ mod parse_tests {
     use Prim1::*;
 
     test_parser("if sub1(1): 6 else: 7",
-                &If(Box::new(Prim1(Sub1, Box::new(Number(1)))),
-                    Box::new(Number(6)),
-                    Box::new(Number(7))),
+                &If(Box::new(Prim1(Sub1, Box::new(Number(1, ())), ())),
+                    Box::new(Number(6, ())),
+                    Box::new(Number(7, ())), ()),
                 &[]);
   }
 
@@ -578,9 +578,9 @@ mod parse_tests {
     test_parser("let a = 2 - 3 in
                  let b = 4 * 5 in
                  a + b",
-                &Let(vec![(0, Prim2(Minus, Box::new(Number(2)), Box::new(Number(3))))],
-                     Box::new(Let(vec![(1, Prim2(Mult, Box::new(Number(4)), Box::new(Number(5))))],
-                                  Box::new(Prim2(Plus, Box::new(Id(0)), Box::new(Id(1))))))),
+                &Let(vec![(0, Prim2(Minus, Box::new(Number(2, ())), Box::new(Number(3, ())), ()))],
+                     Box::new(Let(vec![(1, Prim2(Mult, Box::new(Number(4, ())), Box::new(Number(5, ())), ()))],
+                                  Box::new(Prim2(Plus, Box::new(Id(0, ())), Box::new(Id(1, ())), ())), ())), ()),
                 &["a", "b"]);
   }
 
@@ -591,17 +591,225 @@ mod parse_tests {
 
     test_parser("2 + (3 + 4)",
                 &Prim2(Plus,
-                       Box::new(Number(2)),
-                       Box::new(Prim2(Plus, Box::new(Number(3)), Box::new(Number(4))))),
+                       Box::new(Number(2, ())),
+                       Box::new(Prim2(Plus, Box::new(Number(3, ())), Box::new(Number(4, ())), ())), ()),
                 &[]);
   }
 }
 
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Compiler
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+// Number each node of the AST
+fn tag<T>(ast: AST<T>) -> AST<(usize, T)> {
+  AST {
+    root: tag_expr(ast.root, 1).0,
+    symbols: ast.symbols.clone(),
+  }
+}
+
+fn tag_expr<T>(expr: Expr<T>, seed: usize) -> (Expr<(usize, T)>, usize) {
+  use Expr::*;
+
+  match expr {
+    Number(n, t) => (Number(n, (seed, t)), seed+1),
+    Id(s, t) => (Id(s, (seed, t)), seed+1),
+    Prim1(op, exp, t) => {
+      let (e, seed) = tag_expr(*exp, seed);
+      (Prim1(op, Box::new(e), (seed, t)), seed+1)
+    }
+    Prim2(op, left, right, t) => {
+      let (l, seed) = tag_expr(*left, seed);
+      let (r, seed) = tag_expr(*right, seed);
+      (Prim2(op, Box::new(l), Box::new(r), (seed, t)), seed+1)
+    }
+    If(cond, then, els, t) => {
+      let (c, seed) = tag_expr(*cond, seed);
+      let (th, seed) = tag_expr(*then, seed);
+      let (el, seed) = tag_expr(*els, seed);
+      (If(Box::new(c), Box::new(th), Box::new(el), (seed, t)), seed+1)
+    }
+    Let(bindings, body, t) => {
+      let (binds, seed) = tag_bindings(bindings, seed);
+      let (b, seed) = tag_expr(*body, seed);
+      (Let(binds, Box::new(b), (seed, t)), seed+1)
+    }
+  }
+}
+
+fn tag_bindings<T>(bindings: Vec<(usize, Expr<T>)>, mut seed: usize)
+                   -> (Vec<(usize, Expr<(usize, T)>)>, usize) {
+  let mut ret = Vec::new();
+  for (id, expr) in bindings {
+    let (ex, s) = tag_expr(expr, seed);
+    seed = s;
+    ret.push((id, ex));
+  }
+  (ret, seed)
+}
+
+#[derive(Debug)]
+enum Reg {
+  EAX,
+  ESP,
+}
+
+#[derive(Debug)]
+enum Arg {
+  Const(i32),
+  Reg(Reg),
+  RegOffset(Reg, usize),
+}
+
+#[derive(Debug)]
+enum Instr {
+  Mov(Arg, Arg),
+  Inc(Arg),
+  Dec(Arg),
+  Cmp(Arg, Arg),
+  Label(String),
+  Jmp(String),
+  Je(String),
+}
+
+/// Return the stack index of symbol ID in ENV.
+fn lookup(id: usize, env: &[usize]) -> Option<usize> {
+  // Look from the right in order to always get the /latest/ binding
+  env.iter().rposition(|&n| n == id).map(|n| n+1)
+}
+
+fn compile<T>(ast: &AST<(usize, T)>) -> Vec<Instr> {
+  compile_expr(&ast.root, &ast.symbols, &mut vec![])
+}
+
+fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -> Vec<Instr> {
+  use Instr::*;
+  use Prim1::*;
+  use Arg::*;
+  use Reg::*;
+  use Expr::*;
+
+  match e {
+    Number(n, _) => vec![Mov(Reg(EAX), Const(*n))],
+
+    Prim1(Add1, ex, _) => {
+      let mut v = compile_expr(ex, symbols,env);
+      v.push(Inc(Reg(EAX)));
+      v
+    }
+
+    Prim1(Sub1, ex, _) => {
+      let mut v = compile_expr(ex, symbols, env);
+      v.push(Dec(Reg(EAX)));
+      v
+    }
+
+    Prim2(_, _, _, _) => unimplemented!(),
+
+    Id(s, _) => match lookup(*s, env) {
+      Some(n) => vec![Mov(Reg(EAX), RegOffset(ESP, n))],
+      None => panic!("Identifier not bound '{}'", symbols[*s]),
+    }
+
+    Let(bindings, body, _) => {
+      let mut env2 = env.clone();
+      let mut v = Vec::new();
+
+      // Check for duplicate bindings first, which are forbidden by the
+      // language.
+      let mut b : Vec<usize> = bindings.iter().map(|&(id,_)| id).collect();
+      b.sort();
+      b.dedup();
+      if b.len() != bindings.len() {
+        panic!("Duplicate bindings in `let`");
+      }
+
+      for (x, ex) in bindings {
+        v.append(&mut compile_expr(ex, symbols, &env2));
+        env2.push(*x);
+        v.push(Mov(RegOffset(ESP, env2.len()), Reg(EAX)));
+      }
+
+      v.append(&mut compile_expr(body, symbols, &mut env2));
+      v
+    }
+
+    If(cond, then, els, (n, _)) => {
+      let mut v = Vec::new();
+      v.append(&mut compile_expr(cond, symbols, env));
+      v.push(Cmp(Reg(EAX), Const(0)));
+      let if_false = format!("if_false_{}", n);
+      let done = format!("done_{}", n);
+      v.push(Je(if_false.clone()));
+      v.append(&mut compile_expr(then, symbols, env));
+      v.push(Jmp(done.clone()));
+      v.push(Label(if_false));
+      v.append(&mut compile_expr(els, symbols, env));
+      v.push(Label(done));
+      v
+    }
+  }
+}
+
+fn emit_asm(instrs: &[Instr]) -> String {
+  format!("section.text
+global entry_point
+entry_point:
+  {}
+  ret", instrs.iter().map(|i| format!("{}", i)).collect::<String>())
+}
+
+impl Display for Reg {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    use Reg::*;
+
+    match self {
+      EAX => write!(f, "eax"),
+      ESP => write!(f, "esp"),
+    }
+  }
+}
+
+impl Display for Arg {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    use Arg::*;
+
+    match self {
+      Const(n) => write!(f, "{}", n),
+      Reg(r) => write!(f, "{}", r),
+      RegOffset(r, o) => write!(f, "[{} - 4*{}]", r, o),
+    }
+  }
+}
+
+impl Display for Instr {
+  fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    use Instr::*;
+
+    match self {
+      Mov(dst, src) => writeln!(f, "mov {}, {}", dst, src),
+      Inc(dst) => writeln!(f, "inc {}", dst),
+      Dec(dst) => writeln!(f, "dec {}", dst),
+      Cmp(a, b) => writeln!(f, "cmp {}, {}", a, b),
+      Label(s) => writeln!(f, "{}:", s),
+      Jmp(s) => writeln!(f, "jmp {}", s),
+      Je(s) => writeln!(f, "je {}", s),
+    }
+  }
+}
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Main
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 fn main() {
   let stdin = io::stdin();
   let mut input = String::new();
   stdin.lock().read_to_string(&mut input).unwrap();
   let ast = parse(&mut TokenStream::new(&input));
-  println!("{:?}", ast);
+  println!("{}", emit_asm(&compile(&tag(ast))));
 }
