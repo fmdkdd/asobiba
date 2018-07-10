@@ -603,7 +603,7 @@ mod parse_tests {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 // Number each node of the AST
-fn tag<T>(ast: AST<T>) -> AST<(usize, T)> {
+fn number<T>(ast: AST<T>) -> AST<(usize, T)> {
   AST {
     root: tag_expr(ast.root, 1).0,
     symbols: ast.symbols.clone(),
@@ -650,9 +650,23 @@ fn tag_bindings<T>(bindings: Vec<(usize, Expr<T>)>, mut seed: usize)
   (ret, seed)
 }
 
+fn tag<T>(expr: &Expr<T>) -> &T {
+  use Expr::*;
+
+  match expr {
+    Number(_, t) => t,
+    Id(_, t) => t,
+    Prim1(_, _, t) => t,
+    Prim2(_, _, _, t) => t,
+    Let(_, _, t) => t,
+    If(_, _, _, t) => t,
+  }
+}
+
 #[derive(Debug)]
 enum Reg {
   EAX,
+  ECX,
   ESP,
 }
 
@@ -668,6 +682,9 @@ enum Instr {
   Mov(Arg, Arg),
   Inc(Arg),
   Dec(Arg),
+  Add(Arg, Arg),
+  Sub(Arg, Arg),
+  IMul(Arg, Arg),
   Cmp(Arg, Arg),
   Label(String),
   Jmp(String),
@@ -687,6 +704,7 @@ fn compile<T>(ast: &AST<(usize, T)>) -> Vec<Instr> {
 fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -> Vec<Instr> {
   use Instr::*;
   use Prim1::*;
+  use Prim2::*;
   use Arg::*;
   use Reg::*;
   use Expr::*;
@@ -706,7 +724,29 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       v
     }
 
-    Prim2(_, _, _, _) => unimplemented!(),
+    Prim2(op, l, r, _) => {
+      // If l and r aren't immediate, we cannot compile
+      if !is_anf(l) || !is_anf(r) {
+        panic!("Binary expression not in ANF");
+      }
+
+      let mut v = compile_expr(l, symbols, env);
+      // Set this result aside
+      // (using EBX segfaults, so I'm assuming that register has a role in the
+      // calling convention)
+      v.push(Mov(Reg(ECX), Reg(EAX)));
+      // Get the right-hand into EAX
+      v.append(&mut compile_expr(r, symbols, env));
+      // Combine the two
+      let a = Reg(EAX);
+      let b = Reg(ECX);
+      v.push(match op {
+        Plus => Add(a, b),
+        Minus => Sub(a, b),
+        Mult => IMul(a, b),
+      });
+      v
+    }
 
     Id(s, _) => match lookup(*s, env) {
       Some(n) => vec![Mov(Reg(EAX), RegOffset(ESP, n))],
@@ -767,6 +807,7 @@ impl Display for Reg {
 
     match self {
       EAX => write!(f, "eax"),
+      ECX => write!(f, "ecx"),
       ESP => write!(f, "esp"),
     }
   }
@@ -792,11 +833,67 @@ impl Display for Instr {
       Mov(dst, src) => writeln!(f, "mov {}, {}", dst, src),
       Inc(dst) => writeln!(f, "inc {}", dst),
       Dec(dst) => writeln!(f, "dec {}", dst),
+      Add(dst, src) => writeln!(f, "add {}, {}", dst, src),
+      Sub(dst, src) => writeln!(f, "sub {}, {}", dst, src),
+      IMul(dst, src) => writeln!(f, "imul {}, {}", dst, src),
       Cmp(a, b) => writeln!(f, "cmp {}, {}", a, b),
       Label(s) => writeln!(f, "{}:", s),
       Jmp(s) => writeln!(f, "jmp {}", s),
       Je(s) => writeln!(f, "je {}", s),
     }
+  }
+}
+
+// Binary expressions of arbitrary size cannot be compiled directly to return to
+// EAX.  We transform the program into an Administrative Normal Form (ANF),
+// which is composed only of *immediate* expressions which can be trivially
+// compiled.
+
+fn is_anf<T>(expr: &Expr<T>) -> bool {
+  use Expr::*;
+
+  match expr {
+    Prim1(_, e, _) => is_imm(e),
+    Prim2(_, l, r, _) => is_imm(l) && is_imm(r),
+    Let(es, e, _) => es.iter().all(|(_,e)| is_anf(e)) && is_anf(e),
+    If(e1, e2, e3, _) => is_imm(e1) && is_anf(e2) && is_anf(e3),
+    e => is_imm(e),
+  }
+}
+
+fn is_imm<T>(expr: &Expr<T>) -> bool {
+  use Expr::*;
+  match expr {
+    Number(_,_) | Id(_,_) => true,
+    _ => false
+  }
+}
+
+fn into_anf<T>(expr: Expr<(usize, T)>) -> Expr<(usize, T)>
+  where T: Clone
+{
+  use Expr::*;
+
+  match expr {
+    Number(_,_) | Id(_,_) => expr,
+    Prim1(p, e, t) => Prim1(p, Box::new(into_anf(*e)), t),
+    Prim2(p, l, r, t) => {
+      let (n0, _) = *tag(&l);
+      let (n1, _) = *tag(&r);
+      Let(vec![(n0, into_anf(*l)),
+               (n1, into_anf(*r))],
+          Box::new(Prim2(p,
+                         Box::new(Id(n0, t.clone())),
+                         Box::new(Id(n1, t.clone())), t.clone())), t)
+    },
+    Let(bs, e, t) =>
+      Let(bs.into_iter().map(|(x, b)| (x, into_anf(b))).collect(),
+          Box::new(into_anf(*e)), t),
+    If(cc, th, el, t) =>
+      If(Box::new(into_anf(*cc)),
+         Box::new(into_anf(*th)),
+         Box::new(into_anf(*el)),
+         t)
   }
 }
 
@@ -811,5 +908,19 @@ fn main() {
   let mut input = String::new();
   stdin.lock().read_to_string(&mut input).unwrap();
   let ast = parse(&mut TokenStream::new(&input));
-  println!("{}", emit_asm(&compile(&tag(ast))));
+
+  // First we tag each node with a unique number.  This is needed for compiling
+  // IF and for transforming into ANF.
+  let tagged_ast = number(ast);
+  // Then we reduce to ANF in order to compile binary expressions.
+  let anf_ast = AST {
+    root: into_anf(tagged_ast.root),
+    symbols: tagged_ast.symbols,
+  };
+  // Then we emit a list of assembly instructions
+  let instrs = compile(&anf_ast);
+  // And finally we emit ASM as a string
+  let asm = emit_asm(&instrs);
+  // And we print the result!
+  println!("{}", asm);
 }
