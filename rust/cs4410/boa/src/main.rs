@@ -797,7 +797,7 @@ fn emit_asm(instrs: &[Instr]) -> String {
   format!("section.text
 global entry_point
 entry_point:
-  {}
+{}
   ret", instrs.iter().map(|i| format!("{}", i)).collect::<String>())
 }
 
@@ -830,16 +830,16 @@ impl Display for Instr {
     use Instr::*;
 
     match self {
-      Mov(dst, src) => writeln!(f, "mov {}, {}", dst, src),
-      Inc(dst) => writeln!(f, "inc {}", dst),
-      Dec(dst) => writeln!(f, "dec {}", dst),
-      Add(dst, src) => writeln!(f, "add {}, {}", dst, src),
-      Sub(dst, src) => writeln!(f, "sub {}, {}", dst, src),
-      IMul(dst, src) => writeln!(f, "imul {}, {}", dst, src),
-      Cmp(a, b) => writeln!(f, "cmp {}, {}", a, b),
+      Mov(dst, src) => writeln!(f, "  mov {}, {}", dst, src),
+      Inc(dst) => writeln!(f, "  inc {}", dst),
+      Dec(dst) => writeln!(f, "  dec {}", dst),
+      Add(dst, src) => writeln!(f, "  add {}, {}", dst, src),
+      Sub(dst, src) => writeln!(f, "  sub {}, {}", dst, src),
+      IMul(dst, src) => writeln!(f, "  imul {}, {}", dst, src),
+      Cmp(a, b) => writeln!(f, "  cmp {}, {}", a, b),
       Label(s) => writeln!(f, "{}:", s),
-      Jmp(s) => writeln!(f, "jmp {}", s),
-      Je(s) => writeln!(f, "je {}", s),
+      Jmp(s) => writeln!(f, "  jmp {}", s),
+      Je(s) => writeln!(f, "  je {}", s),
     }
   }
 }
