@@ -869,31 +869,132 @@ fn is_imm<T>(expr: &Expr<T>) -> bool {
   }
 }
 
-fn into_anf<T>(expr: Expr<(usize, T)>) -> Expr<(usize, T)>
-  where T: Clone
-{
+// This helper will decompose an expression of arbitrary depth into ANF, where
+// all immediate expressions are put in a single context (second returned arg).
+// After that, into_anf will simply create a single Let expr with this context
+// as bindings.
+fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
+                -> (Expr<()>, Vec<(usize, Expr<()>)>) {
   use Expr::*;
 
   match expr {
-    Number(_,_) | Id(_,_) => expr,
-    Prim1(p, e, t) => Prim1(p, Box::new(into_anf(*e)), t),
-    Prim2(p, l, r, t) => {
-      let (n0, _) = *tag(&l);
-      let (n1, _) = *tag(&r);
-      Let(vec![(n0, into_anf(*l)),
-               (n1, into_anf(*r))],
-          Box::new(Prim2(p,
-                         Box::new(Id(n0, t.clone())),
-                         Box::new(Id(n1, t.clone())), t.clone())), t)
+    Number(n, _) => (Number(n, ()), vec![]),
+    Id(s, _) => (Id(s, ()), vec![]),
+    Prim1(p, e, _) => {
+      let (imm, mut ctx) = into_anf1(*e, symbols);
+      (Prim1(p, Box::new(imm), ()), ctx)
     },
-    Let(bs, e, t) =>
-      Let(bs.into_iter().map(|(x, b)| (x, into_anf(b))).collect(),
-          Box::new(into_anf(*e)), t),
-    If(cc, th, el, t) =>
-      If(Box::new(into_anf(*cc)),
-         Box::new(into_anf(*th)),
-         Box::new(into_anf(*el)),
-         t)
+
+    Prim2(p, l, r, (t, _)) => {
+      let (l_imm, mut l_ctx) = into_anf1(*l, symbols);
+      let (r_imm, mut r_ctx) = into_anf1(*r, symbols);
+      let sym = format!("prim2_{}", t);
+      symbols.push(sym);
+      let s = symbols.len() - 1;
+      l_ctx.append(&mut r_ctx);
+      l_ctx.push((s, Prim2(p, Box::new(l_imm), Box::new(r_imm), ())));
+      (Id(s, ()), l_ctx)
+    }
+
+    // For Let, we can 'flatten' the context gotten from the recursion.  Instead
+    // of:
+    //
+    //   let a = 1 + 2 + 3
+    //   =>
+    //   let c1 = 1 + 2, c2 = c1 + 3 in let a = c2 in a
+    //
+    // We transform directly to:
+    //
+    //  let c1 = 1 + 2, c2 = c1 + 3, a = c2 in a
+    //
+    // A final trick is to eliminate the last binding, which is redundant.
+    Let(bs, e, _) => {
+      let mut ctx = vec![];
+      for (x,b) in bs {
+        let (imm, mut c) = into_anf1(b, symbols);
+        ctx.append(&mut c);
+        if let Some((_, imm2)) = ctx.pop() {
+          ctx.push((x, imm2));
+        } else {
+          ctx.push((x, imm));
+        }
+      }
+      let (e_anf, mut c) = into_anf1(*e, symbols);
+      ctx.append(&mut c);
+      (Let(ctx, Box::new(e_anf), ()), vec![])
+    }
+
+    If(cc, th, el, _) => {
+      let (cc_anf, ctx) = into_anf1(*cc, symbols);
+      let (th_anf, th_ctx) = into_anf1(*th, symbols);
+      let (el_anf, el_ctx) = into_anf1(*el, symbols);
+      (If(Box::new(cc_anf),
+          Box::new(Let(th_ctx, Box::new(th_anf), ())),
+          Box::new(Let(el_ctx, Box::new(el_anf), ())),
+          ()),
+       ctx)
+    }
+  }
+}
+
+fn into_anf<T>(mut ast: AST<(usize, T)>) -> AST<()> {
+  let (e, ctx) = into_anf1(ast.root, &mut ast.symbols);
+
+  let root = if ctx.len() == 0 {
+    e
+  } else {
+    Expr::Let(ctx, Box::new(e), ())
+  };
+
+  let ast_anf = AST {
+    root: root,
+    symbols: ast.symbols,
+  };
+
+  if !is_anf(&ast_anf.root) {
+    panic!("Normalization into ANF failed");
+  } else {
+    ast_anf
+  }
+}
+
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Pretty printer
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+fn pp<T>(ast: &AST<T>) -> String {
+  pp_expr(&ast.root, &ast.symbols)
+}
+
+fn pp_expr<T>(expr: &Expr<T>, symbols: &[String]) -> String {
+  use Expr::*;
+  use Prim2::*;
+
+  match expr {
+    Number(n, _) => format!("{}", n),
+    Id(n, _) => format!("{}", symbols[*n]),
+    Prim1(p, e, _) => format!("{:?}({})", p, pp_expr(e, symbols)),
+    Prim2(p, l, r, _) => format!("{} {} {}",
+                                 pp_expr(l, symbols),
+                                 match p {
+                                   Plus => "+",
+                                   Minus => "-",
+                                   Mult => "*",
+                                 },
+                                 pp_expr(r, symbols)),
+    Let(bs, body, _) => format!("let {} in {}",
+                                bs.iter()
+                                .map(|(x,e)| format!("{} = {}",
+                                                     symbols[*x],
+                                                     pp_expr(e, symbols)))
+                                .collect::<Vec<String>>().join(",\n    "),
+                                pp_expr(body, symbols)),
+    If(cc, th, el, _) => format!("if {}:\n{}\nelse:\n{}",
+                                 pp_expr(cc, symbols),
+                                 pp_expr(th, symbols),
+                                 pp_expr(el, symbols))
   }
 }
 
@@ -910,15 +1011,15 @@ fn main() {
   let ast = parse(&mut TokenStream::new(&input));
 
   // First we tag each node with a unique number.  This is needed for compiling
-  // IF and for transforming into ANF.
-  let tagged_ast = number(ast);
-  // Then we reduce to ANF in order to compile binary expressions.
-  let anf_ast = AST {
-    root: into_anf(tagged_ast.root),
-    symbols: tagged_ast.symbols,
-  };
-  // Then we emit a list of assembly instructions
-  let instrs = compile(&anf_ast);
+  // IF and for transforming into ANF.  Then we reduce to ANF in order to
+  // compile binary expressions.
+  let anf_ast = into_anf(number(ast));
+
+  println!("{}", pp(&anf_ast));
+
+  // Then we emit a list of assembly instructions (we renumber since the ANF
+  // transformtion lost the numerotation)
+  let instrs = compile(&number(anf_ast));
   // And finally we emit ASM as a string
   let asm = emit_asm(&instrs);
   // And we print the result!
