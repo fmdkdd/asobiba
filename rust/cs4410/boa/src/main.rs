@@ -666,7 +666,6 @@ fn tag<T>(expr: &Expr<T>) -> &T {
 #[derive(Debug)]
 enum Reg {
   EAX,
-  ECX,
   ESP,
 }
 
@@ -712,6 +711,11 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
   match e {
     Number(n, _) => vec![Mov(Reg(EAX), Const(*n))],
 
+    Id(s, _) => match lookup(*s, env) {
+      Some(n) => vec![Mov(Reg(EAX), RegOffset(ESP, n))],
+      None => panic!("Identifier not bound '{}'", symbols[*s]),
+    }
+
     Prim1(Add1, ex, _) => {
       let mut v = compile_expr(ex, symbols,env);
       v.push(Inc(Reg(EAX)));
@@ -726,31 +730,27 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
 
     Prim2(op, l, r, _) => {
       // If l and r aren't immediate, we cannot compile
-      if !is_anf(l) || !is_anf(r) {
+      if !is_imm(l) || !is_imm(r) {
         panic!("Binary expression not in ANF");
       }
 
       let mut v = compile_expr(l, symbols, env);
-      // Set this result aside
-      // (using EBX segfaults, so I'm assuming that register has a role in the
-      // calling convention)
-      v.push(Mov(Reg(ECX), Reg(EAX)));
-      // Get the right-hand into EAX
-      v.append(&mut compile_expr(r, symbols, env));
+      // Now we know that `r` is immediate, so it's either a Number or an Id,
+      // and we can use the right-hand side of the compiled instruction
+      // directly to replace the Mov by the adequate arithmetic operation.
+      let b = if let Some(Mov(_, b)) = compile_expr(r, symbols, env).pop() {
+        b
+      } else {
+        unreachable!();
+      };
       // Combine the two
       let a = Reg(EAX);
-      let b = Reg(ECX);
       v.push(match op {
         Plus => Add(a, b),
         Minus => Sub(a, b),
         Mult => IMul(a, b),
       });
       v
-    }
-
-    Id(s, _) => match lookup(*s, env) {
-      Some(n) => vec![Mov(Reg(EAX), RegOffset(ESP, n))],
-      None => panic!("Identifier not bound '{}'", symbols[*s]),
     }
 
     Let(bindings, body, _) => {
@@ -807,7 +807,6 @@ impl Display for Reg {
 
     match self {
       EAX => write!(f, "eax"),
-      ECX => write!(f, "ecx"),
       ESP => write!(f, "esp"),
     }
   }
@@ -1015,7 +1014,7 @@ fn main() {
   // compile binary expressions.
   let anf_ast = into_anf(number(ast));
 
-  println!("{}", pp(&anf_ast));
+  // println!("{}", pp(&anf_ast));
 
   // Then we emit a list of assembly instructions (we renumber since the ANF
   // transformtion lost the numerotation)
