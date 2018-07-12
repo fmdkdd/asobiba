@@ -876,7 +876,7 @@ fn is_anf<T>(expr: &Expr<T>) -> bool {
   use Expr::*;
 
   match expr {
-    Prim1(_, e, _) => is_imm(e),
+    Prim1(_, e, _) => is_anf(e),
     Prim2(_, l, r, _) => is_imm(l) && is_imm(r),
     Let(es, e, _) => es.iter().all(|(_,e)| is_anf(e)) && is_anf(e),
     If(e1, e2, e3, _) => is_imm(e1) && is_anf(e2) && is_anf(e3),
@@ -929,18 +929,12 @@ fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
     // We transform directly to:
     //
     //  let c1 = 1 + 2, c2 = c1 + 3, a = c2 in a
-    //
-    // A final trick is to eliminate the last binding, which is redundant.
     Let(bs, e, _) => {
       let mut ctx = vec![];
       for (x,b) in bs {
         let (imm, mut c) = into_anf1(b, symbols);
         ctx.append(&mut c);
-        if let Some((_, imm2)) = ctx.pop() {
-          ctx.push((x, imm2));
-        } else {
-          ctx.push((x, imm));
-        }
+        ctx.push((x, imm));
       }
       let (e_anf, mut c) = into_anf1(*e, symbols);
       ctx.append(&mut c);
