@@ -867,6 +867,12 @@ impl Display for Instr {
   }
 }
 
+fn new_sym(prefix: &str, tag: usize, symbols: &mut Vec<String>) -> usize {
+  let s = format!("{}_{}", prefix, tag);
+  symbols.push(s);
+  symbols.len() - 1
+  }
+
 // Binary expressions of arbitrary size cannot be compiled directly to return to
 // EAX.  We transform the program into an Administrative Normal Form (ANF),
 // which is composed only of *immediate* expressions which can be trivially
@@ -892,6 +898,39 @@ fn is_imm<T>(expr: &Expr<T>) -> bool {
   }
 }
 
+fn replace<T>(a: usize, b: usize, expr: Expr<T>) -> Expr<T> {
+  use Expr::*;
+
+  match expr {
+    Id(n, t) => if n == a { Id(b, t) }
+                else      { Id(a, t) },
+    Prim1(p, e, t) => Prim1(p, Box::new(replace(a, b, *e)), t),
+    Prim2(p, l, r, t) => Prim2(p,
+                               Box::new(replace(a, b, *l)),
+                               Box::new(replace(a, b, *r)),
+                               t),
+    If(cc, th, el, t) => If(Box::new(replace(a, b, *cc)),
+                            Box::new(replace(a, b, *th)),
+                            Box::new(replace(a, b, *el)),
+                            t),
+    Let(bs, body, t) => {
+      let mut new_bs = Vec::new();
+      let mut shadow = false;
+      for (x,e) in bs {
+        if x == a { shadow = true }
+        if shadow {
+          new_bs.push((x, e));
+        } else {
+          new_bs.push((x, replace(a, b, e)));
+        }
+      }
+      Let(new_bs, Box::new(if shadow { *body }
+                           else      { replace(a, b, *body) }), t)
+    }
+    _ => expr,
+  }
+}
+
 // This helper will decompose an expression of arbitrary depth into ANF, where
 // all immediate expressions are put in a single context (second returned arg).
 // After that, into_anf will simply create a single Let expr with this context
@@ -911,9 +950,7 @@ fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
     Prim2(p, l, r, (t, _)) => {
       let (l_imm, mut l_ctx) = into_anf1(*l, symbols);
       let (r_imm, mut r_ctx) = into_anf1(*r, symbols);
-      let sym = format!("prim2_{}", t);
-      symbols.push(sym);
-      let s = symbols.len() - 1;
+      let s = new_sym("prim2", t, symbols);
       l_ctx.append(&mut r_ctx);
       l_ctx.push((s, Prim2(p, Box::new(l_imm), Box::new(r_imm), ())));
       (Id(s, ()), l_ctx)
@@ -929,7 +966,9 @@ fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
     // We transform directly to:
     //
     //  let c1 = 1 + 2, c2 = c1 + 3, a = c2 in a
-    Let(bs, e, _) => {
+    //
+    // This transformation is incorrect if shadowing is allowed.
+    Let(bs, e, (t, _)) => {
       let mut ctx = vec![];
       for (x,b) in bs {
         let (imm, mut c) = into_anf1(b, symbols);
@@ -938,16 +977,22 @@ fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
       }
       let (e_anf, mut c) = into_anf1(*e, symbols);
       ctx.append(&mut c);
-      (Let(ctx, Box::new(e_anf), ()), vec![])
+      let s = new_sym("let", t, symbols);
+      ctx.push((s, e_anf));
+      (Id(s, ()), ctx)
     }
 
-    If(cc, th, el, _) => {
-      let (cc_anf, ctx) = into_anf1(*cc, symbols);
+    If(cc, th, el, (t, _)) => {
+      let (cc_anf, mut ctx) = into_anf1(*cc, symbols);
+      let s = new_sym("if", t, symbols);
+      ctx.push((s, cc_anf));
       let (th_anf, th_ctx) = into_anf1(*th, symbols);
       let (el_anf, el_ctx) = into_anf1(*el, symbols);
-      (If(Box::new(cc_anf),
-          Box::new(Let(th_ctx, Box::new(th_anf), ())),
-          Box::new(Let(el_ctx, Box::new(el_anf), ())),
+      (If(Box::new(Id(s, ())),
+          Box::new(if th_ctx.len() > 0 { Let(th_ctx, Box::new(th_anf), ()) }
+                   else                { th_anf }),
+          Box::new(if el_ctx.len() > 0 { Let(el_ctx, Box::new(el_anf), ()) }
+                   else                { el_anf }),
           ()),
        ctx)
     }
