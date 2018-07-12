@@ -41,8 +41,8 @@ impl<'a> CharStream<'a> {
     }
   }
 
-  fn peek(&mut self) -> Option<&char> {
-    self.input.peek()
+  fn peek(&mut self) -> Option<char> {
+    self.input.peek().map(|c| *c)
   }
 
   fn next(&mut self) -> Option<char> {
@@ -142,10 +142,21 @@ impl<'a> TokenStream<'a> {
       match self.input.peek() {
         None                          => return,
         Some(c) if !c.is_whitespace() => return,
-        Some(_)                       => {},
-      }
-      // Do it outside because of borrowing
+        _                             => self.input.next(),
+      };
+    }
+  }
+
+  fn eat_comment(&mut self) {
+    if let Some('#') = self.input.peek() {
       self.input.next();
+      loop {
+        match self.input.peek() {
+          None       => return,
+          Some('\n') => { self.input.next(); return },
+          _          => self.input.next(),
+        };
+      }
     }
   }
 
@@ -155,11 +166,8 @@ impl<'a> TokenStream<'a> {
       match self.input.peek() {
         None                       => break,
         Some(c) if !c.is_digit(10) => break,
-        Some(_)                    => {},
+        Some(_)                    => s.push(self.input.next().unwrap()),
       }
-      // Have to put that there because self.input is borrowed in the match
-      // above
-      s.push(self.input.next().unwrap());
     }
     let pos = self.input.pos_of_next_char;
     s.parse::<i64>().expect(&format!("{}:{}: Failed to parse decimal number: '{}'",
@@ -172,14 +180,11 @@ impl<'a> TokenStream<'a> {
       match self.input.peek() {
         None                         => break,
         Some(c) if c.is_whitespace() => break,
-        Some(&'(') | Some(&')') | Some(&',')
-          | Some(&':') | Some(&'=') | Some(&'+')
-          | Some(&'-') | Some(&'*')  => break,
-        Some(_)                      => {},
+        Some('(') | Some(')') | Some(',')
+          | Some(':') | Some('=') | Some('+')
+          | Some('-') | Some('*')  => break,
+        Some(_)                      => s.push(self.input.next().unwrap()),
       }
-      // Have to put that there because self.input is borrowed in the match
-      // above
-      s.push(self.input.next().unwrap());
     }
 
     // It's either a keyword or a plain identifier
@@ -204,17 +209,22 @@ impl<'a> TokenStream<'a> {
 
   // Consume input until we have eaten another token
   fn advance(&mut self) -> Token {
-    // Skip whitespace
-    self.eat_space();
+    loop {
+      match self.input.peek() {
+        // Skip whitespace
+        Some(c) if c.is_whitespace() => self.eat_space(),
+        // Skip comments
+        Some('#')                    => self.eat_comment(),
+        _                            => break,
+      }
+    }
 
     // Bail if no more input
     if let None = self.input.peek() {
       return self.emit(TokenKind::EOF)
     }
 
-    // Have to dance around since peek borrows self.input
-    let c = *self.input.peek().unwrap();
-    match c {
+    match self.input.peek().unwrap() {
       '('                 => { self.input.next(); self.emit(TokenKind::LeftParen) },
       ')'                 => { self.input.next(); self.emit(TokenKind::RightParen) },
       ','                 => { self.input.next(); self.emit(TokenKind::Comma) },
@@ -223,7 +233,7 @@ impl<'a> TokenStream<'a> {
       '+'                 => { self.input.next(); self.emit(TokenKind::BinOp(BinOp::Plus)) },
       '-'                 => { self.input.next(); self.emit(TokenKind::BinOp(BinOp::Minus)) },
       '*'                 => { self.input.next(); self.emit(TokenKind::BinOp(BinOp::Mult)) },
-      _ if c.is_digit(10) => { self.save_position();
+      c if c.is_digit(10) => { self.save_position();
                                let n = self.read_number();
                                self.emit(TokenKind::Number(n)) },
       _                   => { self.save_position();
@@ -255,7 +265,7 @@ impl<'a> TokenStream<'a> {
 }
 
 #[cfg(test)]
-mod tests {
+mod lex_tests {
   use super::*;
 
   fn test_lexer(input: &str, expected: &[TokenKind], symbols: &[&str]) {
@@ -343,6 +353,20 @@ mod tests {
     test_lexer("let first = 2 - 3 in
                 let second = 4 * 5 in
                 first + second", &tokens, &symbols);
+  }
+
+  #[test]
+  fn comment() {
+    use TokenKind::*;
+
+    let tokens = [
+      Number(2),
+      Number(3),
+    ];
+    test_lexer("# ignored
+2
+# ignored
+3 # + 2", &tokens, &vec![]);
   }
 }
 

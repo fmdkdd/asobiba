@@ -19,9 +19,7 @@ build/%.o: build/%.s
 
 .PRECIOUS: build/%.s
 build/%.s: tests/%.boa $(COMPILER)
-	@tail -n+2 $< > $@.in
-	$(COMPILER) < $@.in > $@
-	@rm $@.in
+	$(COMPILER) < $< > $@
 
 .PHONY: clean
 clean:
