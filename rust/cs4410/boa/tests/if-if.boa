@@ -1,0 +1,2 @@
+# expect: 2
+if if 0 : 0 else: 1 : 2 else: 3
