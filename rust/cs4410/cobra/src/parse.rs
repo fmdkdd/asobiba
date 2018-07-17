@@ -10,6 +10,10 @@ use lex::{BinOp, Keyword, Token, TokenKind, TokenStream};
 pub enum Prim1 {
   Add1,
   Sub1,
+  Print,
+  IsBool,
+  IsNum,
+  Not,
 }
 
 #[derive(Debug, PartialEq)]
@@ -17,12 +21,20 @@ pub enum Prim2 {
   Plus,
   Minus,
   Mult,
+  And,
+  Or,
+  Greater,
+  GreaterEq,
+  Less,
+  LessEq,
+  Eq,
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Expr<T> {
   Number(i32, T),
   Id(usize, T),
+  Bool(bool, T),
   Prim1(Prim1, Box<Expr<T>>, T),
   Prim2(Prim2, Box<Expr<T>>, Box<Expr<T>>, T),
   Let(Vec<(usize, Expr<T>)>, Box<Expr<T>>, T),
@@ -56,16 +68,21 @@ pub fn parse(input: &mut TokenStream) -> AST<()> {
   }
 }
 
-// Have to change the Boa grammar to be LL(1) and handle (unspecified) operator
-// precedence.  Let's go with standard precedence for binary operators.
+// Have to change the Cobra grammar to be LL(1) and handle (unspecified)
+// operator precedence.  Let's go with standard precedence for binary operators.
 //
 // expr: 'let' bindings 'in' expr
 //     | 'if' expr ':' expr 'else:' expr
-//     | addition
+//     | equality
+// equality: comparison ('==' equality)*
+// comparison: addition (('<' | '<=' | '>' | '>=') addition)*
 // addition: multiplication (('-' | '+') multiplication)*
-// multiplication: primary ('*' primary)*
+// multiplication: unary ('*' unary)*
+// unary: ('!') unary
+//      | primary
 // primary: NUMBER | IDENTIFIER
-//        | ('add1' | 'sub1') '(' expr ')'
+//        | 'true' | 'false'
+//        | ('add1' | 'sub1' | 'print' | 'isbool' | 'isnum') '(' expr ')'
 //        | '(' expr ')'
 // bindings: IDENTIFIER '=' expr (',' bindings)*
 
@@ -95,7 +112,7 @@ fn parse_expr(input: &mut TokenStream) -> Expr<()> {
       Expr::If(Box::new(cond), Box::new(then), Box::new(els), ())
     }
 
-    _ => parse_addition(input)
+    _ => parse_equality(input)
   }
 }
 
@@ -116,6 +133,57 @@ fn parse_bindings(input: &mut TokenStream) -> Vec<(usize, Expr<()>)> {
   } else {
     panic!("{}: Expected identifier, got {:?}", loc(&t), t.kind);
   }
+}
+
+fn parse_equality(input: &mut TokenStream) -> Expr<()> {
+  use self::TokenKind::*;
+  use self::BinOp::*;
+
+  let mut expr = parse_comparison(input);
+
+  loop {
+    match input.peek().kind.clone() {
+      BinOp(Eq) => {
+        input.next(); // eat the operator
+
+        let right = parse_comparison(input);
+        expr = Expr::Prim2(Prim2::Eq, Box::new(expr), Box::new(right), ())
+      }
+
+      _ => break
+    }
+  }
+
+  expr
+}
+
+fn parse_comparison(input: &mut TokenStream) -> Expr<()> {
+  use self::TokenKind::*;
+  use self::BinOp::*;
+
+  let mut expr = parse_addition(input);
+
+  loop {
+    match input.peek().kind.clone() {
+      BinOp(op @ Less) | BinOp(op @ LessEq)
+        | BinOp(op @ Greater) | BinOp(op @ GreaterEq) => {
+          input.next(); // eat the operator
+
+          let right = parse_addition(input);
+          expr = Expr::Prim2(match op {
+            Less      => Prim2::Less,
+            LessEq    => Prim2::LessEq,
+            Greater   => Prim2::Greater,
+            GreaterEq => Prim2::GreaterEq,
+            _ => unreachable!(),
+          }, Box::new(expr), Box::new(right), ())
+      }
+
+      _ => break
+    }
+  }
+
+  expr
 }
 
 fn parse_addition(input: &mut TokenStream) -> Expr<()> {
@@ -148,14 +216,14 @@ fn parse_multiplication(input: &mut TokenStream) -> Expr<()> {
   use self::TokenKind::*;
   use self::BinOp::*;
 
-  let mut expr = parse_primary(input);
+  let mut expr = parse_unary(input);
 
   loop {
     match input.peek().kind.clone() {
       BinOp(Mult) => {
         input.next(); // eat the operator
 
-        let right = parse_primary(input);
+        let right = parse_unary(input);
         expr = Expr::Prim2(Prim2::Mult, Box::new(expr), Box::new(right), ())
       }
 
@@ -164,6 +232,15 @@ fn parse_multiplication(input: &mut TokenStream) -> Expr<()> {
   }
 
   expr
+}
+
+fn parse_unary(input: &mut TokenStream) -> Expr<()> {
+  use self::TokenKind::*;
+
+  match input.peek().kind {
+    Bang => Expr::Prim1(Prim1::Not, Box::new(parse_unary(input)), ()),
+    _    => parse_primary(input),
+  }
 }
 
 fn parse_primary(input: &mut TokenStream) -> Expr<()> {
@@ -176,15 +253,32 @@ fn parse_primary(input: &mut TokenStream) -> Expr<()> {
 
     Ident(s) => { input.next(); Expr::Id(s, ()) }
 
-    Keyword(ref k @ Add1) | Keyword(ref k @ Sub1)=> {
+    Keyword(True) => {
+      input.next();
+      Expr::Bool(true, ())
+    }
+
+    Keyword(False) => {
+      input.next();
+      Expr::Bool(false, ())
+    }
+
+    Keyword(ref k @ Add1) |
+    Keyword(ref k @ Sub1) |
+    Keyword(ref k @ Print) |
+    Keyword(ref k @ IsBool) |
+    Keyword(ref k @ IsNum) => {
       input.next(); // eat the keyword
       expect(input, LeftParen);
       let expr = parse_expr(input);
       expect(input, RightParen);
       Expr::Prim1(match k {
-        Add1 => Prim1::Add1,
-        Sub1 => Prim1::Sub1,
-        _ => unreachable!(),
+        Add1   => Prim1::Add1,
+        Sub1   => Prim1::Sub1,
+        Print  => Prim1::Print,
+        IsBool => Prim1::IsBool,
+        IsNum  => Prim1::IsNum,
+        _      => unreachable!(),
       }, Box::new(expr), ())
     }
 
@@ -247,6 +341,22 @@ mod parse_tests {
                 &Prim2(Plus,
                        Box::new(Number(2, ())),
                        Box::new(Prim2(Plus, Box::new(Number(3, ())), Box::new(Number(4, ())), ())), ()),
+                &[]);
+  }
+
+  #[test]
+  fn bool_expr() {
+    use self::Expr::*;
+    use self::Prim2::*;
+
+    test_parser("1<2<=3 == false",
+                &Prim2(Eq,
+                       Box::new(Prim2(LessEq,
+                                      Box::new(Prim2(Less,
+                                                     Box::new(Number(1, ())),
+                                                     Box::new(Number(2, ())), ())),
+                                      Box::new(Number(3, ())), ())),
+                       Box::new(Bool(false, ())), ()),
                 &[]);
   }
 }
