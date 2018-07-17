@@ -1,0 +1,6 @@
+# expected: 13
+let a = 10 in
+  let c = let b = add1(a) in
+            let d = add1(b) in
+              add1(b)
+    in add1(c)

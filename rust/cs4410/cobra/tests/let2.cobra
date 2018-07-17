@@ -1,0 +1,4 @@
+# expect: 3
+let x = 5,
+    y = sub1(x) in
+  sub1(y)
