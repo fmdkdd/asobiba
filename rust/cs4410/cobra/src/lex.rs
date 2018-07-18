@@ -78,7 +78,7 @@ pub enum TokenKind {
   BinOp(BinOp),
   Keyword(Keyword),
   Ident(usize),
-  Number(i64),
+  Number(i32),
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -168,7 +168,7 @@ impl<'a> TokenStream<'a> {
     }
   }
 
-  fn read_number(&mut self) -> i64 {
+  fn read_number(&mut self) -> i32 {
     let mut s = String::new();
     loop {
       match self.input.peek() {
@@ -178,7 +178,7 @@ impl<'a> TokenStream<'a> {
       }
     }
     let pos = self.input.pos_of_next_char;
-    s.parse::<i64>().expect(&format!("{}:{}: Failed to parse decimal number: '{}'",
+    s.parse::<i32>().expect(&format!("{}:{}: Failed to parse decimal number: '{}'",
                                      pos.line, pos.column, s))
   }
 
@@ -459,5 +459,19 @@ mod lex_tests {
       Keyword(False),
     ];
     test_lexer("true==!false", &tokens, &vec![]);;
+  }
+
+  #[test]
+  fn boolexpr2() {
+    use self::TokenKind::*;
+    use self::BinOp::*;
+    use self::Keyword::*;
+
+    let tokens = [
+      Keyword(True),
+      BinOp(Or),
+      Keyword(False),
+    ];
+    test_lexer("true || false", &tokens, &vec![]);;
   }
 }

@@ -20,6 +20,7 @@ fn tag_expr<T>(expr: Expr<T>, seed: usize) -> (Expr<(usize, T)>, usize) {
   match expr {
     Number(n, t) => (Number(n, (seed, t)), seed+1),
     Id(s, t) => (Id(s, (seed, t)), seed+1),
+    Bool(b, t) => (Bool(b, (seed, t)), seed+1),
     Expr::Prim1(op, exp, t) => {
       let (e, seed) = tag_expr(*exp, seed);
       (Prim1(op, Box::new(e), (seed, t)), seed+1)
@@ -58,12 +59,13 @@ fn tag<T>(expr: &Expr<T>) -> &T {
   use self::Expr::*;
 
   match expr {
-    Number(_, t) => t,
-    Id(_, t) => t,
-    Prim1(_, _, t) => t,
+    Number(_, t)      => t,
+    Id(_, t)          => t,
+    Bool(_, t)        => t,
+    Prim1(_, _, t)    => t,
     Prim2(_, _, _, t) => t,
-    Let(_, _, t) => t,
-    If(_, _, _, t) => t,
+    Let(_, _, t)      => t,
+    If(_, _, _, t)    => t,
   }
 }
 
@@ -88,6 +90,8 @@ enum Instr {
   Add(Arg, Arg),
   Sub(Arg, Arg),
   IMul(Arg, Arg),
+  And(Arg, Arg),
+  Or(Arg, Arg),
   Cmp(Arg, Arg),
   Label(String),
   Jmp(String),
@@ -137,18 +141,27 @@ fn compile_ast<T>(ast: &AST<(usize, T)>) -> Vec<Instr> {
 fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -> Vec<Instr> {
   use self::Instr::*;
   use self::Prim1::*;
-  use self::Prim2::*;
+  use self::Prim2;
   use self::Arg::*;
   use self::Reg::*;
   use self::Expr::*;
 
   match e {
-    Number(n, _) => vec![Mov(Reg(EAX), Const(*n))],
+    Number(n, _) => {
+      if *n > ((1 << 30) - 1) || *n < -(1 << 30) {
+        panic!("Integer is too large to be represented: {}", n);
+      } else {
+        vec![Mov(Reg(EAX), Const(n << 1))]
+      }
+    }
 
     Id(s, _) => match lookup(*s, env) {
       Some(n) => vec![Mov(Reg(EAX), RegOffset(ESP, n))],
       None => panic!("Identifier not bound '{}'", symbols[*s]),
     }
+
+    Bool(true, _)  => vec![Mov(Reg(EAX), Const(-1))],
+    Bool(false, _) => vec![Mov(Reg(EAX), Const(0x7FFFFFFF))],
 
     Prim1(Add1, ex, _) => {
       let mut v = compile_expr(ex, symbols,env);
@@ -161,6 +174,8 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       v.push(Dec(Reg(EAX)));
       v
     }
+
+    Prim1(_, _, _) => unimplemented!(),
 
     Prim2(op, l, r, _) => {
       // If l and r aren't immediate, we cannot compile
@@ -180,9 +195,12 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       // Combine the two
       let a = Reg(EAX);
       v.push(match op {
-        Plus => Add(a, b),
-        Minus => Sub(a, b),
-        Mult => IMul(a, b),
+        Prim2::Plus  => Add(a, b),
+        Prim2::Minus => Sub(a, b),
+        Prim2::Mult  => IMul(a, b),
+        Prim2::And   => And(a, b),
+        Prim2::Or    => Or(a, b),
+        _ => unimplemented!(),
       });
       v
     }
@@ -269,6 +287,8 @@ impl Display for Instr {
       Add(dst, src) => writeln!(f, "  add {}, {}", dst, src),
       Sub(dst, src) => writeln!(f, "  sub {}, {}", dst, src),
       IMul(dst, src) => writeln!(f, "  imul {}, {}", dst, src),
+      And(dst, src) => writeln!(f, "  and {}, {}", dst, src),
+      Or(dst, src) => writeln!(f, "  or {}, {}", dst, src),
       Cmp(a, b) => writeln!(f, "  cmp {}, {}", a, b),
       Label(s) => writeln!(f, "{}:", s),
       Jmp(s) => writeln!(f, "  jmp {}", s),
@@ -303,7 +323,7 @@ fn is_anf<T>(expr: &Expr<T>) -> bool {
 fn is_imm<T>(expr: &Expr<T>) -> bool {
   use self::Expr::*;
   match expr {
-    Number(_,_) | Id(_,_) => true,
+    Number(_,_) | Id(_,_) | Bool(_,_) => true,
     _ => false
   }
 }
@@ -352,6 +372,7 @@ fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
   match expr {
     Number(n, _) => (Number(n, ()), vec![]),
     Id(s, _) => (Id(s, ()), vec![]),
+    Bool(b, _) => (Bool(b, ()), vec![]),
     Prim1(p, e, _) => {
       let (imm, mut ctx) = into_anf1(*e, symbols);
       (Prim1(p, Box::new(imm), ()), ctx)
@@ -446,13 +467,21 @@ fn pp_expr<T>(expr: &Expr<T>, symbols: &[String]) -> String {
   match expr {
     Number(n, _) => format!("{}", n),
     Id(n, _) => format!("{}", symbols[*n]),
+    Bool(b, _) => format!("{}", b),
     Prim1(p, e, _) => format!("{:?}({})", p, pp_expr(e, symbols)),
     Prim2(p, l, r, _) => format!("{} {} {}",
                                  pp_expr(l, symbols),
                                  match p {
-                                   Plus => "+",
-                                   Minus => "-",
-                                   Mult => "*",
+                                   Plus      => "+",
+                                   Minus     => "-",
+                                   Mult      => "*",
+                                   And       => "&&",
+                                   Or        => "||",
+                                   Less      => "<",
+                                   LessEq    => "<=",
+                                   Greater   => ">",
+                                   GreaterEq => ">=",
+                                   Eq        => "==",
                                  },
                                  pp_expr(r, symbols)),
     Let(bs, body, _) => format!("let {} in {}",

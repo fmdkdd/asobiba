@@ -165,8 +165,9 @@ fn parse_comparison(input: &mut TokenStream) -> Expr<()> {
 
   loop {
     match input.peek().kind.clone() {
-      BinOp(op @ Less) | BinOp(op @ LessEq)
-        | BinOp(op @ Greater) | BinOp(op @ GreaterEq) => {
+      BinOp(op @ Less) | BinOp(op @ LessEq) |
+      BinOp(op @ Greater) | BinOp(op @ GreaterEq) |
+      BinOp(op @ Or) | BinOp(op @ And) => {
           input.next(); // eat the operator
 
           let right = parse_addition(input);
@@ -175,6 +176,8 @@ fn parse_comparison(input: &mut TokenStream) -> Expr<()> {
             LessEq    => Prim2::LessEq,
             Greater   => Prim2::Greater,
             GreaterEq => Prim2::GreaterEq,
+            And       => Prim2::And,
+            Or        => Prim2::Or,
             _ => unreachable!(),
           }, Box::new(expr), Box::new(right), ())
       }
@@ -356,6 +359,18 @@ mod parse_tests {
                                                      Box::new(Number(1, ())),
                                                      Box::new(Number(2, ())), ())),
                                       Box::new(Number(3, ())), ())),
+                       Box::new(Bool(false, ())), ()),
+                &[]);
+  }
+
+  #[test]
+  fn bool_expr2() {
+    use self::Expr::*;
+    use self::Prim2::*;
+
+    test_parser("true || false",
+                &Prim2(Or,
+                       Box::new(Bool(true, ())),
                        Box::new(Bool(false, ())), ()),
                 &[]);
   }
