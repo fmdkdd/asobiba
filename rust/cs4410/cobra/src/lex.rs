@@ -188,9 +188,9 @@ impl<'a> TokenStream<'a> {
       match self.input.peek() {
         None                         => break,
         Some(c) if c.is_whitespace() => break,
-        Some('(') | Some(')') | Some(',')
-          | Some(':') | Some('=') | Some('+')
-          | Some('-') | Some('*') | Some('!') => break,
+        Some('(') | Some(')') | Some(',') |
+        Some(':') | Some('=') | Some('+') |
+        Some('-') | Some('*') | Some('!') => break,
         Some(_)                      => s.push(self.input.next().unwrap()),
       }
     }

@@ -241,7 +241,7 @@ fn parse_unary(input: &mut TokenStream) -> Expr<()> {
   use self::TokenKind::*;
 
   match input.peek().kind {
-    Bang => Expr::Prim1(Prim1::Not, Box::new(parse_unary(input)), ()),
+    Bang => { input.next(); Expr::Prim1(Prim1::Not, Box::new(parse_unary(input)), ()) },
     _    => parse_primary(input),
   }
 }
