@@ -78,6 +78,7 @@ enum Reg {
 #[derive(Debug)]
 enum Arg {
   Const(i32),
+  HexConst(i32),
   Reg(Reg),
   RegOffset(Reg, usize),
 }
@@ -161,8 +162,8 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       None => panic!("Identifier not bound '{}'", symbols[*s]),
     }
 
-    Bool(true, _)  => vec![Mov(Reg(EAX), Const(-1))],
-    Bool(false, _) => vec![Mov(Reg(EAX), Const(0x7FFFFFFF))],
+    Bool(true, _)  => vec![Mov(Reg(EAX), HexConst(-1))],
+    Bool(false, _) => vec![Mov(Reg(EAX), HexConst(0x7FFFFFFF))],
 
     Prim1(Add1, ex, _) => {
       let mut v = compile_expr(ex, symbols,env);
@@ -178,7 +179,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
 
     Prim1(Not, ex, _) => {
       let mut v = compile_expr(ex, symbols, env);
-      v.push(Xor(Reg(EAX), Const(0x80000000)));
+      v.push(Xor(Reg(EAX), HexConst(1 << 31)));
       v
     }
 
@@ -276,8 +277,9 @@ impl Display for Arg {
     use self::Arg::*;
 
     match self {
-      Const(n) => write!(f, "{}", n),
-      Reg(r) => write!(f, "{}", r),
+      Const(n)        => write!(f, "{}", n),
+      HexConst(n)     => write!(f, "0x{:x}", n),
+      Reg(r)          => write!(f, "{}", r),
       RegOffset(r, o) => write!(f, "[{} - 4*{}]", r, o),
     }
   }
