@@ -94,6 +94,7 @@ enum Instr {
   And(Arg, Arg),
   Or(Arg, Arg),
   Xor(Arg, Arg),
+  Shr(Arg, Arg),
   Cmp(Arg, Arg),
   Label(String),
   Jmp(String),
@@ -167,13 +168,13 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
 
     Prim1(Add1, ex, _) => {
       let mut v = compile_expr(ex, symbols,env);
-      v.push(Inc(Reg(EAX)));
+      v.push(Add(Reg(EAX), Const(2)));
       v
     }
 
     Prim1(Sub1, ex, _) => {
       let mut v = compile_expr(ex, symbols, env);
-      v.push(Dec(Reg(EAX)));
+      v.push(Sub(Reg(EAX), Const(2)));
       v
     }
 
@@ -202,12 +203,12 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       };
       // Combine the two
       let a = Reg(EAX);
-      v.push(match op {
-        Prim2::Plus  => Add(a, b),
-        Prim2::Minus => Sub(a, b),
-        Prim2::Mult  => IMul(a, b),
-        Prim2::And   => And(a, b),
-        Prim2::Or    => Or(a, b),
+      v.append(&mut match op {
+        Prim2::Plus  => vec![Add(a, b)],
+        Prim2::Minus => vec![Sub(a, b)],
+        Prim2::Mult  => vec![IMul(a, b), Shr(Reg(EAX), Const(1))],
+        Prim2::And   => vec![And(a, b)],
+        Prim2::Or    => vec![Or(a, b)],
         _ => unimplemented!(),
       });
       v
@@ -299,6 +300,7 @@ impl Display for Instr {
       And(dst, src)  => writeln!(f, "  and {}, {}", dst, src),
       Or(dst, src)   => writeln!(f, "  or {}, {}", dst, src),
       Xor(dst, src)  => writeln!(f, "  xor {}, {}", dst, src),
+      Shr(dst, src)  => writeln!(f, "  shr {}, {}", dst, src),
       Cmp(a, b)      => writeln!(f, "  cmp {}, {}", a, b),
       Label(s)       => writeln!(f, "{}:", s),
       Jmp(s)         => writeln!(f, "  jmp {}", s),
