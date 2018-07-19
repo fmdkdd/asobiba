@@ -92,6 +92,7 @@ enum Instr {
   IMul(Arg, Arg),
   And(Arg, Arg),
   Or(Arg, Arg),
+  Xor(Arg, Arg),
   Cmp(Arg, Arg),
   Label(String),
   Jmp(String),
@@ -172,6 +173,12 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
     Prim1(Sub1, ex, _) => {
       let mut v = compile_expr(ex, symbols, env);
       v.push(Dec(Reg(EAX)));
+      v
+    }
+
+    Prim1(Not, ex, _) => {
+      let mut v = compile_expr(ex, symbols, env);
+      v.push(Xor(Reg(EAX), Const(0x80000000)));
       v
     }
 
@@ -281,18 +288,19 @@ impl Display for Instr {
     use self::Instr::*;
 
     match self {
-      Mov(dst, src) => writeln!(f, "  mov {}, {}", dst, src),
-      Inc(dst) => writeln!(f, "  inc {}", dst),
-      Dec(dst) => writeln!(f, "  dec {}", dst),
-      Add(dst, src) => writeln!(f, "  add {}, {}", dst, src),
-      Sub(dst, src) => writeln!(f, "  sub {}, {}", dst, src),
+      Mov(dst, src)  => writeln!(f, "  mov {}, {}", dst, src),
+      Inc(dst)       => writeln!(f, "  inc {}", dst),
+      Dec(dst)       => writeln!(f, "  dec {}", dst),
+      Add(dst, src)  => writeln!(f, "  add {}, {}", dst, src),
+      Sub(dst, src)  => writeln!(f, "  sub {}, {}", dst, src),
       IMul(dst, src) => writeln!(f, "  imul {}, {}", dst, src),
-      And(dst, src) => writeln!(f, "  and {}, {}", dst, src),
-      Or(dst, src) => writeln!(f, "  or {}, {}", dst, src),
-      Cmp(a, b) => writeln!(f, "  cmp {}, {}", a, b),
-      Label(s) => writeln!(f, "{}:", s),
-      Jmp(s) => writeln!(f, "  jmp {}", s),
-      Je(s) => writeln!(f, "  je {}", s),
+      And(dst, src)  => writeln!(f, "  and {}, {}", dst, src),
+      Or(dst, src)   => writeln!(f, "  or {}, {}", dst, src),
+      Xor(dst, src)  => writeln!(f, "  xor {}, {}", dst, src),
+      Cmp(a, b)      => writeln!(f, "  cmp {}, {}", a, b),
+      Label(s)       => writeln!(f, "{}:", s),
+      Jmp(s)         => writeln!(f, "  jmp {}", s),
+      Je(s)          => writeln!(f, "  je {}", s),
     }
   }
 }
