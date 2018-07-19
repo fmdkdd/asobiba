@@ -18,7 +18,7 @@ for file in `find build/ -executable -type f | sort`; do
     bin=`basename "$file"`
     expect=`head -n1 "tests/$bin.cobra" | cut -d: -f2`
     actual=`./$file`
-    if [ $expect != $actual ]; then
+    if [[ ! $expect -eq $actual ]]; then
         echo FAIL: "$bin": expected $expect, got $actual
         ret=1
     else

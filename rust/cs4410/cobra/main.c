@@ -8,7 +8,7 @@ void print(int r) {
   if (r & BOOL_TAG) {
     if (r == -1)              { printf("true");  }
     else if (r == 0x7FFFFFFF) { printf("false"); }
-    else                      { fprintf(stderr, "Invalid value: %x", r); }
+    else                      { fprintf(stderr, "Invalid value: 0x%x\n", r); }
   } else {
     // Number
     printf("%d", r >> 1);
