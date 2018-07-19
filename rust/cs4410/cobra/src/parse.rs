@@ -249,6 +249,7 @@ fn parse_unary(input: &mut TokenStream) -> Expr<()> {
 fn parse_primary(input: &mut TokenStream) -> Expr<()> {
   use self::TokenKind::*;
   use self::Keyword::*;
+  use self::BinOp::*;
 
   let t = input.peek().clone();
   match t.kind {
@@ -290,6 +291,14 @@ fn parse_primary(input: &mut TokenStream) -> Expr<()> {
       let expr = parse_expr(input);
       expect(input, RightParen);
       expr
+    }
+
+    BinOp(Minus) => {
+      input.next();
+      match input.peek().kind {
+        Number(n) => { input.next(); Expr::Number(-n as i32, ()) }
+        _ => panic!("Expected a number, got end of input")
+      }
     }
 
     _ => unreachable!()
@@ -372,6 +381,51 @@ mod parse_tests {
                 &Prim2(Or,
                        Box::new(Bool(true, ())),
                        Box::new(Bool(false, ())), ()),
+                &[]);
+  }
+
+  #[test]
+  fn neg_num() {
+    use self::Expr::*;
+    use self::Prim2::*;
+
+    test_parser("2 * -1",
+                &Prim2(Mult,
+                       Box::new(Number(2, ())),
+                       Box::new(Number(-1, ())), ()),
+                &[]);
+  }
+
+  #[test]
+  fn neg_num2() {
+    use self::Expr::*;
+
+    test_parser("-1",
+                &Number(-1, ()),
+                &[]);
+  }
+
+  #[test]
+  fn neg_num3() {
+    use self::Expr::*;
+    use self::Prim2::*;
+
+    test_parser("1--1",
+                &Prim2(Minus,
+                       Box::new(Number(1, ())),
+                       Box::new(Number(-1, ())), ()),
+                &[]);
+  }
+
+  #[test]
+  fn neg_num4() {
+    use self::Expr::*;
+    use self::Prim2::*;
+
+    test_parser("-1--1",
+                &Prim2(Minus,
+                       Box::new(Number(-1, ())),
+                       Box::new(Number(-1, ())), ()),
                 &[]);
   }
 }

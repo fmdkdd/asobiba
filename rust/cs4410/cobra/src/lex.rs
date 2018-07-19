@@ -170,6 +170,12 @@ impl<'a> TokenStream<'a> {
 
   fn read_number(&mut self) -> i32 {
     let mut s = String::new();
+
+    if let Some('-') = self.input.peek() {
+      self.input.next();
+      s.push('-');
+    }
+
     loop {
       match self.input.peek() {
         None                       => break,
@@ -473,5 +479,19 @@ mod lex_tests {
       Keyword(False),
     ];
     test_lexer("true || false", &tokens, &vec![]);;
+  }
+
+  #[test]
+  fn neg_num() {
+    use self::TokenKind::*;
+    use self::BinOp::*;
+
+    let tokens = [
+      Number(2),
+      BinOp(Mult),
+      BinOp(Minus),
+      Number(1),
+    ];
+    test_lexer("2 * -1", &tokens, &vec![]);;
   }
 }
