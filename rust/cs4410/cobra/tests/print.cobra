@@ -1,0 +1,4 @@
+# expect: 1 2 3 3
+let x = print(1),
+    y = print(x + x) in
+    print(x + y)

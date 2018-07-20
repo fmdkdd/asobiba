@@ -69,13 +69,14 @@ fn tag<T>(expr: &Expr<T>) -> &T {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Reg {
   EAX,
+  EBP,
   ESP,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum Arg {
   Const(i32),
   HexConst(i32),
@@ -86,8 +87,8 @@ enum Arg {
 #[derive(Debug)]
 enum Instr {
   Mov(Arg, Arg),
-  Inc(Arg),
-  Dec(Arg),
+  // Inc(Arg),
+  // Dec(Arg),
   Add(Arg, Arg),
   Sub(Arg, Arg),
   IMul(Arg, Arg),
@@ -99,6 +100,8 @@ enum Instr {
   Label(String),
   Jmp(String),
   Je(String),
+  Push(Arg),
+  Call(Prim1),
 }
 
 /// Return the stack index of symbol ID in ENV.
@@ -137,9 +140,36 @@ pub fn debug<T>(ast: AST<T>) {
   println!("==== ASM ====\n{}", asm);
 }
 
-fn compile_ast<T>(ast: &AST<(usize, T)>) -> Vec<Instr> {
-  compile_expr(&ast.root, &ast.symbols, &mut vec![])
+// Return the greatest number of variables we need at once, in order to make
+// room on the stack.
+fn count_vars<T>(expr: &Expr<T>) -> usize {
+  use self::Expr::*;
+
+  match expr {
+    // Only `let` can create variables
+    Let(bs, e, _)     => bs.len() + count_vars(e),
+
+    Prim1(_, e, _)    => count_vars(e),
+    Prim2(_, l, r, _) => count_vars(l) + count_vars(r),
+    If(cc, th, el, _) => *[count_vars(cc), count_vars(th), count_vars(el)]
+      .iter().max().unwrap(),
+
+    _                 => 0
+  }
 }
+
+fn compile_ast<T>(ast: &AST<(usize, T)>) -> Vec<Instr> {
+  use self::Instr::*;
+  use self::Arg::*;
+  use self::Reg::*;
+
+  let mut v = vec![Sub(Reg(ESP), Const((count_vars(&ast.root) * 4) as i32))];
+  v.append(&mut compile_expr(&ast.root, &ast.symbols, &mut vec![]));
+  v
+}
+
+static BOOL_TRUE  : i32 = -1;
+static BOOL_FALSE : i32 = 0x7fffffff;
 
 fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -> Vec<Instr> {
   use self::Instr::*;
@@ -159,12 +189,12 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
     }
 
     Id(s, _) => match lookup(*s, env) {
-      Some(n) => vec![Mov(Reg(EAX), RegOffset(ESP, n))],
+      Some(n) => vec![Mov(Reg(EAX), RegOffset(EBP, n))],
       None => panic!("Identifier not bound '{}'", symbols[*s]),
     }
 
-    Bool(true, _)  => vec![Mov(Reg(EAX), HexConst(-1))],
-    Bool(false, _) => vec![Mov(Reg(EAX), HexConst(0x7FFFFFFF))],
+    Bool(true, _)  => vec![Mov(Reg(EAX), HexConst(BOOL_TRUE))],
+    Bool(false, _) => vec![Mov(Reg(EAX), HexConst(BOOL_FALSE))],
 
     Prim1(Add1, ex, _) => {
       let mut v = compile_expr(ex, symbols,env);
@@ -184,7 +214,14 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       v
     }
 
-    Prim1(_, _, _) => unimplemented!(),
+    Prim1(p @ IsBool, ex, _) |
+    Prim1(p @ IsNum, ex, _) |
+    Prim1(p @ Print, ex, _) => {
+      let mut v = compile_expr(ex, symbols, env);
+      v.push(Push(Reg(EAX)));
+      v.push(Call(*p));
+      v
+    }
 
     Prim2(op, l, r, _) => {
       // If l and r aren't immediate, we cannot compile
@@ -230,7 +267,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       for (x, ex) in bindings {
         v.append(&mut compile_expr(ex, symbols, &env2));
         env2.push(*x);
-        v.push(Mov(RegOffset(ESP, env2.len()), Reg(EAX)));
+        v.push(Mov(RegOffset(EBP, env2.len()), Reg(EAX)));
       }
 
       v.append(&mut compile_expr(body, symbols, &mut env2));
@@ -256,9 +293,16 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
 
 fn emit_asm(instrs: &[Instr]) -> String {
   format!("section.text
+extern is_bool
+extern is_num
+extern print
 global entry_point
 entry_point:
+  push ebp
+  mov ebp, esp
 {}
+  mov esp, ebp
+  pop ebp
   ret", instrs.iter().map(|i| format!("{}", i)).collect::<String>())
 }
 
@@ -268,6 +312,7 @@ impl Display for Reg {
 
     match self {
       EAX => write!(f, "eax"),
+      EBP => write!(f, "ebp"),
       ESP => write!(f, "esp"),
     }
   }
@@ -281,7 +326,7 @@ impl Display for Arg {
       Const(n)        => write!(f, "{}", n),
       HexConst(n)     => write!(f, "0x{:x}", n),
       Reg(r)          => write!(f, "{}", r),
-      RegOffset(r, o) => write!(f, "[{} - 4*{}]", r, o),
+      RegOffset(r, o) => write!(f, "[{}-{}]", r, 4 * o),
     }
   }
 }
@@ -292,8 +337,8 @@ impl Display for Instr {
 
     match self {
       Mov(dst, src)  => writeln!(f, "  mov {}, {}", dst, src),
-      Inc(dst)       => writeln!(f, "  inc {}", dst),
-      Dec(dst)       => writeln!(f, "  dec {}", dst),
+      // Inc(dst)       => writeln!(f, "  inc {}", dst),
+      // Dec(dst)       => writeln!(f, "  dec {}", dst),
       Add(dst, src)  => writeln!(f, "  add {}, {}", dst, src),
       Sub(dst, src)  => writeln!(f, "  sub {}, {}", dst, src),
       IMul(dst, src) => writeln!(f, "  imul {}, {}", dst, src),
@@ -305,6 +350,22 @@ impl Display for Instr {
       Label(s)       => writeln!(f, "{}:", s),
       Jmp(s)         => writeln!(f, "  jmp {}", s),
       Je(s)          => writeln!(f, "  je {}", s),
+      Push(s)        => writeln!(f, "  push {}", s),
+      Call(s)        => writeln!(f, "  call {}", s),
+    }
+  }
+}
+
+impl Display for Prim1 {
+  fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+    use self::Prim1::*;
+
+    match self {
+      Print  => write!(f, "print"),
+      IsBool => write!(f, "is_bool"),
+      IsNum  => write!(f, "is_num"),
+
+      _ => unreachable!(),
     }
   }
 }

@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 # Exit on first failure
 set -e
@@ -18,11 +18,11 @@ for file in `find build/ -executable -type f | sort`; do
     bin=`basename "$file"`
     expect=`head -n1 "tests/$bin.cobra" | cut -d: -f2`
     actual=`./$file`
-    if [[ ! $expect -eq $actual ]]; then
+    if [[ "$expect" == "$actual" ]]; then
+        echo pass: "$bin"
+    else
         echo FAIL: "$bin": expected $expect, got $actual
         ret=1
-    else
-        echo pass: "$bin"
     fi
 done
 

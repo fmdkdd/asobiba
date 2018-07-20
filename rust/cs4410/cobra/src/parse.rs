@@ -6,7 +6,7 @@ use lex::{BinOp, Keyword, Token, TokenKind, TokenStream};
 
 // The Boa language is closer to ML than Lisp, so we discard the S-exp parser.
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Prim1 {
   Add1,
   Sub1,
@@ -16,7 +16,7 @@ pub enum Prim1 {
   Not,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Prim2 {
   Plus,
   Minus,
