@@ -1,0 +1,2 @@
+# expect: Error: if expected a boolean
+if 0: 1 else: 2

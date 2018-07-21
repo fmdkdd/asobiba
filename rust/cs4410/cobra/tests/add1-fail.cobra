@@ -1,0 +1,2 @@
+# expect: Error: arithmetic expected a number
+add1(true)

@@ -1,2 +1,2 @@
 # expect: 2
-if 0 : 1 else: 2
+if false : 1 else: 2

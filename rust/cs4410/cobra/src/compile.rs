@@ -101,7 +101,18 @@ enum Instr {
   Jmp(String),
   Je(String),
   Push(Arg),
-  Call(Prim1),
+  Pop(Arg),
+  Call(Runtime),
+}
+
+#[derive(Debug)]
+enum Runtime {
+  IsNum,
+  IsBool,
+  Print,
+  NumCheck,
+  BoolCheck,
+  IfCondCheck,
 }
 
 /// Return the stack index of symbol ID in ENV.
@@ -201,19 +212,28 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
     Bool(false, _) => vec![Mov(Reg(EAX), HexConst(BOOL_FALSE))],
 
     Prim1(Add1, ex, _) => {
-      let mut v = compile_expr(ex, symbols,env);
+      let mut v = compile_expr(ex, symbols, env);
+      v.push(Push(Reg(EAX)));
+      v.push(Call(Runtime::NumCheck));
+      v.push(Pop(Reg(EAX)));
       v.push(Add(Reg(EAX), Const(2)));
       v
     }
 
     Prim1(Sub1, ex, _) => {
       let mut v = compile_expr(ex, symbols, env);
+      v.push(Push(Reg(EAX)));
+      v.push(Call(Runtime::NumCheck));
+      v.push(Pop(Reg(EAX)));
       v.push(Sub(Reg(EAX), Const(2)));
       v
     }
 
     Prim1(Not, ex, _) => {
       let mut v = compile_expr(ex, symbols, env);
+      v.push(Push(Reg(EAX)));
+      v.push(Call(Runtime::BoolCheck));
+      v.push(Pop(Reg(EAX)));
       v.push(Xor(Reg(EAX), HexConst(1 << 31)));
       v
     }
@@ -223,7 +243,12 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
     Prim1(p @ Print, ex, _) => {
       let mut v = compile_expr(ex, symbols, env);
       v.push(Push(Reg(EAX)));
-      v.push(Call(*p));
+      v.push(Call(match p {
+        IsBool => Runtime::IsBool,
+        IsNum  => Runtime::IsNum,
+        Print  => Runtime::Print,
+        _      => unreachable!(),
+      }));
       v
     }
 
@@ -281,7 +306,10 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
     If(cond, then, els, (n, _)) => {
       let mut v = Vec::new();
       v.append(&mut compile_expr(cond, symbols, env));
-      v.push(Cmp(Reg(EAX), Const(0)));
+      v.push(Push(Reg(EAX)));
+      v.push(Call(Runtime::IfCondCheck));
+      v.push(Pop(Reg(EAX)));
+      v.push(Cmp(Reg(EAX), Const(BOOL_FALSE)));
       let if_false = format!("if_false_{}", n);
       let done = format!("done_{}", n);
       v.push(Je(if_false.clone()));
@@ -300,6 +328,9 @@ fn emit_asm(instrs: &[Instr]) -> String {
 extern is_bool
 extern is_num
 extern print
+extern num_check
+extern bool_check
+extern if_cond_check
 global entry_point
 entry_point:
   push ebp
@@ -355,21 +386,23 @@ impl Display for Instr {
       Jmp(s)         => writeln!(f, "  jmp {}", s),
       Je(s)          => writeln!(f, "  je {}", s),
       Push(s)        => writeln!(f, "  push {}", s),
+      Pop(s)         => writeln!(f, "  pop {}", s),
       Call(s)        => writeln!(f, "  call {}", s),
     }
   }
 }
 
-impl Display for Prim1 {
+impl Display for Runtime {
   fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-    use self::Prim1::*;
+    use self::Runtime::*;
 
     match self {
-      Print  => write!(f, "print"),
-      IsBool => write!(f, "is_bool"),
-      IsNum  => write!(f, "is_num"),
-
-      _ => unreachable!(),
+      Print       => write!(f, "print"),
+      IsBool      => write!(f, "is_bool"),
+      IsNum       => write!(f, "is_num"),
+      NumCheck    => write!(f, "num_check"),
+      BoolCheck   => write!(f, "bool_check"),
+      IfCondCheck => write!(f, "if_cond_check"),
     }
   }
 }
