@@ -163,7 +163,11 @@ fn compile_ast<T>(ast: &AST<(usize, T)>) -> Vec<Instr> {
   use self::Arg::*;
   use self::Reg::*;
 
-  let mut v = vec![Sub(Reg(ESP), Const((count_vars(&ast.root) * 4) as i32))];
+  let mut v = vec![];
+  let vars = count_vars(&ast.root);
+  if vars > 0 {
+      v.push(Sub(Reg(ESP), Const((vars * 4) as i32)));
+  }
   v.append(&mut compile_expr(&ast.root, &ast.symbols, &mut vec![]));
   v
 }
