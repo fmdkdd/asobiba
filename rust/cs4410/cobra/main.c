@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-extern int entry_point() asm("entry_point");
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Runtime functions called from compiled Cobra code
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 const int BOOL_TAG   = 1;
 const int BOOL_TRUE  = 0xffffffff;
@@ -12,28 +14,21 @@ enum Error { Arith_Expect_Num = 1,
              If_Cond_Expect_Bool,
 };
 
-void error(enum Error code) {
-  switch (code) {
-  case Arith_Expect_Num    : fprintf(stderr, " Error: arithmetic expected a number\n"); break;
-  case Comp_Expect_Num     : fprintf(stderr, " Error: comparison expected a number\n"); break;
-  case If_Cond_Expect_Bool : fprintf(stderr, " Error: if expected a boolean\n"); break;
+// Helper
+void _print(int r, FILE *stream) {
+  if (r & BOOL_TAG) {
+    if (r == -1)              { fprintf(stream, "true");  }
+    else if (r == 0x7FFFFFFF) { fprintf(stream, "false"); }
+    else                      { fprintf(stderr, "Invalid value: 0x%x\n", r); }
+  } else {
+    // Number
+    fprintf(stream, "%d", r >> 1);
   }
-
-  exit(code);
 }
 
 int print(int r) {
   printf(" ");
-
-  if (r & BOOL_TAG) {
-    if (r == -1)              { printf("true");  }
-    else if (r == 0x7FFFFFFF) { printf("false"); }
-    else                      { fprintf(stderr, "Invalid value: 0x%x\n", r); }
-  } else {
-    // Number
-    printf("%d", r >> 1);
-  }
-
+  _print(r, stdout);
   return r;
 }
 
@@ -55,21 +50,57 @@ int is_num(int n) {
 
 void num_check(int n) {
   if (is_num(n) == BOOL_FALSE) {
-    error(Arith_Expect_Num);
+    fprintf(stderr, "Error: arithmetic expected a number, got ");
+    _print(n, stderr);
+    exit(Arith_Expect_Num);
+  }
+}
+
+void num_check2(int a, int b) {
+  if (is_num(a) == BOOL_FALSE) {
+    fprintf(stderr, "Error: arithmetic expected a number, got ");
+    _print(a, stderr);
+    exit(Arith_Expect_Num);
+  } else if (is_num(b) == BOOL_FALSE) {
+    fprintf(stderr, "Error: arithmetic expected a number, got ");
+    _print(b, stderr);
+    exit(Arith_Expect_Num);
   }
 }
 
 void bool_check(int n) {
   if (is_bool(n) == BOOL_FALSE) {
-    error(Comp_Expect_Num);
+    fprintf(stderr, "Error: expected a boolean, got ");
+    _print(n, stderr);
+    exit(Comp_Expect_Num);
+  }
+}
+
+void bool_check2(int a, int b) {
+  if (is_bool(a) == BOOL_FALSE) {
+    fprintf(stderr, "Error: logic expected a boolean, got ");
+    _print(a, stderr);
+    exit(Comp_Expect_Num);
+  } else if (is_bool(b) == BOOL_FALSE) {
+    fprintf(stderr, "Error: logic expected a boolean, got ");
+    _print(b, stderr);
+    exit(Comp_Expect_Num);
   }
 }
 
 void if_cond_check(int n) {
   if (is_bool(n) == BOOL_FALSE) {
-    error(If_Cond_Expect_Bool);
+    fprintf(stderr, "Error: if expected a boolean, got ");
+    _print(n, stderr);
+    exit(If_Cond_Expect_Bool);
   }
 }
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Main
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+extern int entry_point() asm("entry_point");
 
 int main() {
   int result = entry_point();

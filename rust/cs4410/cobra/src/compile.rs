@@ -2,6 +2,10 @@ use std::fmt::Display;
 
 use parse::{AST, Expr, Prim1, Prim2};
 
+// TODO: comparison operators (unimplemented! macros)
+// TODO: runtime checks for comparisons
+// TODO: overflow check for arithmetic
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Compiler
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -72,16 +76,25 @@ fn tag<T>(expr: &Expr<T>) -> &T {
 #[derive(Debug, Clone, Copy)]
 enum Reg {
   EAX,
+  ECX,
   EBP,
   ESP,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 enum Arg {
   Const(i32),
   HexConst(i32),
   Reg(Reg),
   RegOffset(Reg, usize),
+  Sized(ArgSize, Box<Arg>),
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ArgSize {
+  Byte,
+  Word,
+  Dword,
 }
 
 #[derive(Debug)]
@@ -111,7 +124,9 @@ enum Runtime {
   IsBool,
   Print,
   NumCheck,
+  NumCheck2,
   BoolCheck,
+  BoolCheck2,
   IfCondCheck,
 }
 
@@ -191,6 +206,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
   use self::Prim1::*;
   use self::Prim2;
   use self::Arg::*;
+  use self::ArgSize::*;
   use self::Reg::*;
   use self::Expr::*;
 
@@ -204,7 +220,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
     }
 
     Id(s, _) => match lookup(*s, env) {
-      Some(n) => vec![Mov(Reg(EAX), RegOffset(EBP, n))],
+      Some(n) => vec![Mov(Reg(EAX), Sized(Dword, Box::new(RegOffset(EBP, n))))],
       None => panic!("Identifier not bound '{}'", symbols[*s]),
     }
 
@@ -249,6 +265,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
         Print  => Runtime::Print,
         _      => unreachable!(),
       }));
+      v.push(Pop(Reg(ECX)));
       v
     }
 
@@ -267,8 +284,34 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       } else {
         unreachable!();
       };
-      // Combine the two
+      // Combine the two, and add runtime checks
       let a = Reg(EAX);
+
+      match op {
+        Prim2::Plus | Prim2::Minus | Prim2::Mult => {
+          // So this is tricky: the calling convention wants us to push
+          // arguments in reverse order, so intuitively we want to push b,
+          // then a.  But!  We need to preserve EAX (a), and we don't care
+          // about b.  So, we push a last, so that when popping, the second
+          // pop restores EAX.
+          v.push(Push(a.clone()));
+          v.push(Push(b.clone()));
+          v.push(Call(Runtime::NumCheck2));
+          v.push(Pop(Reg(EAX)));
+          v.push(Pop(Reg(EAX)));
+        }
+
+        Prim2::And | Prim2::Or => {
+          v.push(Push(a.clone()));
+          v.push(Push(b.clone()));
+          v.push(Call(Runtime::BoolCheck2));
+          v.push(Pop(Reg(EAX)));
+          v.push(Pop(Reg(EAX)));
+        }
+
+        _ => unimplemented!(),
+      };
+
       v.append(&mut match op {
         Prim2::Plus  => vec![Add(a, b)],
         Prim2::Minus => vec![Sub(a, b)],
@@ -329,7 +372,9 @@ extern is_bool
 extern is_num
 extern print
 extern num_check
+extern num_check2
 extern bool_check
+extern bool_check2
 extern if_cond_check
 global entry_point
 entry_point:
@@ -347,6 +392,7 @@ impl Display for Reg {
 
     match self {
       EAX => write!(f, "eax"),
+      ECX => write!(f, "ecx"),
       EBP => write!(f, "ebp"),
       ESP => write!(f, "esp"),
     }
@@ -362,6 +408,19 @@ impl Display for Arg {
       HexConst(n)     => write!(f, "0x{:x}", n),
       Reg(r)          => write!(f, "{}", r),
       RegOffset(r, o) => write!(f, "[{}-{}]", r, 4 * o),
+      Sized(s, a)     => write!(f, "{} {}", s, a)
+    }
+  }
+}
+
+impl Display for ArgSize {
+  fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+    use self::ArgSize::*;
+
+    match self {
+      Byte  => write!(f, "BYTE"),
+      Word  => write!(f, "WORD"),
+      Dword => write!(f, "DWORD"),
     }
   }
 }
@@ -401,7 +460,9 @@ impl Display for Runtime {
       IsBool      => write!(f, "is_bool"),
       IsNum       => write!(f, "is_num"),
       NumCheck    => write!(f, "num_check"),
+      NumCheck2   => write!(f, "num_check2"),
       BoolCheck   => write!(f, "bool_check"),
+      BoolCheck2  => write!(f, "bool_check2"),
       IfCondCheck => write!(f, "if_cond_check"),
     }
   }
