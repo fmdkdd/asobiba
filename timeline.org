@@ -14394,3 +14394,122 @@ should be treated: read from, written to, tested against a value...
 
 I think I can salvage this approach by adding new template words beside SRC and
 DST, like CC for condition.
+
+* [2018-07-23 lun.]
+** Reviewing PR 1308 (hopefully for good)                          :flycheck:
+https://github.com/flycheck/flycheck/pull/1308
+
+It starts with a simple feature request: allow Flycheck to run automatically
+whenever the user switches to a buffer (after some delay) in flycheck-mode.
+
+The motivation behind the feature is that editing another buffer might affect
+the results of check in other buffers (think project-wide checks).
+
+Unfortunately, there were unforeseen complications due to:
+
+1. Detecting a buffer switch was not straightforward.  Emacs provides
+   ~buffer-list-update-hook~, but there are surprising corner cases where
+   ~current-buffer~ is wrong when that hook is called.
+2. An "idle buffer switch" timer had to work with the "idle change" one.  If you
+   just switched, but start editing right away, the check should be delayed.
+3. The exact behavior of the feature was underspecified.  The user can switch to
+   multiple buffers before the delay is up: should all intermediate buffers be
+   checked, or only the final one?
+
+Handling all these cases complexifies the code, which makes reviewing the PR
+harder.
+
+So let's try to untangle it.  What the PR should do:
+
+1. Whenever the user switches to a flycheck-mode buffer, that buffer should run
+   a check after a customizable delay.
+2. That behavior only happens when "buffer-switch" is in
+   ~flycheck-check-syntax-automatically~.
+3. If the user starts typing in the buffer right after switching to a buffer,
+   the check should be rescheduled (since the check results would be obsolete).
+4. If the user was typing (hence scheduling a check) in a buffer, and the user
+   switches to another buffer and back, the check should *not* be rescheduled.
+
+   (In practice, it may be simpler to always reschedule checks, and it is also
+   always correct.)
+
+5. If the user rapidly switches to multiple flycheck-mode buffers, checks should
+   be scheduled for all buffers.  This behavior can be toggled off, in which
+   case only the final flycheck-mode buffer will run a check.
+
+The following table describes the interactions between idle-change and
+idle-buffer-switch.  In all cases, the point is that *only one check* should
+run.
+
+|                                   | idle-change    | idle-buffer-switch | both             |
+|-----------------------------------+----------------+--------------------+------------------|
+| Switch to flycheck buffer         | -              | schedule check     | schedule check   |
+| Switch, then type                 | schedule check | schedule check     | reschedule check |
+| Type, then switch away            | schedule check | -                  | schedule check   |
+| Type, switch away and back        | schedule check | schedule check     | reschedule check |
+| Type, switch away, back, and away | schedule check | schedule check*    | reschedule check |
+| Rapidly switch multiple times     | -              | schedule checks*   | schedule checks* |
+
+(*) Only if flycheck-check-intermediate-buffers is non-nil.
+
+- Schedule check :: create a timer that will call flycheck-buffer-automatically
+     after a customizable delay.
+- Reschedule check :: cancel any pending check timer and create another one
+     using the customizable delay for the latest trigger.
+
+Another table for the interactions between mode-enabled and idle-buffer-switch.
+Again, only one check should run:
+
+|                          | mode-enabled | idle-buffer-switch | both        |
+|--------------------------+--------------+--------------------+-------------|
+| Open new flycheck buffer | defer check  | schedule check     | defer check |
+| Enable flycheck-mode     | defer check  | -                  | defer check |
+
+- Defer check :: force a deferred check (which will be called on
+     post-command-hook).
+
+So basically, idle-buffer-switch should have no effect on toggling the minor
+mode (since whether a check happens at that time is already governed by
+mode-enabled).
+
+Path to review:
+
+1. [X] Check that the PR does all the above interactively.
+
+   Observed behavior:
+
+   | Requirement | Correct                            |
+   |-------------+------------------------------------|
+   |           1 | yes                                |
+   |           2 | yes                                |
+   |           3 | yes                                |
+   |           4 | not rescheduled, but check happens |
+   |           5 | yes                                |
+
+   |                                   | idle-change | idle-buffer-switch  | both                |
+   |-----------------------------------+-------------+---------------------+---------------------|
+   | Switch to flycheck buffer         | -           | 1 check             | 1 check             |
+   | Switch, then type                 | 1 check     | 1 check             | 1 check             |
+   | Type, then switch away            | 1 check     | -                   | 1 check             |
+   | Type, switch away and back        | 1 check     | 1 check             | 1 check             |
+   | Type, switch away, back, and away | 1 check     | 1 check             | 1 check             |
+   | Rapidly switch multiple times     | -           | all buffers checked | all buffers checked |
+
+   |                          | mode-enabled | idle-buffer-switch | both       |
+   |--------------------------+--------------+--------------------+------------|
+   | Open new flycheck buffer | 1 check      | -                  | *2 checks* |
+   | Enable flycheck-mode     | 1 check      | -                  | 1 check    |
+
+   Conclusion: one redundant check when opening a new flycheck buffer, otherwise
+   it's fine.
+
+2. [X] Write tests to ensure it does it in the future as well.
+
+   Couldn't reproduce the failure with idle-buffer-switch and mode-enabled with
+   tests, since it seems to be triggered by global-flycheck-mode.
+
+   But the tests cover most of the functionality.
+
+3. [ ] Check the implementation is correct.
+4. [ ] Check if the code can be simplified.
+5. [ ] Check documentation (docstrings and manual)
