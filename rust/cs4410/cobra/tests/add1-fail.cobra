@@ -1,2 +1,2 @@
-# expect:Error: arithmetic expected a number, got true
+# expect:Error: expected a number, got true
 add1(true)

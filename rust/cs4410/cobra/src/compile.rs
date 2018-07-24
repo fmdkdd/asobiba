@@ -2,8 +2,6 @@ use std::fmt::Display;
 
 use parse::{AST, Expr, Prim1, Prim2};
 
-// TODO: runtime checks for comparisons
-
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Compiler
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -294,7 +292,9 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       let a = Reg(EAX);
 
       match op {
-        Prim2::Plus | Prim2::Minus | Prim2::Mult => {
+        Prim2::Plus | Prim2::Minus | Prim2::Mult |
+        Prim2::Greater | Prim2::GreaterEq |
+        Prim2::Less | Prim2::LessEq => {
           // So this is tricky: the calling convention wants us to push
           // arguments in reverse order, so intuitively we want to push b,
           // then a.  But!  We need to preserve EAX (a), and we don't care
@@ -316,12 +316,8 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
           v.push(Pop(Reg(EAX)));
         }
 
-        Prim2::Greater => {},
-        Prim2::GreaterEq => {},
-        Prim2::Less => {},
-        Prim2::LessEq => {},
+        // Eq compares anything
         Prim2::Eq => {}
-
       };
 
       let overflow = OVERFLOW.to_string();

@@ -1,2 +1,2 @@
 # expect:Error: expected a number, got true
-true + 42
+2 > true
