@@ -177,7 +177,7 @@ fn count_vars<T>(expr: &Expr<T>) -> usize {
     Let(bs, e, _)     => bs.len() + count_vars(e),
 
     Prim1(_, e, _)    => count_vars(e),
-    Prim2(_, l, r, _) => count_vars(l) + count_vars(r),
+    Prim2(_, l, r, _) => usize::max(count_vars(l), count_vars(r)),
     If(cc, th, el, _) => *[count_vars(cc), count_vars(th), count_vars(el)]
       .iter().max().unwrap(),
 
