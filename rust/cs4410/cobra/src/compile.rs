@@ -4,7 +4,6 @@ use parse::{AST, Expr, Prim1, Prim2};
 
 // TODO: comparison operators (unimplemented! macros)
 // TODO: runtime checks for comparisons
-// TODO: overflow check for arithmetic
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Compiler
@@ -113,6 +112,7 @@ enum Instr {
   Label(String),
   Jmp(String),
   Je(String),
+  Jo(String),
   Push(Arg),
   Pop(Arg),
   Call(Runtime),
@@ -200,6 +200,7 @@ fn compile_ast<T>(ast: &AST<(usize, T)>) -> Vec<Instr> {
 
 static BOOL_TRUE  : i32 = -1;
 static BOOL_FALSE : i32 = 0x7fffffff;
+static OVERFLOW   : &'static str = "error_overflow";
 
 fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -> Vec<Instr> {
   use self::Instr::*;
@@ -233,6 +234,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       v.push(Call(Runtime::NumCheck));
       v.push(Pop(Reg(EAX)));
       v.push(Add(Reg(EAX), Const(2)));
+      v.push(Jo(OVERFLOW.to_string()));
       v
     }
 
@@ -242,6 +244,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       v.push(Call(Runtime::NumCheck));
       v.push(Pop(Reg(EAX)));
       v.push(Sub(Reg(EAX), Const(2)));
+      v.push(Jo(OVERFLOW.to_string()));
       v
     }
 
@@ -302,6 +305,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
         }
 
         Prim2::And | Prim2::Or => {
+          // Idem
           v.push(Push(a.clone()));
           v.push(Push(b.clone()));
           v.push(Call(Runtime::BoolCheck2));
@@ -312,10 +316,12 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
         _ => unimplemented!(),
       };
 
+      let overflow = OVERFLOW.to_string();
+
       v.append(&mut match op {
-        Prim2::Plus  => vec![Add(a, b)],
-        Prim2::Minus => vec![Sub(a, b)],
-        Prim2::Mult  => vec![IMul(a, b), Sar(Reg(EAX), Const(1))],
+        Prim2::Plus  => vec![Add(a, b), Jo(overflow)],
+        Prim2::Minus => vec![Sub(a, b), Jo(overflow)],
+        Prim2::Mult  => vec![IMul(a, b), Jo(overflow), Sar(Reg(EAX), Const(1))],
         Prim2::And   => vec![And(a, b)],
         Prim2::Or    => vec![Or(a, b)],
         _ => unimplemented!(),
@@ -376,6 +382,7 @@ extern num_check2
 extern bool_check
 extern bool_check2
 extern if_cond_check
+extern overflow
 global entry_point
 entry_point:
   push ebp
@@ -383,7 +390,12 @@ entry_point:
 {}
   mov esp, ebp
   pop ebp
-  ret", instrs.iter().map(|i| format!("{}", i)).collect::<String>())
+  ret
+
+{}:
+  call overflow",
+          instrs.iter().map(|i| format!("{}", i)).collect::<String>(),
+          OVERFLOW)
 }
 
 impl Display for Reg {
@@ -444,6 +456,7 @@ impl Display for Instr {
       Label(s)       => writeln!(f, "{}:", s),
       Jmp(s)         => writeln!(f, "  jmp {}", s),
       Je(s)          => writeln!(f, "  je {}", s),
+      Jo(s)          => writeln!(f, "  jo {}", s),
       Push(s)        => writeln!(f, "  push {}", s),
       Pop(s)         => writeln!(f, "  pop {}", s),
       Call(s)        => writeln!(f, "  call {}", s),

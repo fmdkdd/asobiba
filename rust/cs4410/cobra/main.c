@@ -12,6 +12,7 @@ const int BOOL_FALSE = 0x7fffffff;
 enum Error { Arith_Expect_Num = 1,
              Comp_Expect_Num,
              If_Cond_Expect_Bool,
+             Overflow,
 };
 
 // Helper
@@ -94,6 +95,11 @@ void if_cond_check(int n) {
     _print(n, stderr);
     exit(If_Cond_Expect_Bool);
   }
+}
+
+void overflow() {
+  fprintf(stderr, "Error: integer overflow");
+  exit(Overflow);
 }
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
