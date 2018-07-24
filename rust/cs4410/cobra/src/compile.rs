@@ -269,7 +269,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
         Print  => Runtime::Print,
         _      => unreachable!(),
       }));
-      v.push(Pop(Reg(ECX)));
+      v.push(Add(Reg(ESP), Const(4))); // Discard argument
       v
     }
 
