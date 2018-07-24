@@ -2,7 +2,6 @@ use std::fmt::Display;
 
 use parse::{AST, Expr, Prim1, Prim2};
 
-// TODO: comparison operators (unimplemented! macros)
 // TODO: runtime checks for comparisons
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -58,19 +57,19 @@ fn tag_bindings<T>(bindings: Vec<(usize, Expr<T>)>, mut seed: usize)
   (ret, seed)
 }
 
-fn tag<T>(expr: &Expr<T>) -> &T {
-  use self::Expr::*;
+// fn tag<T>(expr: &Expr<T>) -> &T {
+//   use self::Expr::*;
 
-  match expr {
-    Number(_, t)      => t,
-    Id(_, t)          => t,
-    Bool(_, t)        => t,
-    Prim1(_, _, t)    => t,
-    Prim2(_, _, _, t) => t,
-    Let(_, _, t)      => t,
-    If(_, _, _, t)    => t,
-  }
-}
+//   match expr {
+//     Number(_, t)      => t,
+//     Id(_, t)          => t,
+//     Bool(_, t)        => t,
+//     Prim1(_, _, t)    => t,
+//     Prim2(_, _, _, t) => t,
+//     Let(_, _, t)      => t,
+//     If(_, _, _, t)    => t,
+//   }
+// }
 
 #[derive(Debug, Clone, Copy)]
 enum Reg {
@@ -112,6 +111,10 @@ enum Instr {
   Label(String),
   Jmp(String),
   Je(String),
+  Jg(String),
+  Jge(String),
+  Jl(String),
+  Jle(String),
   Jo(String),
   Push(Arg),
   Pop(Arg),
@@ -272,7 +275,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       v
     }
 
-    Prim2(op, l, r, _) => {
+    Prim2(op, l, r, (n, _)) => {
       // If l and r aren't immediate, we cannot compile
       if !is_imm(l) || !is_imm(r) {
         panic!("Binary expression not in ANF");
@@ -313,7 +316,12 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
           v.push(Pop(Reg(EAX)));
         }
 
-        _ => unimplemented!(),
+        Prim2::Greater => {},
+        Prim2::GreaterEq => {},
+        Prim2::Less => {},
+        Prim2::LessEq => {},
+        Prim2::Eq => {}
+
       };
 
       let overflow = OVERFLOW.to_string();
@@ -324,7 +332,27 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
         Prim2::Mult  => vec![IMul(a, b), Jo(overflow), Sar(Reg(EAX), Const(1))],
         Prim2::And   => vec![And(a, b)],
         Prim2::Or    => vec![Or(a, b)],
-        _ => unimplemented!(),
+        Prim2::Greater | Prim2::GreaterEq |
+        Prim2::Less | Prim2::LessEq | Prim2::Eq => {
+          let target = format!("{}_{}", op, n);
+          let done = format!("done_{}", n);
+          vec![
+            Cmp(a, b),
+            match op {
+              Prim2::Greater   => Jg(target.clone()),
+              Prim2::GreaterEq => Jge(target.clone()),
+              Prim2::Less      => Jl(target.clone()),
+              Prim2::LessEq    => Jle(target.clone()),
+              Prim2::Eq        => Je(target.clone()),
+              _ => unreachable!(),
+            },
+            Mov(Reg(EAX), HexConst(BOOL_FALSE)),
+            Jmp(done.clone()),
+            Label(target),
+            Mov(Reg(EAX), HexConst(BOOL_TRUE)),
+            Label(done),
+          ]
+        }
       });
       v
     }
@@ -456,6 +484,10 @@ impl Display for Instr {
       Label(s)       => writeln!(f, "{}:", s),
       Jmp(s)         => writeln!(f, "  jmp {}", s),
       Je(s)          => writeln!(f, "  je {}", s),
+      Jg(s)          => writeln!(f, "  jg {}", s),
+      Jge(s)         => writeln!(f, "  jge {}", s),
+      Jl(s)          => writeln!(f, "  jl {}", s),
+      Jle(s)         => writeln!(f, "  jle {}", s),
       Jo(s)          => writeln!(f, "  jo {}", s),
       Push(s)        => writeln!(f, "  push {}", s),
       Pop(s)         => writeln!(f, "  pop {}", s),
@@ -477,6 +509,22 @@ impl Display for Runtime {
       BoolCheck   => write!(f, "bool_check"),
       BoolCheck2  => write!(f, "bool_check2"),
       IfCondCheck => write!(f, "if_cond_check"),
+    }
+  }
+}
+
+impl Display for Prim2 {
+   fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+    use self::Prim2::*;
+
+    match self {
+      Greater   => write!(f, "greater"),
+      GreaterEq => write!(f, "greater_eq"),
+      Less      => write!(f, "less"),
+      LessEq    => write!(f, "less_eq"),
+      Eq        => write!(f, "eq"),
+
+      _ => unreachable!(),
     }
   }
 }
@@ -512,38 +560,38 @@ fn is_imm<T>(expr: &Expr<T>) -> bool {
   }
 }
 
-fn replace<T>(a: usize, b: usize, expr: Expr<T>) -> Expr<T> {
-  use self::Expr::*;
+// fn replace<T>(a: usize, b: usize, expr: Expr<T>) -> Expr<T> {
+//   use self::Expr::*;
 
-  match expr {
-    Id(n, t) => if n == a { Id(b, t) }
-                else      { Id(a, t) },
-    Prim1(p, e, t) => Prim1(p, Box::new(replace(a, b, *e)), t),
-    Prim2(p, l, r, t) => Prim2(p,
-                               Box::new(replace(a, b, *l)),
-                               Box::new(replace(a, b, *r)),
-                               t),
-    If(cc, th, el, t) => If(Box::new(replace(a, b, *cc)),
-                            Box::new(replace(a, b, *th)),
-                            Box::new(replace(a, b, *el)),
-                            t),
-    Let(bs, body, t) => {
-      let mut new_bs = Vec::new();
-      let mut shadow = false;
-      for (x,e) in bs {
-        if x == a { shadow = true }
-        if shadow {
-          new_bs.push((x, e));
-        } else {
-          new_bs.push((x, replace(a, b, e)));
-        }
-      }
-      Let(new_bs, Box::new(if shadow { *body }
-                           else      { replace(a, b, *body) }), t)
-    }
-    _ => expr,
-  }
-}
+//   match expr {
+//     Id(n, t) => if n == a { Id(b, t) }
+//                 else      { Id(a, t) },
+//     Prim1(p, e, t) => Prim1(p, Box::new(replace(a, b, *e)), t),
+//     Prim2(p, l, r, t) => Prim2(p,
+//                                Box::new(replace(a, b, *l)),
+//                                Box::new(replace(a, b, *r)),
+//                                t),
+//     If(cc, th, el, t) => If(Box::new(replace(a, b, *cc)),
+//                             Box::new(replace(a, b, *th)),
+//                             Box::new(replace(a, b, *el)),
+//                             t),
+//     Let(bs, body, t) => {
+//       let mut new_bs = Vec::new();
+//       let mut shadow = false;
+//       for (x,e) in bs {
+//         if x == a { shadow = true }
+//         if shadow {
+//           new_bs.push((x, e));
+//         } else {
+//           new_bs.push((x, replace(a, b, e)));
+//         }
+//       }
+//       Let(new_bs, Box::new(if shadow { *body }
+//                            else      { replace(a, b, *body) }), t)
+//     }
+//     _ => expr,
+//   }
+// }
 
 // This helper will decompose an expression of arbitrary depth into ANF, where
 // all immediate expressions are put in a single context (second returned arg).
