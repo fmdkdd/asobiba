@@ -1,0 +1,2 @@
+# expect:Error: expected a boolean, got 2
+true || 2

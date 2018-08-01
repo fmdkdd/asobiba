@@ -1,0 +1,2 @@
+# expect:Error: integer overflow
+add1(1073741823)

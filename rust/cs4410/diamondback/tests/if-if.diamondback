@@ -1,0 +1,2 @@
+# expect: 2
+if if false : 0 else: true : 2 else: 3

@@ -1,0 +1,4 @@
+# expect: 2 2
+let a = 0,
+    aa = a + 1
+in print(let b = a + 1 in b + aa)

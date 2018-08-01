@@ -1,0 +1,4 @@
+# expected: 3
+let x = 0 in
+  add1(let y = add1(x) in
+         add1(y))
