@@ -14513,3 +14513,266 @@ Path to review:
 3. [ ] Check the implementation is correct.
 4. [ ] Check if the code can be simplified.
 5. [ ] Check documentation (docstrings and manual)
+
+* [2018-08-02 jeu.]
+** Sketching out a PuzzleScript for abstract strategy games        :abstraga:
+[[https://www.puzzlescript.net/][PuzzleScript]] is a fantastic idea.  And the related [[http://tinyworld.spacebar.org/][T in Y World]] is even better,
+because rules are part of the field, and thus can be mutated (metaprogramming!).
+
+The core idea to both is to describe the game rules by pattern matching and
+replacement.
+
+But pattern matching on a grid needs to look in all four cardinal directions.
+They share the same clever solution to describe on one line patterns in
+arbitrary directions:
+
+: A>B>X
+
+will match ABX, but not A nor XBA
+                        B
+                        X
+
+: AvBvX
+
+will match A but not ABX
+           B
+           X
+
+: AvB>C^D
+
+match AD
+      BC
+
+: A)B)X
+
+will match ABX   XBA   A
+                       B
+                       X
+
+I wonder if the same idea can work for specifying abstract strategy games.  In
+some ways they are simpler than puzzle games, in other ways they are more
+difficult.
+
+Example games: Aballone, Reversi, Go, Chess, Tak, Quoridor...
+
+Characteristics of abstract strategy games:
+
+- Turn-based
+- Fixed play area (grid, square or eventually hex)
+- Pieces can be put down, captured, moved, stacked, flipped
+- There may be a set number of pieces
+- Captured pieces may be played again
+- Win condition can be elimination, territory scoring, reaching a position
+- Multiplayer
+
+Multiplayer can be tricky to specify.  Roles are usually symmetric (black and
+white), but they don't have to be.  Players can pass.  Must decide who starts,
+when a turn is over.  What actions can be taken in a turn.
+
+Some games have difficult rules.  The Ko rule of Go requires modeling more than
+one time step (and in fact, keeping the whole history).  Scoring in Go has
+multiple definitions.
+
+Chess is full of idiosyncracies.  Knight move, prise en passant, roque!
+
+*** Reversi
+
+- A valid move is one where at least one piece is flipped.
+- Players alternate by putting a piece or passing.
+- The games end after neither player can move.
+- After putting a piece (P), flip all the pieces of the opposite color in a
+  straight line between P and another piece of the same color.  Straight lines
+  include horizontals, verticals and diagonals.
+
+W = White
+B = Black
+
+: ?W)B).)B)W=W)W).)W)W
+
+The above rule has two problems (assuming ')' includes diagonals):
+
+- The repetition of flipping is not obvious.  If '.' means "match anything",
+  in the output the '.' would be the same as in the input.
+
+  So instead you want to propagate the flip.
+
+- When is it applied?  For Reversi, the rules clearly state that you only flip
+  lines that start or end with the active piece.  They should /not/ flip after
+  that.
+
+I managed to get something going in PuzzleScript:
+
+#+BEGIN_SRC puzzlescript
+title Reversi
+
+========
+OBJECTS
+========
+
+Background
+GREEN
+
+White
+WHITE
+
+Wt
+WHITE
+
+BLACK
+BLACK
+
+Bt
+BLACK
+
+player1
+RED
+
+player2
+BLUE
+
+=======
+LEGEND
+=======
+
+W = White
+B = Black
+. = Background
+@ = player1
+Player = player1 or player2
+
+=======
+SOUNDS
+=======
+
+================
+COLLISIONLAYERS
+================
+
+Background
+White, Black, Wt, Bt
+Player
+
+======
+RULES
+======
+
+[ action player1 | ] -> [ Wt | player2 ]
+[ action player2 | ] -> [ Bt | player1 ]
+[ Wt | B | ... | W ] -> [ W | Wt | ... | W ]
+[ W | Wt | W ] -> [ W | W | W ]
+[ Bt | W | ... | B ] -> [ B | Bt | ... | B ]
+[ B | Bt | B ] -> [ B | B | B ]
+
+==============
+WINCONDITIONS
+==============
+
+
+=======
+LEVELS
+=======
+
+........
+........
+...@....
+...WB...
+...BW...
+........
+........
+........
+#+END_SRC
+
+The 'action' rules let player put a piece down where they are, and switch to the
+other player.
+
+The 'Wt' is a white token.  The token is used to make sure only the active piece
+starts a flip chain, not just any white piece.
+
+The flip chain is defined like so:
+
+: [ Wt | B | ... | W ] -> [ W | Wt | ... | W ]
+: [ W | Wt | W ] -> [ W | W | W ]
+
+The pattern is pretty clear: a token, a black piece, anything in between
+(including nothing), and a white piece.  Then the black piece is turned into the
+token.  In PuzzleScript, the rule is applied as long as the left-hand part
+matches.
+
+So in essence we have a recursive definition that flips one piece at a time.
+And the second rule is the base case, which gets rid of the token.
+
+This works, but it's not Reversi yet:
+
+- It doesn't match for diagonals.  Horizontal and vertical lines in any
+  direction are flipped, but not diagonals (because PuzzleScript doesn't look
+  for them).
+
+- You can put a piece anywhere, not just in valid position.  This requires
+  additional work, and I haven't found how to check the tile below the player.
+
+  The rules above assume the move is valid, otherwise bad things will happen.
+
+- There is a bug!  When propagating the token, we do it one cell at a time, but
+  we do not make sure to /stick to the initial direction/.  That is, the token
+  will flip white pieces in any direction adjacent to it, but not necessarily in
+  a straight line.
+
+To wit, in this configuration:
+
+#+BEGIN_EXAMPLE
+..@
+WBB
+.BW
+.W.
+#+END_EXAMPLE
+
+If I put a white piece down where the player ('@') is, all black pieces are
+turned white.  Here is replacement step by step ('t' for the white token):
+
+#+BEGIN_EXAMPLE
+..t
+WBB
+.BW
+.W.
+
+..W
+WBt
+.BW
+.W.
+
+..W
+WtW
+.BW
+.W.
+
+..W
+WWW
+.tW
+.W.
+
+..W
+WWW
+.WW
+.W.
+#+END_EXAMPLE
+
+As long as there is a white piece in a straight line from the token, it
+keeps flipping them.
+
+I think the solution is to fix the flipping direction of the token after the
+first match.  That means we have to create separate tokens and separate rules
+for each direction, which is already more verbose.
+
+E.g.:
+
+: down [ Wt | B | ... | W ] -> [ Wd | B | ... | W ]
+: down [ Wd | B | ... | W ] -> [ W | Wd | ... | W ]
+: [ W | AnyW | W ] -> [ W | W | W ]
+
+The first rule now only matches in the down direction, and we transform the
+token to a 'white down token'.  After that, we have the same recursive
+definition as before, but now it only matches in the down direction.
+
+For the base case, the direction does not matther, so we can use just one.
+
+Too bad however that we have to write down all the rules for all the directions.
