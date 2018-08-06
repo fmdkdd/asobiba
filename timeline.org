@@ -14776,3 +14776,328 @@ definition as before, but now it only matches in the down direction.
 For the base case, the direction does not matther, so we can use just one.
 
 Too bad however that we have to write down all the rules for all the directions.
+
+* [2018-08-06 lun.]
+** More PuzzleScript Reversi                          :abstraga:puzzlescript:
+On the way home, it hit me that I could use the 'horizontal' and 'vertical'
+keywords to cut down on the verbosity of the previous solution.
+
+So now I have:
+
+#+BEGIN_SRC puzzlescript
+[ action player1 | ] -> [ Wt | player2 ]
+[ action player2 | ] -> [ Bt | player1 ]
+
+horizontal [ Wt | B | ... | W ] -> [ W | Wh | ... | W ]
+horizontal [ Wh | B ] -> [ W | Wh ]
+vertical [ Wt | B | ... | W ] -> [ W | Wv | ... | W ]
+vertical [ Wv | B ] -> [ W | Wv ]
+[ W | AnyWt | W ] -> [ W | W | W ]
+
+horizontal [ Bt | W | ... | B ] -> [ B | Bh | ... | B ]
+horizontal [ Bh | W ] -> [ B | Bh ]
+vertical [ Bt | W | ... | B ] -> [ B | Bv | ... | B ]
+vertical [ Bv | W ] -> [ B | Bv ]
+[ B | AnyBt | B ] -> [ B | B | B ]
+#+END_SRC
+
+Wt is the white token that is put down.  If it's next to a black piece in a
+horizontal line ending with a white piece, we propagate the token.  But this
+time, we put down a white /horizontal/ token.  That one can only propagate
+horizontally due to the rule:
+
+: horizontal [ Wh | B ] -> [ W | Wh ]
+
+(Bonus simplification: we don't actually need to check that we are going toward
+a white piece, since the horizontal token would not be there if we weren't)
+
+We can do the same for vertical, and for black pieces.
+
+More verbose, but it fixes the previous solution's defect.  To wit:
+
+#+BEGIN_EXAMPLE
+..@
+WBB
+.BW
+.W.
+
+..t
+WBB
+.BW
+.W.
+
+..W
+WBv
+.BW
+.W.
+
+..W
+WBW
+.BW
+.W.
+#+END_EXAMPLE
+
+However, it's not correct yet.  There is another bug:
+
+#+BEGIN_EXAMPLE
+@BW
+B..
+W..
+
+WhW
+B..
+W..
+
+WWW
+B..
+W..
+#+END_EXAMPLE
+
+One token can only propagate in one line!  We should propagate to /all lines/
+that end with a white piece instead.
+
+Luckily, it's a simple fix.  The trick is to not discard the white token until
+there are lines that can be flipped.  That is:
+
+#+BEGIN_SRC puzzlescript
+horizontal [ Wt | B | ... | W ] -> [ Wt | Wh | ... | W ]
+horizontal [ Wh | B ] -> [ W | Wh ]
+vertical [ Wt | B | ... | W ] -> [ Wt | Wv | ... | W ]
+vertical [ Wv | B ] -> [ W | Wv ]
+[ AnyWt | W ] -> [ W | W ]
+#+END_SRC
+
+If we keep the token, we make sure it is still around for the vertical rule to
+match.  So:
+
+#+BEGIN_EXAMPLE
+tBW
+B..
+W..
+
+thW
+B..
+W..
+
+thW
+B..
+W..
+
+thW
+v..
+W..
+
+tWW
+v..
+W..
+
+WWW
+v..
+W..
+
+WWW
+W..
+W..
+#+END_EXAMPLE
+
+The fact that a rule is executed as long as the left-hand part matches is used
+for all rules: when we have two horizontal lines, the first rule places two
+horizontal tokens; when we several black pieces in a row, the second rule
+applies to propagate that token; finally, all temporary tokens are turned
+into white pieces by repeated application of the AnyWt rule:
+
+#+BEGIN_EXAMPLE
+WB@BW
+
+WBtBW
+
+WhtBW    ; Wt | B -> Wt | Wh
+
+WhthW    ; idem
+
+WWthW    ; AnyWt -> W
+
+WWWhW
+
+WWWWW
+#+END_EXAMPLE
+
+In fact, we can simplify the clearing up rule even further:
+
+: [ AnyWt ] -> [ W ]
+
+Since we know by construction that any leftover white token is in fact just a
+white piece, once the rules propagating the tokens have executed, we can turn
+all tokens into white pieces, regardless if they are next to white piece.
+
+So what's missing?  Diagonals would make a playable Reversi, but one where you
+only play valid moves.  I feel that defining validity in the rules is
+primordial: the rules describe what can happen sure, but they also state what
+/cannot/ happen.  As it stands, I can play wherever I want, but it's not
+Reversi.
+
+Diagonals would be trivial to do if PuzzleScript had a dedicated keyword (maybe
+one keyword for both directions: bottom-left to top-down and top-left to
+bottom-right).  I think we can keep using the token idea to get to diagonals in
+two steps:
+
+#+BEGIN_EXAMPLE
+..W
+.B.
+t..
+
+..W
+aB.
+t..
+
+..W
+.d.
+t..
+
+.aW
+.d.
+t..
+
+.aW
+.W.
+t..
+
+..W
+.W.
+t..
+#+END_EXAMPLE
+
+Push a token in one direction, say up.   That token looks for a black piece to
+its right.  Keep doing the same.
+
+It might work on an empty board, but I think we'll run into issues with a full
+board, since it looks like we can only have one piece per cell?  It wouldn't
+prevent us from using the technique, it would just be super tedious since we
+would have to create one temporary token for each type of token that can appear
+below it, and have rules do the proper replacement.  Anyway, let's try it.
+
+#+BEGIN_EXAMPLE
+t..
+.B.
+..B
+
+t..
+aB.
+..B
+
+t..
+ad.
+..B
+
+t..
+.d.
+..B
+
+ta.
+.W.
+.aB
+
+t..
+.W.
+.ad
+
+t..
+.W.
+.ad
+
+t..
+.W.
+..d
+
+t..
+.Wa
+..W
+
+t..
+.W.
+..W
+#+END_EXAMPLE
+
+Ahah!  I've got propagation on diagonals working with:
+
+#+BEGIN_SRC puzzlescript
+vertical   [ Wt | . ] -> [ Wt | Wa ]
+horizontal [ Wa | B ] -> [ Wa | Wd ]
++          [ Wa ]     -> [ Background ]
++up        [ Wd | . ] -> [ Wd | Wa ]
++down      [ Wd | . ] -> [ W  | Wa ]
+#+END_SRC
+
+(Could be made simpler, but I tried to follow the logic of the orthogonal rules,
+where multiple diagonals can match).
+
+So first rule is just: step above and below of Wt.  The exploratory token 'a',
+if next horizontally to a black piece, turns the B in a white diagonal token.
+After that, we discard all exploratory tokens.  Then, we do the same thing with
+Wd instead of Wt, and we do that until the group matches.
+
+I've had to split the Wd rules into up and down, since I needed to expire the Wd
+token after both directions were explored.  E.g.:
+
+: vertical [ Wd | . ] -> [ W | Wa ]
+
+will produce just one Wa token before expiring Wd.  Instead, if we write:
+
+: vertical [ Wd | . ] -> [ Wd | Wa ]
+
+Then we explore both directions, but we still have a Wd token that we need to
+expire (otherwise we will explore its neighbouring cells again, which is
+useless, and might regress infinitely).  We could add a rule that discards the
+Wd token, like we did for Wa.
+
+I believe that's a valid use case for grouping rules, since we want to loop
+here.
+
+But!  It's not enough for Reversi.  It flips white pieces in diagonals,
+/regardless/ if there is a white piece at the end of the diagonal.  Using the
+same method, we would in fact have to do two propagations: one would explore all
+diagonals until the end, and if they encounter a white piece, then they back
+propagate and do the flipping.  Like so:
+
+(flattening the diagonal on a line because it's easier to see):
+
+#+BEGIN_EXAMPLE
+tBBBW
+
+taBBw
+
+taaBw
+
+taaaW
+
+taaWW
+
+taWWW
+
+tWWWW
+#+END_EXAMPLE
+
+In fact, we could do the same thing for horizontal and vertical lines.  Step one
+cell at a time, until you hit a white piece, and propagate back if you do,
+flipping all the black pieces.  Or leave the pieces black if you don't find a
+white piece.
+
+We don't /have to/ do it that way for horizontal and vertical lines, because
+PuzzleScript allows us to match a whole line.  But for diagonals, we have to do
+it one (half-) step at a time.
+
+So I'm pretty sure it's doable, but very tedious.  I feel like I'm in a
+Zachtronics game: dealing with very low-level, fine-grained contraptions to
+achieve even the most trivial effect.
+
+The point was to find a system for expressing game rules, and for Reversi I'm
+already specifying /how/ to apply the rules very finely (with cell-to-cell
+propagation).
+
+Maybe we would get more mileage out of PuzzleScript if we could define and reuse
+abstractions, so we could express rules at a higher level, but still have the
+ability to express very low-level mechanisms if we needed to.
+
+I want to think about restricting moves to valid ones first.  But in essence, in
+order to know if the move is valid, we have to know if we would end up flipping
+something.  So we have to do a flip check!
