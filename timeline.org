@@ -15101,3 +15101,282 @@ ability to express very low-level mechanisms if we needed to.
 I want to think about restricting moves to valid ones first.  But in essence, in
 order to know if the move is valid, we have to know if we would end up flipping
 something.  So we have to do a flip check!
+
+* [2018-08-07 mar.]
+** Reversi in ideal PuzzleScript                                   :abstraga:
+Doing a flip check is in fact more complex than what I used previously for
+starting a flip.  The left-hand part:
+
+: horizontal [ Wt | B | ... | W ]
+
+matches tBBBW, but also matches tB.BW!  The ellipsis matches anything, and we
+cannot match for repeated Bs.
+
+So doing something like this:
+
+: horizontal [ action player | B | ... | W ] -> [ Wt | B | ... | W ]
+
+does not suffice for a flip check.
+
+(As an aside, I don't know where to put the player now!  I cannot write ~player
+on B~ even though with the previous rule, the player tile was moved
+automatically away, without touching whatever was below)
+
+If we were to do it in PuzzleScript, we would have to go tile by tile, until we
+eventually a white piece, and then allow the move.  Or we don't hit any, in
+which case the move cannot proceed (we don't put down a white token, and none of
+the remaining rules apply)
+
+In ideal PuzzleScript, we could write:
+
+: [ action player | B | B... | W ] -> [ Wt | B | B... | W ]
+
+This would match any valid move, in any direction.  There is at least one black
+piece next to the piece played.
+
+Now since the move is valid, the propagation setup can be simplified:
+
+: horizontal [ Wt | B ] -> [ Wt | Wh ]
+: vertical   [ Wt | B ] -> [ Wt | Wv ]
+: diagonal1  [ Wt | B ] -> [ Wt | Wd1 ]
+: diagonal2  [ Wt | B ] -> [ Wt | Wd2 ]
+
+This sets up tokens on the black pieces next to the played piece. These will
+propagate, but only in the direction specific to the token.
+
+Then we have the actual propagation:
+
+: horizontal [ Wh | B ]  -> [ W | Wh ]
+: vertical   [ Wv | B ]  -> [ W | Wv ]
+: diagonal1  [ Wd1 | B ] -> [ W | Wd1 ]
+: diagonal2  [ Wd2 | B ] -> [ W | Wd2 ]
+
+This flips the pieces one by one, but only in the direction given by the token.
+We have to separate the two diagonals, since in a square grid we have four axes.
+
+The propagation phase stops matching because we have reached the white token, so
+we can just clean up every temporary token:
+
+: [ Wt or Wh or Wv or Wd1 or Wd2 ] -> [ W ]
+
+And same thing for black.
+
+There is repetition that could be abstracted with macros.  For setup:
+
+: setup(dir) := $dir [ Wt | B ] -> [ Wt | W$dir ]
+: setup(horizontal)
+: setup(vertical)
+: setup(diagonal1)
+: setup(diagonal2)
+
+For propagation:
+
+: flip(dir) := $dir [ W$dir | B ] -> [ W | W$dir ]
+: flip(horizontal)
+: flip(vertical)
+: flip(diagonal1)
+: flip(diagonal2)
+
+And we could go further by bundling all the valid axes:
+
+: axes := { horizontal, vertical, diagonal1, diagonal2 }
+: setup(a) for a in axes
+: flip(a) for a in axes
+
+or even
+
+: setup(a); flip(a) for a in axes
+
+But the verbosity is not so bad so we don't need the abstractions.
+
+All that's left is passing, and the winning condition.
+
+If you cannot move, you must pass.  This switches to the next player.  Checking
+if there is a valid move is expensive.
+
+With the rules above, we don't need to.  Either we add another action to the
+language (another input button), or we add a special "Pass" tile that the player
+can move onto.  Doesn't really matter.
+
+: [ action2 player1  ] -> [ player2 ]
+
+: [ action player1 on pass ] -> [ player2 ]
+
+Ending condition is that neither player can move, which again is expensive
+(because the board is not necessarily full).  Alternatively, we could say that
+both players have to pass.  If the latter, we must keep track of the fact that
+the previous player has passed or not.
+
+Trying the former:
+
+: [ Background | B | B... | W ] -> [ P | B | B... | W ]
+: [ Background | W | W... | B ] -> [ P | W | W... | B ]
+: [ no P ] -> end
+: [ P ] -> []
+
+If there is any valid move, we put a token there.  We do that for both players.
+If there aren't any valid move, we end the game.  Otherwise, we cleanup these
+tokens.
+
+If instead we detect two pass in a row:
+
+: [ action player1 on pass ]  -> [ player2 on pass ]
+: [ action player2 on pass ]  -> [ player1 on pass ]
+: [ action player1 on pass1 ] -> end
+: [ action player2 on pass1 ] -> end
+
+'pass' and 'pass1' are two different tiles.  We convert the first to the second
+to keep track of a player passing in the previous round.
+
+The tricky part is to reset that tile when a player actually plays, because the
+action happens far from the pass tile.
+
+So instead we have to keep track of that state on the player itself.
+
+: [ action player1 on pass ] -> [ player2pass on pass ]
+: [ action player2 on pass ] -> [ player2pass on pass ]
+: [ action player1pass on pass ] -> end
+: [ action player2pass on pass ] -> end
+: [ action (player1 or player1pass) | B | B... | W ] -> [ player1 on Wt | B | B... | W ]
+: [ action (player2 or player2pass) | W | W... | B ] -> [ player2 on Bt | W | W... | B ]
+
+Or maybe we can actually match any state like this:
+
+: [ pass1 ] [ action player1 on pass ] -> end
+: [ pass ]  [ action player1 on pass ] -> [] [ player2 on pass ]
+
+Which would be more direct.
+
+After the game ends, we need to determine a winner.  PuzzleScript only has a
+winning condition section, which does both at the same time, since there's only
+one player.
+
+For Reversi, the winner is the player with the highest score.  That is, the highest
+number of pieces of his color on the board.
+
+A straightforward solution is to count.  A less straightforward but more adapted
+to pattern matching is to remove one black piece and one white piece at the same
+time, until only one color remains on the board.  The remaining color wins.
+There might be draws.
+
+*** Rules for interaction versus rules for proving stuff
+These rules, and a proper PuzzleScript semantics, describe in fine details the
+rules of Reversi.  In fact, they do more: they provide an interactive, playable
+Reversi inside PuzzleScript.
+
+But I have no guarantee that the rules are, in fact, correct with respect to the
+official rules of Reversi.
+
+Having the game rules spelt out mechanically allows us to play the game, good.
+But actually we could have played the game much faster by drawing a chess board
+and cutting 64 pieces of paper, black on one side, white on the other.
+
+Even for explanatory purposes: it's faster to change the rules and play another
+round with humans, than figure out how to express these new rules under whatever
+system you have.  Unless your system is so particularly well-suited to your
+domain (which PuzzleScript isn't).
+
+Interpreting the rules wasn't difficult.  For most games, the difficulty is in
+interpreting the corner cases, where the rules do not go.  For the game
+designer, the difficulty is in finding out about these corner cases.
+
+The benefit of having a mechanical implementation of the game rules thus lies in
+ensuring that some situations cannot happen.
+
+But if you start with the questions, you might want to use a different
+formalism.  A mathematical modelisation for instance could be less verbose and
+still let us answer interesting questions.  But the PuzzleScript rules are
+constructive and may give us the sequence of moves that lead to a specific board
+state (that way, we can for instance know if a board is legal or not).
+
+Let's say we want to know whether the game can get stuck.  That is: reach a
+state where there is no valid action for any player, thus preventing the game to
+progress and reach the end condition.
+
+Now, Reversi rules simple enough that the answer is obviously no.  Players
+always have the ability to pass.  Two passes in a row ends the game.  So you can
+always end.
+
+Are there situations where the board is not full, but no valid moves exist?
+(Meaning both players have to pass to end the game.)  That's not obvious from
+the rules, but the answer is yes.  The best way to prove that is to find such a
+case.
+
+The empty board is such a case.  There are no valid moves on it.  However, the
+empty board is not a legal position.
+
+Similarly, it's easy to see by playing a bit that when a line of pieces of the
+same color touches the edge of the board, the opposite color can never flip it,
+so it's never valid to play on the row.
+
+By trying to stick to the edges, it may be possible to derive a stuck case using
+only legal moves.  One may be able to answer that question with a mathematical
+argument (using symmetry as in the 15 puzzle maybe?), but I feel that it's less
+effort to find a counter example.
+
+However, in the event the rules did not allow for a stuck case to occur, proving
+that it is indeed the case could be tricky.
+
+With mechanical rules, we might be able to compute all possible states, and
+check if we get stuck.  The benefit of this approach is that you get potentially
+all sequences of moves that lead to a stuck game.  The downside is that you may
+not be able to answer all questions if the game is not amenable to exhaustive
+state enumeration.
+
+Can we have draws?  Trivially, yes: player 1 passes, player 2 passes, draw.
+
+Can we have draws where the game ends by the two players passing only because
+there are no valid moves left?  I'm tempted to say yes, by symmetry: if player 2
+plays the mirror move of player 1, they should end up in a draw.  However, it's
+not obvious whether player 2 can always play a move to mirror player 1; the
+board may have changed such that the move is not valid.
+
+For instance:
+
+#+BEGIN_EXAMPLE
+1         2         3         4         5
+........  ........  ........  ........  ........
+........  ........  ........  ........  ........
+........  ........  ........  ........  ....B...
+...BW...  ..WWW...  ..WWW...  ..WWW...  ..WWB...
+...WB...  ...WB...  ..BBB...  ..WWB...  ..WWB...
+........  ........  ........  ..W.....  ..W.....
+........  ........  ........  ........  ........
+........  ........  ........  ........  ........
+#+END_EXAMPLE
+
+Here after move 4 the board is asymmetric, and if black playing the mirror move
+does not restore this symmetry.
+
+But white could have played 4b instead, and symmetry would have been maintained:
+
+#+BEGIN_EXAMPLE
+1         2         3         4b         5b
+........  ........  ........  ........  ........
+........  ........  ........  ........  ........
+........  ........  ........  ........  .B......
+...BW...  ..WWW...  ..WWW...  ..WWW...  ..BWW...
+...WB...  ...WB...  ..BBB...  ..WBB...  ..WBB...
+........  ........  ........  .W......  .W......
+........  ........  ........  ........  ........
+........  ........  ........  ........  ........
+#+END_EXAMPLE
+
+Thus, if one can show there is always a valid move that maintains symmetry, then
+there can be such draws.  But to me it's not obvious whether this second
+property holds.
+
+I would sooner resort to exhaustive enumeration to be sure.
+
+But at least, I think it shows that having mechanical rules can help in
+answering questions about the game.  So it's valuable.
+
+If you have the rules in mechanical form, then players can check if their
+current board is legal. Then they can check what they can do a in a given
+situation (what are the legal moves?).  And they can check what would happen in
+some specific situations that the manual does not cover.
+
+This works only if the rules are complete.  How do you ensure they are though?
+
+If you have English rules and mechanical rules, which is the sole source of
+truth?  How do you ensure they actually say the same thing?  You don't!
