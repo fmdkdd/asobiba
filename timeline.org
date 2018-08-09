@@ -15380,3 +15380,41 @@ This works only if the rules are complete.  How do you ensure they are though?
 
 If you have English rules and mechanical rules, which is the sole source of
 truth?  How do you ensure they actually say the same thing?  You don't!
+
+* [2018-08-09 jeu.]
+** Simpler rules                                                   :abstraga:
+Before going to bed, it hit me than in an ideal PuzzleScript, I could vastly
+simplify the rules, and instead of this:
+
+#+BEGIN_SRC puzzlescript
+# Valid move
+[ action player | B | B... | W ] -> [ Wt | B | B... | W ]
+
+# Setup
+horizontal [ Wt | B ] -> [ Wt | Wh ]
+vertical   [ Wt | B ] -> [ Wt | Wv ]
+diagonal1  [ Wt | B ] -> [ Wt | Wd1 ]
+diagonal2  [ Wt | B ] -> [ Wt | Wd2 ]
+
+# Propagate
+horizontal [ Wh | B ]  -> [ W | Wh ]
+vertical   [ Wv | B ]  -> [ W | Wv ]
+diagonal1  [ Wd1 | B ] -> [ W | Wd1 ]
+diagonal2  [ Wd2 | B ] -> [ W | Wd2 ]
+
+# Cleanup
+[ Wt or Wh or Wv or Wd1 or Wd2 ] -> [ W ]
+#+END_SRC
+
+write:
+
+#+BEGIN_SRC puzzlescript
+[ action player | B | B... | W ] -> [ Wt | B | B... | W ]
+[ Wt | B | B... | W ] -> [ Wt | W | W... | W ]
+[ Wt ] -> [ W ]
+#+END_SRC
+
+The first rule makes sure we have a valid move, and the second flips whole lines
+in any direction as long as it matches.  The third cleans up the token.
+
+That's rather terse, and requires only two small extensions to PuzzleScript.
