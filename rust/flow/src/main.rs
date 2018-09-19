@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{self, AtomicUsize};
 
 // ~~~~~~~~~
@@ -125,9 +125,12 @@ struct TypeVar(String);
 
 static VAR_COUNTER: AtomicUsize = atomic::ATOMIC_USIZE_INIT;
 
+fn uid() -> usize {
+  VAR_COUNTER.fetch_add(1, atomic::Ordering::SeqCst)
+}
+
 fn fresh_typevar() -> TypeVar {
-  let i = VAR_COUNTER.fetch_add(1, atomic::Ordering::SeqCst);
-  TypeVar(format!("a{}", i))
+  TypeVar(format!("a{}", uid()))
 }
 
 #[derive(Debug, Clone)]
@@ -143,25 +146,27 @@ enum Type {
 
 type Env = HashMap<Var, (Type, TypeVar)>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct EffectVar(String);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Effect {
-  Bottom,
   Var(Var),
   EffectVar(EffectVar),
-  Union(Box<Effect>, Box<Effect>),
 }
 
-fn effect_u(e1: Effect, e2: Effect) -> Effect {
-  if let Effect::Bottom = e1 {
-    e2
-  } else if let Effect::Bottom = e2 {
-    e1
-  } else {
-    Effect::Union(Box::new(e1), Box::new(e2))
+fn effect_add(e1: EffectSet, e2: Effect) -> EffectSet {
+  let mut eff2 = HashSet::new();
+  eff2.insert(e2);
+  effect_u(e1, eff2)
+}
+
+fn effect_u(e1: EffectSet, e2: EffectSet) -> EffectSet {
+  let mut r = HashSet::new();
+  for e in e1.union(&e2) {
+    r.insert(e.clone());
   }
+  r
 }
 
 #[derive(Debug, Clone)]
@@ -205,7 +210,12 @@ fn pm_exclude(p: PredMap, e: Effect) -> PredMap {
   PredMap::Exclude(Box::new(p), e)
 }
 
-fn cgen_statement(env: Env, s: Statement) -> (Effect, Env, Vec<Constraint>) {
+type EffectSet = HashSet<Effect>;
+fn effect_bottom() -> EffectSet {
+  HashSet::new()
+}
+
+fn cgen_statement(env: Env, s: Statement) -> (EffectSet, Env, Vec<Constraint>) {
   match s {
     Statement::Expr(e) => {
       let (_, eff, _, env2, c) = cgen_expr(env, e);
@@ -231,7 +241,7 @@ fn cgen_statement(env: Env, s: Statement) -> (Effect, Env, Vec<Constraint>) {
   }
 }
 
-fn cgen_expr(env: Env, e: Expr) -> (Type, Effect, PredMap, Env, Vec<Constraint>) {
+fn cgen_expr(env: Env, e: Expr) -> (Type, EffectSet, PredMap, Env, Vec<Constraint>) {
   match e {
     Expr::Const(c) => {
       let t = match c {
@@ -239,12 +249,12 @@ fn cgen_expr(env: Env, e: Expr) -> (Type, Effect, PredMap, Env, Vec<Constraint>)
         Const::String(s) => Type::String(s),
         Const::Undef     => Type::Void,
       };
-      (t, Effect::Bottom, PredMap::Empty, env, vec![])
+      (t, effect_bottom(), PredMap::Empty, env, vec![])
     }
 
     Expr::Read(x) => {
       match env.get(&x) {
-        Some((t, _)) =>  (t.clone(), Effect::Bottom, PredMap::Bind(x, Pred::Truthy), env.clone(), vec![]),
+        Some((t, _)) =>  (t.clone(), effect_bottom(), PredMap::Bind(x, Pred::Truthy), env.clone(), vec![]),
         None    => panic!("Variable {:?} not found in env", x),
       }
     }
@@ -256,14 +266,14 @@ fn cgen_expr(env: Env, e: Expr) -> (Type, Effect, PredMap, Env, Vec<Constraint>)
       env3.insert(x.clone(), (t.clone(), a.clone()));
       let mut c2 = c.clone();
       c2.push(Constraint::T(t.clone(), TypeUse::Var(a.clone())));
-      (t, effect_u(eff, Effect::Var(x.clone())), pm_exclude(p, Effect::Var(x.clone())), env3, c2)
+      (t, effect_add(eff, Effect::Var(x.clone())), pm_exclude(p, Effect::Var(x.clone())), env3, c2)
     }
 
     _ => unimplemented!(),
   }
 }
 
-fn cgen(s: Statement) -> (Effect, Env, Vec<Constraint>) {
+fn cgen(s: Statement) -> (EffectSet, Env, Vec<Constraint>) {
   cgen_statement(HashMap::new(), s)
 }
 
