@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::sync::atomic::{self, AtomicUsize};
 
 // ~~~~~~~~~
@@ -27,11 +28,23 @@ enum Pred {
   Field(Field, Const),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 struct Var(String);
 
-#[derive(Debug, Clone)]
+impl fmt::Debug for Var {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{:?}", self.0)
+  }
+}
+
+#[derive(Clone)]
 struct Field(String);
+
+impl fmt::Debug for Field {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{:?}", self.0)
+  }
+}
 
 #[derive(Debug, Clone)]
 enum Expr {
@@ -124,8 +137,14 @@ const skip : Statement = Statement::Skip;
 
 // From Section 3.1
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct TypeVar(String);
+
+impl fmt::Debug for TypeVar {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{:?}", self.0)
+  }
+}
 
 // A global shared counter using atomics
 static VAR_COUNTER: AtomicUsize = atomic::ATOMIC_USIZE_INIT;
@@ -149,7 +168,7 @@ enum Type {
   Var(TypeVar),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct Env {
   env: HashMap<Var, (Type, TypeVar)>,
 }
@@ -175,6 +194,12 @@ impl Env {
   }
 }
 
+impl fmt::Debug for Env {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "Env {:?}", self.env)
+  }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct EffectVar(String);
 
@@ -184,7 +209,7 @@ enum Effect {
   EffectVar(EffectVar),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct EffectSet {
   effects: HashSet<Effect>,
 }
@@ -211,6 +236,12 @@ impl EffectSet {
   }
 }
 
+impl fmt::Debug for EffectSet {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "EffectSet {:?}", self.effects)
+  }
+}
+
 #[derive(Debug, Clone)]
 enum TypeUse {
   Var(TypeVar),
@@ -232,7 +263,7 @@ enum Constraint {
   E(Effect, EffectUse),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct ConstraintSet {
   constraints: Vec<Constraint>,
 }
@@ -254,6 +285,12 @@ impl ConstraintSet {
     let mut r = self.clone();
     r.constraints.append(&mut c.constraints.clone());
     r
+  }
+}
+
+impl fmt::Debug for ConstraintSet {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "ConstraintSet {:?}", self.constraints)
   }
 }
 
