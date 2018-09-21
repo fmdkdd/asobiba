@@ -26,6 +26,7 @@ enum Pred {
   Eq(Const),
   Truthy,
   Field(Field, Const),
+  Not(Box<Pred>),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -137,7 +138,7 @@ const skip : Statement = Statement::Skip;
 
 // From Section 3.1
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Eq)]
 struct TypeVar(String);
 
 impl fmt::Debug for TypeVar {
@@ -153,8 +154,8 @@ fn uid() -> usize {
   VAR_COUNTER.fetch_add(1, atomic::Ordering::SeqCst)
 }
 
-fn fresh_typevar() -> TypeVar {
-  TypeVar(format!("a{}", uid()))
+fn fresh_typevar(prefix: &str) -> TypeVar {
+  TypeVar(format!("{}{}", prefix, uid()))
 }
 
 #[derive(Debug, Clone)]
@@ -186,10 +187,97 @@ impl Env {
     r
   }
 
+  fn update(&self, x: Var, t: (Type, TypeVar)) -> Env {
+    self.add(x, t)
+  }
+
   fn lookup(&self, x: &Var) -> (&Type, &TypeVar) {
     match self.env.get(&x) {
       Some((t, a)) => (t, a),
       None         => panic!("Variable {:?} not found in env", x),
+    }
+  }
+
+  fn join(&self, e: &Env) -> Env {
+    let mut r = self.clone();
+    for (x, (t, a)) in &e.env {
+      match self.env.get(&x) {
+        None                      => r.env.insert(x.clone(), (t.clone(), a.clone())),
+        Some((t_, a_)) if a_ == a => r.env.insert(x.clone(), (Type::Union(Box::new(t.clone()),
+                                                                          Box::new(t_.clone())), a.clone())),
+        Some((_, a_)) => panic!("Same variable {:?}, different type var {:?} and {:?}",
+                                x, a, a_)
+      };
+    }
+    r
+  }
+
+  fn erase(&self) -> Env {
+    let mut r = Env::new();
+    for (x, (_, a)) in self.env.iter() {
+      r.env.insert(x.clone(), (Type::Var(a.clone()), a.clone()));
+    }
+    r
+  }
+
+  fn widen(&self) -> (Env, ConstraintSet) {
+    let r = self.clone();
+    let c = ConstraintSet::new();
+    for (x, (t, a)) in self.env.iter() {
+      let b = fresh_typevar("b");
+      r.update(x.clone(), (Type::Var(b.clone()), a.clone()));
+      c.add(Constraint::T(t.clone(), TypeUse::Var(b.clone())));
+      c.add(Constraint::T(Type::Var(b), TypeUse::Var(a.clone())));
+    }
+    (r, c)
+  }
+
+  fn refine(&self, psi: &PredMap) -> (Env, ConstraintSet) {
+    use PredMap::*;
+
+    match psi {
+      Empty => (self.clone(), ConstraintSet::new()),
+      Bind(x, p) => {
+        let (t, a) = self.lookup(x);
+        let b = fresh_typevar("b");
+        let env2 = self.update(x.clone(), (Type::Var(b.clone()), a.clone()));
+        let c = ConstraintSet::new();
+        (env2, c.add(Constraint::T(t.clone(), TypeUse::Pred(p.clone(), b))))
+      }
+      And(p1, p2) => {
+        let (env1, c1) = self.refine(p1);
+        let (env2, c2) = env1.refine(p2);
+        (env2, c1.union(c2))
+      }
+      Or(p1, p2) => {
+        let (env1, c1) = self.refine(p1);
+        let (env2, c2) = env1.refine(p2);
+        (env1.join(&env2), c1.union(c2))
+      }
+      Exclude(p, eff) => {
+        let (env1, c1) = self.refine(p);
+        let (env2, c2) = env1.widen();
+        let mut env3 = HavocEnv::new();
+        for (x, (t, a)) in self.env.iter() {
+          let (b, a_) = env2.lookup(x);
+          if a == a_ {
+            env3.env.insert(x.clone(), (b.clone(), t.clone()));
+          } else {
+            unreachable!();
+          }
+        }
+        (env2, c1.union(c2).add(Constraint::E(eff.clone(), EffectUse::Havoc(env3))))
+      }
+      Not(p) => {
+        match *p.clone() {
+          Empty          => self.refine(&Empty),
+          Bind(x, p)     => self.refine(&Bind(x, Pred::Not(Box::new(p)))),
+          And(p1, p2)    => self.refine(&And(Box::new(Not(p1)), Box::new(Not(p2)))),
+          Or(p1, p2)     => self.refine(&Or(Box::new(Not(p1)), Box::new(Not(p2)))),
+          Exclude(p1, e) => self.refine(&Exclude(Box::new(Not(p1)), e)),
+          Not(p)         => self.refine(&p),
+        }
+      }
     }
   }
 }
@@ -197,6 +285,25 @@ impl Env {
 impl fmt::Debug for Env {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     write!(f, "Env {:?}", self.env)
+  }
+}
+
+#[derive(Clone)]
+struct HavocEnv {
+  env: HashMap<Var, (Type, Type)>,
+}
+
+impl HavocEnv {
+  fn new() -> Self {
+    Self {
+      env: HashMap::new(),
+    }
+  }
+}
+
+impl fmt::Debug for HavocEnv {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "HavocEnv {:?}", self.env)
   }
 }
 
@@ -254,7 +361,7 @@ enum TypeUse {
 #[derive(Debug, Clone)]
 enum EffectUse {
   Var(EffectVar),
-  Havoc(Env),
+  Havoc(HavocEnv),
 }
 
 #[derive(Debug, Clone)]
@@ -300,7 +407,7 @@ enum PredMap {
   Bind(Var, Pred),
   And(Box<PredMap>, Box<PredMap>),
   Or(Box<PredMap>, Box<PredMap>),
-  Not(Box<PredMap>, Box<PredMap>),
+  Not(Box<PredMap>),
   Exclude(Box<PredMap>, Effect),
 }
 
@@ -318,7 +425,7 @@ fn cgen_statement(env: Env, s: Statement) -> (EffectSet, Env, ConstraintSet) {
     Statement::Var(x, e) => {
       // This is not in the paper, but we need to add x to the environment
       // before CG-Assign.
-      let env2 = env.add(x, (Type::Void, fresh_typevar()));
+      let env2 = env.add(x, (Type::Void, fresh_typevar("a")));
       let (_, eff, _, env3, c) = cgen_expr(env2, e);
       (eff, env3, c)
     }
@@ -327,6 +434,16 @@ fn cgen_statement(env: Env, s: Statement) -> (EffectSet, Env, ConstraintSet) {
       let (e1, env1, c1) = cgen_statement(env, *s1);
       let (e2, env2, c2) = cgen_statement(env1, *s2);
       (e1.union(e2), env2, c1.union(c2))
+    }
+
+    Statement::If(e, s1, s2) => {
+      let (_, eff, p, env_, c1) = cgen_expr(env, e);
+      let (env1, c2) = env_.refine(&p);
+      let (eff1, env1_, c3) = cgen_statement(env1, *s1);
+      let (env2, c4) = env_.refine(&PredMap::Not(Box::new(p)));
+      let (eff2, env2_, c5) = cgen_statement(env2, *s2);
+      let env__ = env1_.join(&env2_);
+      (eff.union(eff1).union(eff2), env__, c1.union(c2).union(c3).union(c4).union(c5))
     }
 
     _ => unimplemented!(),
