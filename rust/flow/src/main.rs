@@ -25,6 +25,7 @@ enum Pred {
   Typeof(Primitive),
   Eq(Const),
   Truthy,
+  Falsy,
   Field(Field, Const),
   Not(Box<Pred>),
 }
@@ -157,6 +158,23 @@ fn call1(e: Expr, mut args: Vec<Expr>) -> Expr {
   }
 }
 
+fn iff(e: Expr, s1: Statement, s2: Statement) -> Statement {
+  Statement::If(e, Box::new(s1), Box::new(s2))
+}
+
+fn eq_field(x: &str, f: &str, c: Const) -> Expr {
+  Expr::Pred(Pred::Field(Field(f.to_string()), c), Var(x.to_string()))
+}
+
+fn get(x: &str, f: &str) -> Expr {
+  Expr::Get(Box::new(Expr::Read(Var(x.to_string()))),
+            Field(f.to_string()))
+}
+
+fn read(x: &str) -> Expr {
+  Expr::Read(Var(x.to_string()))
+}
+
 const skip : Statement = Statement::Skip;
 
 // ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -194,6 +212,7 @@ enum Type {
   Number,
   String(String),
   Void,
+  Bool,
   Arrow(TypeVar, EffectSet, Box<Type>),
   Rec(Vec<(Field, TypeVar)>),
   Union(Box<Type>, Box<Type>),
@@ -406,7 +425,7 @@ enum EffectUse {
 #[derive(Debug, Clone)]
 enum Constraint {
   T(Type, TypeUse),
-  E(Effect, EffectUse),
+  E(EffectSet, EffectUse),
 }
 
 #[derive(Clone)]
@@ -447,11 +466,11 @@ enum PredMap {
   And(Box<PredMap>, Box<PredMap>),
   Or(Box<PredMap>, Box<PredMap>),
   Not(Box<PredMap>),
-  Exclude(Box<PredMap>, Effect),
+  Exclude(Box<PredMap>, EffectSet),
 }
 
 fn pm_exclude(p: PredMap, e: Effect) -> PredMap {
-  PredMap::Exclude(Box::new(p), e)
+  PredMap::Exclude(Box::new(p), EffectSet::new().add(e))
 }
 
 fn cgen_statement(env: &Env, s: &Statement) -> (EffectSet, Env, ConstraintSet) {
@@ -546,7 +565,8 @@ fn cgen_expr(env: &Env, e: &Expr) -> (Type, EffectSet, PredMap, Env, ConstraintS
       let (env3, c3) = env2.widen();
       let eff = eff1.union(&eff2).add(Effect::EffectVar(w.clone()));
       let c = c1.union(&c2).union(&c3)
-        .add(Constraint::E(Effect::EffectVar(w.clone()), EffectUse::Havoc(HavocEnv::from_env(&env3))))
+        .add(Constraint::E(EffectSet::new().add(Effect::EffectVar(w.clone())),
+                           EffectUse::Havoc(HavocEnv::from_env(&env3))))
         .add(Constraint::T(t1, TypeUse::Call(t2, w, a.clone())));
       (Type::Var(a), eff, PredMap::Empty, env3, c)
     }
@@ -583,7 +603,48 @@ fn cgen_expr(env: &Env, e: &Expr) -> (Type, EffectSet, PredMap, Env, ConstraintS
        c1.union(&c2).add(Constraint::T(t1, TypeUse::Set(f.clone(), t2))))
     }
 
-    _ => unimplemented!()
+    Expr::Not(e) => {
+      let (t, eff, p, env_, c) = cgen_expr(&env, e);
+      (Type::Bool, eff, PredMap::Not(Box::new(p)), env_, c)
+    }
+
+    Expr::Pred(p, x) => {
+      (Type::Bool, EffectSet::new(),
+       PredMap::Bind(x.clone(), p.clone()),
+       env.clone(), ConstraintSet::new())
+    }
+
+    Expr::And(e1, e2) => {
+      let (t1, eff1, p1, env1, c1) = cgen_expr(&env, e1);
+      let (env1_, c2) = env1.refine(&p1);
+      let (t2, eff2, p2, env2, c3) = cgen_expr(&env1_, e2);
+      let a = fresh_typevar("α");
+      let p = PredMap::And(Box::new(PredMap::Exclude(Box::new(p1.clone()), eff2.clone())),
+                           Box::new(p2));
+      let (env1__, c4) = env1.refine(&PredMap::Not(Box::new(p1)));
+      let env_ = env1__.join(&env2);
+
+      (Type::Union(Box::new(Type::Var(a.clone())), Box::new(t2)),
+       eff1.union(&eff2), p, env_,
+       c1.union(&c2).union(&c3).union(&c4)
+       .add(Constraint::T(t1, TypeUse::Pred(Pred::Falsy, a))))
+    }
+
+    Expr::Or(e1, e2) => {
+      let (t1, eff1, p1, env1, c1) = cgen_expr(&env, e1);
+      let (env1_, c2) = env1.refine(&PredMap::Not(Box::new(p1.clone())));
+      let (t2, eff2, p2, env2, c3) = cgen_expr(&env1_, e2);
+      let a = fresh_typevar("α");
+      let p = PredMap::Or(Box::new(PredMap::Exclude(Box::new(p1.clone()), eff2.clone())),
+                          Box::new(p2));
+      let (env1__, c4) = env1.refine(&p1);
+      let env_ = env1__.join(&env2);
+
+      (Type::Union(Box::new(Type::Var(a.clone())), Box::new(t2)),
+       eff1.union(&eff2), p, env_,
+       c1.union(&c2).union(&c3).union(&c4)
+       .add(Constraint::T(t1, TypeUse::Pred(Pred::Truthy, a))))
+    }
 
   }
 }
@@ -627,23 +688,25 @@ fn main() {
 
   let p4 = st(call("+", vec![num(0), num(1)]));
 
-  // let p4 =
-  //   seq(vec![
-  //     var("nil", rec(vec![("kind", str("nil"))])),
-  //     var("cons", func(vec!["head", "tail"], skip, rec(vec![("kind", str("cons")),
-  //                                                           ("head", val("head")),
-  //                                                           ("tail", val("tail"))]))),
-  //     var("sum", func(vec!["list"], seq(vec![
-  //       var("ret", num(0)),
-  //       iff(eq(get("list", "kind"), str("cons")),
-  //           get("list", "head"),
-  //           skip)
-  //     ]),
-  //                     read("ret"))
+  let p5 =
+    seq(vec![
+      var("nil", rec(vec![("kind", str("nil"))])),
+      var("cons", func(vec!["head", "tail"], skip, rec(vec![("kind", str("cons")),
+                                                            ("head", val("head")),
+                                                            ("tail", val("tail"))]))),
+      var("sum", func(vec!["list"], seq(vec![
+        var("ret", num(0)),
+        iff(eq_field("list", "kind", Const::String("cons".to_string())),
+            st(assign("ret", call("+", vec![get("list", "head"),
+                                            call("sum",
+                                                 vec![get("list", "tail")])]))),
+            skip)
+      ]),
+                      read("ret")))
 
-  //   ]);
+    ]);
 
-  let p = p4;
+  let p = p5;
 
   println!("{:?}", p);
   println!("{:#?}", cgen(&p));
