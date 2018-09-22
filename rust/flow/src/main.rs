@@ -77,9 +77,13 @@ fn locals(s: &Statement) -> Vec<Var> {
   use Statement::*;
 
   let mut v = Vec::new();
-
-  if let Var(x, _) = s {
-    v.push(x.clone())
+  match s {
+    Var(x, _) => v.push(x.clone()),
+    If(_, s1, s2) | Seq(s1, s2) => {
+      v.append(&mut locals(s1));
+      v.append(&mut locals(s2));
+    }
+    _ => {}
   }
   v
 }
@@ -334,7 +338,11 @@ impl Env {
 
 impl fmt::Debug for Env {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "Env {:?}", self.env)
+    writeln!(f, "Env {{")?;
+    for (x, t) in self.env.iter() {
+      writeln!(f, "  {:?}: {:?}", x, t)?;
+    }
+    write!(f, "}}")
   }
 }
 
@@ -365,8 +373,14 @@ impl fmt::Debug for HavocEnv {
   }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 struct EffectVar(String);
+
+impl fmt::Debug for EffectVar {
+  fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    write!(f, "{:?}", self.0)
+  }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 enum Effect {
@@ -455,7 +469,11 @@ impl ConstraintSet {
 
 impl fmt::Debug for ConstraintSet {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    write!(f, "ConstraintSet {:?}", self.constraints)
+    writeln!(f, "ConstraintSet {{")?;
+    for c in self.constraints.iter() {
+      writeln!(f, "  {:?}", c)?;
+    }
+    write!(f, "}}")
   }
 }
 
@@ -548,6 +566,7 @@ fn cgen_expr(env: &Env, e: &Expr) -> (Type, EffectSet, PredMap, Env, ConstraintS
 
       let mut eff2 = eff_.union(&eff);
       // Remove x, xi from eff2
+      eff2.effects.remove(&Effect::Var(x.clone()));
       for xi in l {
         eff2.effects.remove(&Effect::Var(xi));
       }
