@@ -1,0 +1,264 @@
+<style>
+  .card {
+    display: inline-block;
+    width: 250px;
+    height: 400px;
+    background: #eee;
+    border: 2px solid #aaa;
+    border-radius: 30px;
+    box-shadow: 1px 1px 1px #999;
+    position: relative;
+    font-size: 20px;
+    font-family: sans-serif;
+    transform: scale(.6);
+    transition: all 50ms;
+  }
+
+  .card:hover {
+    transform: translate(20px, -40px) scale(.8);
+    box-shadow: 15px 15px 30px #999;
+    transition: all 80ms;
+    z-index: 1;
+  }
+
+  .card + .card {
+    margin-left: -235px;
+  }
+
+  .card h2 {
+    text-align: center;
+    margin-top: 80px;
+  }
+
+  .weight, .cost, .thrust {
+    position: absolute;
+    font-size: 30px;
+    text-align: center;
+    line-height: 1;
+  }
+
+  .weight::before, .cost::before, .thrust::before {
+    font-variant: small-caps;
+    display: block;
+    font-size: 14px;
+  }
+
+  .weight {
+    left: 5px;
+    top: 25px;
+  }
+
+  .weight::before {
+    content: 'weight';
+  }
+
+  .thrust {
+    right: 15px;
+    bottom: 25px;
+  }
+
+  .thrust::before {
+    content: 'thrust';
+  }
+
+  .cost {
+    left: 15px;
+    bottom: 25px;
+  }
+
+  .cost::before {
+    content: 'cost';
+  }
+
+  .tech::before {
+    content: 'req. ';
+  }
+
+  .tech {
+    position: absolute;
+    text-transform: lowercase;
+    font-variant: small-caps;
+    font-size: 20px;
+    top: 95px;
+    transform: rotate(90deg) translate(80px, 5px);
+    display: inline-block;
+  }
+</style>
+
+<div class="hand">
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+
+  <div class="card">
+    <h2>Juno</h2>
+    <span class="tech">Juno</span>
+    <span class="weight">1</span>
+    <span class="cost">1</span>
+    <span class="thrust">4</span>
+  </div>
+</div>
