@@ -15426,3 +15426,157 @@ That's rather terse, and requires only two small extensions to PuzzleScript.
 
 This allows me to paste the image directly in, e.g., Impress.  For fast editing
 of a slideshow.
+
+* [2018-10-05 ven.]
+** Checking out the competition
+*** Sublime Text
+Opens fast.
+
+Zooming fully in incurs slow down.  But arguably that extreme zoom level is not
+useful.
+
+Opening a Rust project: syntax highlighting works.  Code folding for most
+construct, except ~struct~.
+
+There's a command to build with cargo, similar to compile-mode.  Except there's
+no parsing of the compile output for errors.
+
+No inline errors out of the box.
+
+Auto-completion that uses words in the buffer.
+
+No goto definition/reference out of the box for Rust.
+
+Ctrl+P is pretty fast, but similar to ivy/helm.  Except it shows off by opening
+the currently selected file as you type.
+
+Goto-definition/reference works for structs and functions in C, but not for
+struct members or local variables.
+
+Installing a package is seemless.  I installed rust-enhanced, and now got Goto
+definition working without having to reload the buffer.  It has false positives
+though (and won't jump to anything from std).
+
+Saving the file now gives me inline errors.  Except inline errors are all
+visible at once, which can be spammy.
+
+**** Overall impression
++ Fast
++ Decent out-of-the-box experience for common languages
++ Useful tools (find/replace, macros)
++ Friction-less installation of extensions with decent defaults
+
+- No built-in code intelligence
+- Proprietary
+
+I looked at the [[https://www.sublimetext.com/docs/3/api_reference.html][plugin API]] and at some [[https://github.com/bradrobertson/sublime-packages/blob/master/Default/][example plugins]].  The upside is that it's
+just Python, so it's easy to use.  Doesn't look as powerful as elisp, or as
+well-documented.  The API is not too small, but rather 'focused' on the
+essentials: buffers, regions, editing events...
+
+'Focused' is apt to describe Sublime as well.  It provides a slim but decent
+editing experience (multi-region, macros) and even customizability.  All in a
+modern package (phantoms can include HTML/CSS, not weighted down by having to be
+compatible with terminal emulators).
+
+What we can we learn?  I wish Emacs was as snappy, and that we had more liberty
+with the display.  But this is not new.
+
+One thing I noticed in the Transpose command is the overloading: if the cursor
+is between characters, it transposes letters, but if it is at the end of word,
+it transposes words.  And if multiple selectors are enabled, it transposes
+between these cursors.  Same command, different effects depending on the
+context, like 'dwim' commands.  Efficient use of keybindings.
+
+Also, the command palette is overloaded: you can use it to run commands, but
+also jump to files, or to symbols.  Again, saves you from memorizing multiple
+shortcuts.
+
+*** VS Code
+There is a Welcome tab, and an Outline view.  I'm getting an Eclipse vibe.  With
+the minimap it looks like Eclipse and Sublime had a child.
+
+No goto definition out of the box for Rust.  I can install extensions, but there
+are several so I need to go on the web to find out which is better.
+
+Same auto-completion as Sublime (word-based).  Built-in folding.
+
+Goto def for C not built-in.
+
+It's pretty, with shadows and animations.  There are icons for everything.
+
+Not as fast as Sublime.  Opening folders has a noticeable delay.
+
+Trying a JS project like boyo.
+
+Goto definition works, and correctly disambiguates between homonyms.  There's
+even type inference.  Not perfect though, but probably better for TypeScript.
+
+Documentation on hover.  I can also trigger it on a key, but I have to press Esc
+to do anything?
+
+There's this weird restriction where if you open a folder, you are closing the
+previous one.  So you can't jump to another project unless you open two VS code
+instances?
+
+Sublime had the same behavior, but at least by default it doesn't close the
+previous "folder".
+
+Using RLS works.  It's not much faster than calling cargo check on save though.
+
+**** Overall impressions
++ Good discoverability
++ Quite good out-of-the-box JS experience
++ Integrated debugger
++ Open source
+
+- A bit sluggish
+- Mouse-focused
+- Basic editing facilities (multi-cursor but no macros?)
+
+It might be prettier than Sublime, but it does less without extensions.  All
+bells and whistles.
+
+Again, the ability to have arbitrary HTML/CSS for dialogs lets you mix fonts in
+a way that's not possible to replicate in Emacs without dropping terminal
+support.
+
+Looking at [[https://github.com/editor-rs/vscode-rust/blob/master/src/components/cargo/CargoManager.ts][plugins like this]], I'm in awe of peope willing to put up having to
+write that code.  100 points for elisp here.
+*** Summary
+Both Code and Sublime share a good subset of features: syntax highlighting,
+auto-completion, goto definition/find references, multi-cursor editing, folding,
+file tree, version control and of course the signature minimap.
+
+As if all of these were 'must-have'.  I don't see the point of folding.  But
+Emacs has narrowing that supersedes folding, and you can open multiple windows
+on the same buffers to look at whatever you want.
+
+A file tree is useless for opening files: a fuzzy file search is faster 99% of
+the time.  However, the tree can be convenient for lightweight file operations.
+
+I've nevre found a use for multi-cursor editing, but maybe it's a cause of not
+knowing what I'm missing out.
+
+Auto-completion is quite useful.  And Emacs supports it out of the box.  Of
+course, what Sublime and Code both do better is /discoverability/.  With a
+window showing you the completion, so you /know/ that it is there and you can
+use it.  Emacs completion mechanism is hidden behind a shortcut, so you might
+completely never find out it exists!
+
+Version control integration is useful.  Magit is king, of course.  But it should
+even go further than that.  When opening a project, I want Github integration:
+handling pull requests and issues directly in Emacs, because Github has a slow
+interface and it requires a context switch.
+
+Looking at these editors, it has given me a couple of ideas for what to improve
+in my Emacs config.  I have no desire at all to switch, but I understand why
+people who try Emacs, Sublime and Code will bounce off Emacs pretty hard.  Emacs
+looks dated and feature-poor.  Looking through the menus, you might discover
+some weird stuff, like the games, but no syntax highlighting for PHP.
+
+For most advanced configuration, you need to go through either the weird
+customize interface, or have to write Elisp.
+
+Once you get past these hurdles, it's the most powerful editor out there.  But
+it means we are losing many potential users.
