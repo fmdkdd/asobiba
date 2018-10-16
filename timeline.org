@@ -15580,3 +15580,29 @@ customize interface, or have to write Elisp.
 
 Once you get past these hurdles, it's the most powerful editor out there.  But
 it means we are losing many potential users.
+
+* [2018-10-14 dim.]
+** Making firp deployable                                       :firp:django:
+After a fresh clone, using a virtualenv and
+
+: pip install -r requirements.txt
+
+Then,
+
+: python manage.py runserver
+
+fails with:
+
+: FileNotFoundError: [Errno 2] No such file or directory: 'secret_key'
+
+We need to put default values in the repo, and add a local settings file.
+
+No we are missing the 'captcha' module.  Actually we were importing two captcha
+libraries, so probably the first one is useless.
+
+Now the app is complaining we have unapplied migrations.
+
+: python manage.py migrate
+
+After that, going to the index page fails because the DB is empty.  The fix is
+to correctly make all migrations before hand, then apply them.
