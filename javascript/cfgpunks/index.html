@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+
+    <title>CFGPUNKS</title>
+
+    <script src="codemirror.min.js"></script>
+    <link rel="stylesheet" href="codemirror.css">
+    <script src="script.js"></script>
+
+    <style>
+      * { box-sizing: border-box; }
+
+      .dead {
+        color: #aaa !important;
+      }
+
+     #cfg {
+        border: 1px solid #ccc;
+      }
+    </style>
+  </head>
+  <body>
+    <textarea id="source">
+MARK GO
+JUMP LIVE
+
+MARK DEAD
+COPY 1 X
+
+MARK LIVE
+COPY 2 X</textarea>
+    <div id="cfg"></div>
+  </body>
+</html>
