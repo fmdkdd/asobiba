@@ -680,7 +680,17 @@ fn cgen(s: &Statement) -> (EffectSet, Env, ConstraintSet) {
                                                    EffectSet::new().add(Effect::EffectVar(fresh_effectvar("ω"))),
                                                    Box::new(r)), a));
 
-  cgen_statement(&env, s)
+  let a2 = fresh_typevar("α");
+  let r2 = Type::Arrow(a2.clone(),
+                       EffectSet::new().add(Effect::EffectVar(fresh_effectvar("ω"))),
+                       Box::new(Type::Var(a2.clone())));
+  env = env.add(Var("*".to_string()), (Type::Arrow(a2.clone(),
+                                                   EffectSet::new().add(Effect::EffectVar(fresh_effectvar("ω"))),
+                                                   Box::new(r2)), a2.clone()));
+
+  let (eff, e, c) = cgen_statement(&env, s);
+
+  (eff, e, c.add(Constraint::T(Type::Number, TypeUse::Var(a2))))
 }
 
 // ~~~~~~~
@@ -725,7 +735,12 @@ fn main() {
 
     ]);
 
-  let p = p5;
+  let p6 =
+    seq(vec![
+      st(call("*", vec![num(0), num(1)]))
+    ]);
+
+  let p = p6;
 
   println!("{:?}", p);
   println!("{:#?}", cgen(&p));
