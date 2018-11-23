@@ -1,3 +1,4 @@
+#+STARTUP: inlineimages
 #+OPTIONS: ^:{}
 
 * [2015-09-30 mer.]
@@ -12958,7 +12959,7 @@ bundle them all?  It also simplifies reproducibility.
 I might add a toggle in the Makefile to allow a build to use system libraries
 instead of submodule deps, but that's about it.
 
-** Tring to fix AppVeyor build                                       :megado:
+** Trying to fix AppVeyor build                                      :megado:
 [[https://stackoverflow.com/q/43441273][This]] [[https://stackoverflow.com/q/45474857][is]] [[https://stackoverflow.com/q/45452145][terrible]].
 
 * [2017-10-19 jeu.]
@@ -15428,7 +15429,7 @@ This allows me to paste the image directly in, e.g., Impress.  For fast editing
 of a slideshow.
 
 * [2018-10-05 ven.]
-** Checking out the competition
+** Checking out the competition                                    :flycheck:
 *** Sublime Text
 Opens fast.
 
