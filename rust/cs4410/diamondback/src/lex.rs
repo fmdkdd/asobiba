@@ -89,6 +89,7 @@ pub enum Keyword {
   Else,
   True,
   False,
+  Def,
 }
 
 #[derive(PartialEq, Debug, Clone)]
@@ -198,12 +199,13 @@ impl<'a> TokenStream<'a> {
 
     // It's either a keyword or a plain identifier
     match s.as_str() {
-      "let"    => TokenKind::Keyword(Keyword::Let),
-      "in"     => TokenKind::Keyword(Keyword::In),
-      "if"     => TokenKind::Keyword(Keyword::If),
-      "else"   => TokenKind::Keyword(Keyword::Else),
-      "true"   => TokenKind::Keyword(Keyword::True),
-      "false"  => TokenKind::Keyword(Keyword::False),
+      "let"   => TokenKind::Keyword(Keyword::Let),
+      "in"    => TokenKind::Keyword(Keyword::In),
+      "if"    => TokenKind::Keyword(Keyword::If),
+      "else"  => TokenKind::Keyword(Keyword::Else),
+      "true"  => TokenKind::Keyword(Keyword::True),
+      "false" => TokenKind::Keyword(Keyword::False),
+      "def"   => TokenKind::Keyword(Keyword::Def),
 
       _ => TokenKind::Ident(
         match self.symbols.iter().position(|sym| s == *sym) {

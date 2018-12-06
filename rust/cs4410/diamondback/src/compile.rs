@@ -30,15 +30,15 @@ fn tag_expr<T>(expr: Expr<T>, seed: usize) -> (Expr<(usize, T)>, usize) {
       let (r, seed) = tag_expr(*right, seed);
       (Prim2(op, Box::new(l), Box::new(r), (seed, t)), seed+1)
     }
-    Apply(s, exps, t) => {
+    Apply(id, exps, t) => {
       let mut exps_t = Vec::new();
-      let mut s = seed;
+      let mut seed = seed;
       for e in exps {
-        let (e_t, s1) = tag_expr(e, s);
+        let (e_t, s1) = tag_expr(e, seed);
         exps_t.push(e_t);
-        s = s1;
+        seed = s1;
       }
-      (Apply(s, exps_t, (seed, t)), seed+1)
+      (Apply(id, exps_t, (seed, t)), seed+1)
     }
     If(cond, then, els, t) => {
       let (c, seed) = tag_expr(*cond, seed);
@@ -50,6 +50,21 @@ fn tag_expr<T>(expr: Expr<T>, seed: usize) -> (Expr<(usize, T)>, usize) {
       let (binds, seed) = tag_bindings(bindings, seed);
       let (b, seed) = tag_expr(*body, seed);
       (Let(binds, Box::new(b), (seed, t)), seed+1)
+    }
+    Decl(name, ids, body, t) => {
+      let (body_t, seed) = tag_expr(*body, seed);
+      (Decl(name, ids, Box::new(body_t), (seed, t)), seed+1)
+    }
+    Prog(defs, body, t) => {
+      let mut defs_t = Vec::new();
+      let mut seed = seed;
+      for d in defs {
+        let (d_t, s1) = tag_expr(d, seed);
+        defs_t.push(d_t);
+        seed = s1;
+      }
+      let (body_t, seed) = tag_expr(*body, seed);
+      (Prog(defs_t, Box::new(body_t), (seed, t)), seed+1)
     }
   }
 }
@@ -407,6 +422,12 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       v.push(Label(done));
       v
     }
+
+    Decl(name, ids, body, _) =>
+      unimplemented!(),
+
+    Prog(decls, body, _) =>
+      unimplemented!(),
   }
 }
 
@@ -673,6 +694,12 @@ fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
           ()),
        ctx)
     }
+
+    Decl(name, ids, body, _) =>
+      unimplemented!(),
+
+    Prog(decls, body, _) =>
+      into_anf1(*body, symbols)
   }
 }
 
@@ -743,6 +770,17 @@ fn pp_expr<T>(expr: &Expr<T>, symbols: &[String]) -> String {
     If(cc, th, el, _) => format!("if {}:\n{}\nelse:\n{}",
                                  pp_expr(cc, symbols),
                                  pp_expr(th, symbols),
-                                 pp_expr(el, symbols))
+                                 pp_expr(el, symbols)),
+    Decl(n, ids, body, _) => format!("def {}({}):\n{}",
+                                     symbols[*n],
+                                     ids.iter()
+                                     .map(|x| format!("{}", symbols[*x]))
+                                     .collect::<Vec<String>>().join(","),
+                                     pp_expr(body, symbols)),
+    Prog(defs, body, _) => format!("{}{}",
+                                   defs.iter()
+                                   .map(|d| pp_expr(d, symbols))
+                                   .collect::<Vec<String>>().join("\n"),
+                                   pp_expr(body, symbols)),
   }
 }

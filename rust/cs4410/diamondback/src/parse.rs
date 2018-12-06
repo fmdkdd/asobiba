@@ -33,6 +33,8 @@ pub enum Expr<T> {
   Apply(usize, Vec<Expr<T>>, T),
   Let(Vec<(usize, Expr<T>)>, Box<Expr<T>>, T),
   If(Box<Expr<T>>, Box<Expr<T>>, Box<Expr<T>>, T),
+  Prog(Vec<Expr<T>>, Box<Expr<T>>, T),
+  Decl(usize, Vec<usize>, Box<Expr<T>>, T),
 }
 
 #[derive(Debug)]
@@ -55,7 +57,7 @@ fn expect(input: &mut TokenStream, kind: TokenKind) {
 }
 
 pub fn parse(input: &mut TokenStream) -> AST<()> {
-  let root = parse_expr(input);
+  let root = parse_prog(input);
   AST {
     root: root,
     symbols: input.symbols.clone(),
@@ -65,6 +67,9 @@ pub fn parse(input: &mut TokenStream) -> AST<()> {
 // Have to change the Diamondback grammar to be LL(1) and handle (unspecified)
 // operator precedence.  Let's go with standard precedence for binary operators.
 //
+// prog: (decl)* expr
+// decl: 'def' IDENTIFIER '(' (id)* ')' ':' expr
+// id: IDENTIFIER (, id)*
 // expr: 'let' bindings 'in' expr
 //     | 'if' expr ':' expr 'else:' expr
 //     | equality
@@ -80,6 +85,59 @@ pub fn parse(input: &mut TokenStream) -> AST<()> {
 //        | IDENTIFIER
 //        | IDENTIFIER '(' (expr (',' expr)*)? ')'
 // bindings: IDENTIFIER '=' expr (',' bindings)*
+
+fn parse_prog(input: &mut TokenStream) -> Expr<()> {
+
+  let mut decls = Vec::new();
+
+  while let TokenKind::Keyword(Keyword::Def) = input.peek().kind {
+    input.next(); // eat the Def
+    decls.push(parse_decl(input));
+  }
+
+  let body = parse_expr(input);
+
+  Expr::Prog(decls, Box::new(body), ())
+}
+
+fn parse_decl(input: &mut TokenStream) -> Expr<()> {
+  use self::TokenKind::*;
+
+  let name = parse_ident(input);
+  expect(input, TokenKind::LeftParen);
+
+  let mut args = Vec::new();
+
+  loop {
+    match input.peek().kind {
+      RightParen => break,
+
+      _ => {
+        args.push(parse_ident(input));
+
+        if let Comma = input.peek().kind {
+          input.next();
+        }
+      }
+    }
+  }
+
+  expect(input, RightParen);
+  expect(input, TokenKind::Colon);
+  let body = parse_expr(input);
+
+  Expr::Decl(name, args, Box::new(body), ())
+}
+
+fn parse_ident(input: &mut TokenStream) -> usize {
+  let t = input.next();
+
+  if let TokenKind::Ident(s) = t.kind {
+    s
+  } else {
+    panic!("{}: Expected identifier, got {:?}", loc(&t), t.kind);
+  }
+}
 
 fn parse_expr(input: &mut TokenStream) -> Expr<()> {
   use self::TokenKind::*;
@@ -112,22 +170,18 @@ fn parse_expr(input: &mut TokenStream) -> Expr<()> {
 }
 
 fn parse_bindings(input: &mut TokenStream) -> Vec<(usize, Expr<()>)> {
-  let t = input.next();
   let mut bindings = Vec::new();
 
-  if let TokenKind::Ident(s) = t.kind {
-    expect(input, TokenKind::Equals);
-    let expr = parse_expr(input);
-    bindings.push((s, expr));
+  let s = parse_ident(input);
+  expect(input, TokenKind::Equals);
+  let expr = parse_expr(input);
+  bindings.push((s, expr));
 
-    if let TokenKind::Comma = input.peek().kind {
-      input.next(); // eat the comma
-      bindings.append(&mut parse_bindings(input));
-    }
-    bindings
-  } else {
-    panic!("{}: Expected identifier, got {:?}", loc(&t), t.kind);
+  if let TokenKind::Comma = input.peek().kind {
+    input.next(); // eat the comma
+    bindings.append(&mut parse_bindings(input));
   }
+  bindings
 }
 
 fn parse_equality(input: &mut TokenStream) -> Expr<()> {
@@ -336,9 +390,11 @@ mod parse_tests {
     use self::Expr::*;
 
     test_parser("if sub1(1): 6 else: 7",
-                &If(Box::new(Apply(0, vec![Number(1, ())], ())),
-                    Box::new(Number(6, ())),
-                    Box::new(Number(7, ())), ()),
+                &Prog(vec![],
+                      Box::new(If(Box::new(Apply(0, vec![Number(1, ())], ())),
+                                  Box::new(Number(6, ())),
+                                  Box::new(Number(7, ())), ())),
+                      ()),
                 &["sub1"]);
   }
 
@@ -350,9 +406,11 @@ mod parse_tests {
     test_parser("let a = 2 - 3 in
                  let b = 4 * 5 in
                  a + b",
-                &Let(vec![(0, Prim2(Minus, Box::new(Number(2, ())), Box::new(Number(3, ())), ()))],
-                     Box::new(Let(vec![(1, Prim2(Mult, Box::new(Number(4, ())), Box::new(Number(5, ())), ()))],
-                                  Box::new(Prim2(Plus, Box::new(Id(0, ())), Box::new(Id(1, ())), ())), ())), ()),
+                &Prog(vec![],
+                      Box::new(
+                        Let(vec![(0, Prim2(Minus, Box::new(Number(2, ())), Box::new(Number(3, ())), ()))],
+                            Box::new(Let(vec![(1, Prim2(Mult, Box::new(Number(4, ())), Box::new(Number(5, ())), ()))],
+                                         Box::new(Prim2(Plus, Box::new(Id(0, ())), Box::new(Id(1, ())), ())), ())), ())), ()),
                 &["a", "b"]);
   }
 
@@ -362,9 +420,10 @@ mod parse_tests {
     use self::Prim2::*;
 
     test_parser("2 + (3 + 4)",
-                &Prim2(Plus,
+                &Prog(vec![],
+                Box::new(Prim2(Plus,
                        Box::new(Number(2, ())),
-                       Box::new(Prim2(Plus, Box::new(Number(3, ())), Box::new(Number(4, ())), ())), ()),
+                       Box::new(Prim2(Plus, Box::new(Number(3, ())), Box::new(Number(4, ())), ())), ())), ()),
                 &[]);
   }
 
@@ -374,13 +433,14 @@ mod parse_tests {
     use self::Prim2::*;
 
     test_parser("1<2<=3 == false",
-                &Prim2(Eq,
-                       Box::new(Prim2(LessEq,
-                                      Box::new(Prim2(Less,
-                                                     Box::new(Number(1, ())),
-                                                     Box::new(Number(2, ())), ())),
-                                      Box::new(Number(3, ())), ())),
-                       Box::new(Bool(false, ())), ()),
+                &Prog(vec![],
+                      Box::new(Prim2(Eq,
+                                     Box::new(Prim2(LessEq,
+                                                    Box::new(Prim2(Less,
+                                                                   Box::new(Number(1, ())),
+                                                                   Box::new(Number(2, ())), ())),
+                                                    Box::new(Number(3, ())), ())),
+                                     Box::new(Bool(false, ())), ())), ()),
                 &[]);
   }
 
@@ -390,9 +450,10 @@ mod parse_tests {
     use self::Prim2::*;
 
     test_parser("true || false",
-                &Prim2(Or,
-                       Box::new(Bool(true, ())),
-                       Box::new(Bool(false, ())), ()),
+                &Prog(vec![],
+                      Box::new(Prim2(Or,
+                                     Box::new(Bool(true, ())),
+                                     Box::new(Bool(false, ())), ())), ()),
                 &[]);
   }
 
@@ -402,9 +463,10 @@ mod parse_tests {
     use self::Prim2::*;
 
     test_parser("2 * -1",
-                &Prim2(Mult,
-                       Box::new(Number(2, ())),
-                       Box::new(Number(-1, ())), ()),
+                &Prog(vec![],
+                      Box::new(Prim2(Mult,
+                                     Box::new(Number(2, ())),
+                                     Box::new(Number(-1, ())), ())), ()),
                 &[]);
   }
 
@@ -413,7 +475,7 @@ mod parse_tests {
     use self::Expr::*;
 
     test_parser("-1",
-                &Number(-1, ()),
+                &Prog(vec![], Box::new(Number(-1, ())), ()),
                 &[]);
   }
 
@@ -423,9 +485,10 @@ mod parse_tests {
     use self::Prim2::*;
 
     test_parser("1--1",
-                &Prim2(Minus,
-                       Box::new(Number(1, ())),
-                       Box::new(Number(-1, ())), ()),
+                &Prog(vec![],
+                      Box::new(Prim2(Minus,
+                                     Box::new(Number(1, ())),
+                                     Box::new(Number(-1, ())), ())), ()),
                 &[]);
   }
 
@@ -435,9 +498,32 @@ mod parse_tests {
     use self::Prim2::*;
 
     test_parser("-1--1",
-                &Prim2(Minus,
-                       Box::new(Number(-1, ())),
-                       Box::new(Number(-1, ())), ()),
+                &Prog(vec![],
+                      Box::new(Prim2(Minus,
+                                     Box::new(Number(-1, ())),
+                                     Box::new(Number(-1, ())), ())), ()),
                 &[]);
+  }
+
+  #[test]
+  fn decl() {
+    use self::Expr::*;
+
+    test_parser("def foo(): 1
+                 foo()",
+                &Prog(vec![Decl(0, vec![], Box::new(Number(1, ())), ())],
+                      Box::new(Apply(0, vec![], ())), ()),
+                &["foo"]);
+  }
+
+    #[test]
+  fn decl2() {
+    use self::Expr::*;
+
+    test_parser("def foo(a,b): 1
+                 foo(2,3)",
+                &Prog(vec![Decl(0, vec![1,2], Box::new(Number(1, ())), ())],
+                      Box::new(Apply(0, vec![Number(2, ()), Number(3, ())], ())), ()),
+                &["foo", "a", "b"]);
   }
 }
