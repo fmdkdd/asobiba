@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use parse::{AST, Expr, Prim1, Prim2};
+use crate::parse::{AST, Expr, Prim1, Prim2};
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Compiler
@@ -80,20 +80,6 @@ fn tag_bindings<T>(bindings: Vec<(usize, Expr<T>)>, mut seed: usize)
   (ret, seed)
 }
 
-// fn tag<T>(expr: &Expr<T>) -> &T {
-//   use self::Expr::*;
-
-//   match expr {
-//     Number(_, t)      => t,
-//     Id(_, t)          => t,
-//     Bool(_, t)        => t,
-//     Prim1(_, _, t)    => t,
-//     Prim2(_, _, _, t) => t,
-//     Let(_, _, t)      => t,
-//     If(_, _, _, t)    => t,
-//   }
-// }
-
 #[derive(Debug, Clone, Copy)]
 enum Reg {
   EAX,
@@ -146,9 +132,11 @@ enum Instr {
 
 #[derive(Debug)]
 enum Runtime {
+  Print,
+  Add1,
+  Sub1,
   IsNum,
   IsBool,
-  Print,
   NumCheck,
   NumCheck2,
   BoolCheck,
@@ -254,26 +242,6 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
     Bool(true, _)  => vec![Mov(Reg(EAX), HexConst(BOOL_TRUE))],
     Bool(false, _) => vec![Mov(Reg(EAX), HexConst(BOOL_FALSE))],
 
-    // Prim1(Add1, ex, _) => {
-    //   let mut v = compile_expr(ex, symbols, env);
-    //   v.push(Push(Reg(EAX)));
-    //   v.push(Call(Runtime::NumCheck));
-    //   v.push(Pop(Reg(EAX)));
-    //   v.push(Add(Reg(EAX), Const(2)));
-    //   v.push(Jo(OVERFLOW.to_string()));
-    //   v
-    // }
-
-    // Prim1(Sub1, ex, _) => {
-    //   let mut v = compile_expr(ex, symbols, env);
-    //   v.push(Push(Reg(EAX)));
-    //   v.push(Call(Runtime::NumCheck));
-    //   v.push(Pop(Reg(EAX)));
-    //   v.push(Sub(Reg(EAX), Const(2)));
-    //   v.push(Jo(OVERFLOW.to_string()));
-    //   v
-    // }
-
     Prim1(Not, ex, _) => {
       let mut v = compile_expr(ex, symbols, env);
       v.push(Push(Reg(EAX)));
@@ -282,21 +250,6 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       v.push(Xor(Reg(EAX), HexConst(1 << 31)));
       v
     }
-
-    // Prim1(p @ IsBool, ex, _) |
-    // Prim1(p @ IsNum, ex, _) |
-    // Prim1(p @ Print, ex, _) => {
-    //   let mut v = compile_expr(ex, symbols, env);
-    //   v.push(Push(Reg(EAX)));
-    //   v.push(Call(match p {
-    //     IsBool => Runtime::IsBool,
-    //     IsNum  => Runtime::IsNum,
-    //     Print  => Runtime::Print,
-    //     _      => unreachable!(),
-    //   }));
-    //   v.push(Add(Reg(ESP), Const(4))); // Discard argument
-    //   v
-    // }
 
     Prim2(op, l, r, (n, _)) => {
       // If l and r aren't immediate, we cannot compile
@@ -378,8 +331,34 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       v
     }
 
-    Apply(s, es, _) => {
-      unimplemented!()
+    Apply(name, args, _) => {
+      let mut v = Vec::new();
+
+      for a in args {
+        let mut v2 = compile_expr(a, symbols, env);
+        v.append(&mut v2);
+        v.push(Push(Reg(EAX)));
+      }
+
+      let f = symbols[*name].as_str();
+      v.push(Call(match f {
+        "add1"   => Runtime::Add1,
+        "sub1"   => Runtime::Sub1,
+        "print"  => Runtime::Print,
+        "isbool" => Runtime::IsBool,
+        "isnum"  => Runtime::IsNum,
+        _ => panic!("Unknown runtime function, {}", f),
+      }));
+
+      // Check for overflows for arithmetic functions
+      match f {
+        "add1" => v.push(Jo(OVERFLOW.to_string())),
+        "sub1" => v.push(Jo(OVERFLOW.to_string())),
+          _ => {},
+      }
+
+      v.push(Add(Reg(ESP), Const(4 * args.len() as i32))); // Discard argument
+      v
     }
 
     Let(bindings, body, _) => {
@@ -436,6 +415,8 @@ fn emit_asm(instrs: &[Instr]) -> String {
 extern is_bool
 extern is_num
 extern print
+extern add1
+extern sub1
 extern num_check
 extern num_check2
 extern bool_check
@@ -533,6 +514,8 @@ impl Display for Runtime {
 
     match self {
       Print       => write!(f, "print"),
+      Add1        => write!(f, "add1"),
+      Sub1        => write!(f, "sub1"),
       IsBool      => write!(f, "is_bool"),
       IsNum       => write!(f, "is_num"),
       NumCheck    => write!(f, "num_check"),
@@ -579,6 +562,8 @@ fn is_anf<T>(expr: &Expr<T>) -> bool {
     Prim2(_, l, r, _) => is_imm(l) && is_imm(r),
     Let(es, e, _) => es.iter().all(|(_,e)| is_anf(e)) && is_anf(e),
     If(e1, e2, e3, _) => is_imm(e1) && is_anf(e2) && is_anf(e3),
+    Apply(_, args, _) => args.iter().all(|a| is_imm(a)),
+    Prog(_, body, _) => is_anf(body),
     e => is_imm(e),
   }
 }
@@ -637,7 +622,7 @@ fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
     Id(s, _) => (Id(s, ()), vec![]),
     Bool(b, _) => (Bool(b, ()), vec![]),
     Prim1(p, e, _) => {
-      let (imm, mut ctx) = into_anf1(*e, symbols);
+      let (imm, ctx) = into_anf1(*e, symbols);
       (Prim1(p, Box::new(imm), ()), ctx)
     },
 
@@ -650,8 +635,19 @@ fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
       (Id(s, ()), l_ctx)
     }
 
-    Apply(s, es, _) => {
-      unimplemented!()
+    Apply(name, args, (t, _)) => {
+      let mut ctx = Vec::new();
+      let mut args_syms = Vec::new();
+      for a in args {
+        let (a_anf, mut c) = into_anf1(a, symbols);
+        ctx.append(&mut c);
+        args_syms.push(a_anf);
+      }
+
+      let s = new_sym("call", t, symbols);
+      ctx.push((s, Apply(name, args_syms, ())));
+
+      (Id(s, ()), ctx)
     }
 
     // For Let, we can 'flatten' the context gotten from the recursion.  Instead

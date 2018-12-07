@@ -102,6 +102,20 @@ void overflow() {
   exit(Overflow);
 }
 
+int max(int a, int b) {
+  return a > b ? a : b;
+}
+
+int add1(int a) {
+  num_check(a);
+  return a + 2;
+}
+
+int sub1(int a) {
+  num_check(a);
+  return a - 2;
+}
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Main
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

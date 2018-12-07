@@ -1,4 +1,4 @@
-use lex::{BinOp, Keyword, Token, TokenKind, TokenStream};
+use crate::lex::{BinOp, Keyword, Token, TokenKind, TokenStream};
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Parser
@@ -191,7 +191,7 @@ fn parse_equality(input: &mut TokenStream) -> Expr<()> {
   let mut expr = parse_comparison(input);
 
   loop {
-    match input.peek().kind.clone() {
+    match input.peek().kind {
       BinOp(Eq) => {
         input.next(); // eat the operator
 
