@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::parse::{AST, Expr, Prim1, Prim2};
+use crate::parse::{AST, Decl, Expr, Prim1, Prim2, Prog};
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Compiler
@@ -9,9 +9,33 @@ use crate::parse::{AST, Expr, Prim1, Prim2};
 // Number each node of the AST
 fn number<T>(ast: AST<T>) -> AST<(usize, T)> {
   AST {
-    root: tag_expr(ast.root, 1).0,
+    root: tag_prog(ast.root, 1).0,
     symbols: ast.symbols.clone(),
   }
+}
+
+fn tag_prog<T>(prog: Prog<T>, seed: usize) -> (Prog<(usize, T)>, usize) {
+  let mut decls = Vec::new();
+
+  for d in prog.decls {
+    let (d_t, seed) = tag_decl(d, seed);
+    decls.push(d_t);
+  }
+
+  let (body, seed) = tag_expr(prog.body, seed);
+
+  (Prog { decls, body }, seed)
+}
+
+fn tag_decl<T>(decl: Decl<T>, seed: usize) -> (Decl<(usize, T)>, usize) {
+
+  let (body, seed) = tag_expr(decl.body, seed);
+
+  (Decl {
+    name: decl.name,
+    args: decl.args,
+    body
+  }, seed)
 }
 
 fn tag_expr<T>(expr: Expr<T>, seed: usize) -> (Expr<(usize, T)>, usize) {
@@ -50,21 +74,6 @@ fn tag_expr<T>(expr: Expr<T>, seed: usize) -> (Expr<(usize, T)>, usize) {
       let (binds, seed) = tag_bindings(bindings, seed);
       let (b, seed) = tag_expr(*body, seed);
       (Let(binds, Box::new(b), (seed, t)), seed+1)
-    }
-    Decl(name, ids, body, t) => {
-      let (body_t, seed) = tag_expr(*body, seed);
-      (Decl(name, ids, Box::new(body_t), (seed, t)), seed+1)
-    }
-    Prog(defs, body, t) => {
-      let mut defs_t = Vec::new();
-      let mut seed = seed;
-      for d in defs {
-        let (d_t, s1) = tag_expr(d, seed);
-        defs_t.push(d_t);
-        seed = s1;
-      }
-      let (body_t, seed) = tag_expr(*body, seed);
-      (Prog(defs_t, Box::new(body_t), (seed, t)), seed+1)
     }
   }
 }
@@ -128,6 +137,7 @@ enum Instr {
   Push(Arg),
   Pop(Arg),
   Call(Runtime),
+  Ret,
 }
 
 #[derive(Debug)]
@@ -142,6 +152,7 @@ enum Runtime {
   BoolCheck,
   BoolCheck2,
   IfCondCheck,
+  User(String),
 }
 
 /// Return the stack index of symbol ID in ENV.
@@ -198,17 +209,34 @@ fn count_vars<T>(expr: &Expr<T>) -> usize {
   }
 }
 
-fn compile_ast<T>(ast: &AST<(usize, T)>) -> Vec<Instr> {
+fn compile_ast<T>(ast: &AST<(usize, T)>) -> Vec<(String, Vec<Instr>)> {
+  let mut v = Vec::new();
+  for d in &ast.root.decls {
+    v.push((ast.symbols[d.name].clone(), compile_body(&d.body, &ast.symbols, &d.args)));
+  }
+
+  v.push(("entry_point".to_string(), compile_body(&ast.root.body, &ast.symbols, &vec![])));
+  v
+}
+
+fn compile_body<T>(body: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -> Vec<Instr> {
   use self::Instr::*;
   use self::Arg::*;
   use self::Reg::*;
 
-  let mut v = vec![];
-  let vars = count_vars(&ast.root);
+  let mut v = vec![
+    Push(Reg(EBP)),
+    Mov(Reg(EBP), Reg(ESP)),
+  ];
+  let vars = count_vars(&body);
   if vars > 0 {
       v.push(Sub(Reg(ESP), Const((vars * 4) as i32)));
   }
-  v.append(&mut compile_expr(&ast.root, &ast.symbols, &mut vec![]));
+  v.append(&mut compile_expr(&body, &symbols, env));
+
+  v.push(Mov(Reg(ESP), Reg(EBP)));
+  v.push(Pop(Reg(EBP)));
+  v.push(Ret);
   v
 }
 
@@ -347,7 +375,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
         "print"  => Runtime::Print,
         "isbool" => Runtime::IsBool,
         "isnum"  => Runtime::IsNum,
-        _ => panic!("Unknown runtime function, {}", f),
+        _        => Runtime::User(f.to_string()),
       }));
 
       // Check for overflows for arithmetic functions
@@ -401,16 +429,10 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       v.push(Label(done));
       v
     }
-
-    Decl(name, ids, body, _) =>
-      unimplemented!(),
-
-    Prog(decls, body, _) =>
-      unimplemented!(),
   }
 }
 
-fn emit_asm(instrs: &[Instr]) -> String {
+fn emit_asm(blocks: &[(String, Vec<Instr>)]) -> String {
   format!("section.text
 extern is_bool
 extern is_num
@@ -424,17 +446,14 @@ extern bool_check2
 extern if_cond_check
 extern overflow
 global entry_point
-entry_point:
-  push ebp
-  mov ebp, esp
 {}
-  mov esp, ebp
-  pop ebp
-  ret
 
 {}:
   call overflow",
-          instrs.iter().map(|i| format!("{}", i)).collect::<String>(),
+          blocks.iter().map(|b| format!("{}:\n{}",
+                                        b.0,
+                                        b.1.iter().map(|i| format!("{}", i)).collect::<String>()))
+          .collect::<String>(),
           OVERFLOW)
 }
 
@@ -504,6 +523,7 @@ impl Display for Instr {
       Push(s)        => writeln!(f, "  push {}", s),
       Pop(s)         => writeln!(f, "  pop {}", s),
       Call(s)        => writeln!(f, "  call {}", s),
+      Ret            => writeln!(f, "  ret"),
     }
   }
 }
@@ -523,6 +543,7 @@ impl Display for Runtime {
       BoolCheck   => write!(f, "bool_check"),
       BoolCheck2  => write!(f, "bool_check2"),
       IfCondCheck => write!(f, "if_cond_check"),
+      User(n)     => write!(f, "{}", n),
     }
   }
 }
@@ -563,7 +584,6 @@ fn is_anf<T>(expr: &Expr<T>) -> bool {
     Let(es, e, _) => es.iter().all(|(_,e)| is_anf(e)) && is_anf(e),
     If(e1, e2, e3, _) => is_imm(e1) && is_anf(e2) && is_anf(e3),
     Apply(_, args, _) => args.iter().all(|a| is_imm(a)),
-    Prog(_, body, _) => is_anf(body),
     e => is_imm(e),
   }
 }
@@ -690,17 +710,11 @@ fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
           ()),
        ctx)
     }
-
-    Decl(name, ids, body, _) =>
-      unimplemented!(),
-
-    Prog(decls, body, _) =>
-      into_anf1(*body, symbols)
   }
 }
 
-fn into_anf<T>(mut ast: AST<(usize, T)>) -> AST<()> {
-  let (e, ctx) = into_anf1(ast.root, &mut ast.symbols);
+fn into_anf_expr<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>) -> Expr<()> {
+  let (e, ctx) = into_anf1(expr, symbols);
 
   let root = if ctx.len() == 0 {
     e
@@ -708,15 +722,32 @@ fn into_anf<T>(mut ast: AST<(usize, T)>) -> AST<()> {
     self::Expr::Let(ctx, Box::new(e), ())
   };
 
-  let ast_anf = AST {
-    root: root,
-    symbols: ast.symbols,
-  };
-
-  if !is_anf(&ast_anf.root) {
+  if !is_anf(&root) {
     panic!("Normalization into ANF failed");
   } else {
-    ast_anf
+    root
+  }
+}
+
+fn into_anf<T>(mut ast: AST<(usize, T)>) -> AST<()> {
+  // First convert all declarations into anf
+
+  let mut decls = Vec::new();
+
+  for d in ast.root.decls {
+    let body = into_anf_expr(d.body, &mut ast.symbols);
+    decls.push(Decl {
+      name: d.name,
+      args: d.args,
+      body
+    })
+  }
+
+  let body = into_anf_expr(ast.root.body, &mut ast.symbols);
+
+  AST {
+    root: Prog { decls, body },
+    symbols: ast.symbols,
   }
 }
 
@@ -726,7 +757,20 @@ fn into_anf<T>(mut ast: AST<(usize, T)>) -> AST<()> {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 fn pp<T>(ast: &AST<T>) -> String {
-  pp_expr(&ast.root, &ast.symbols)
+  format!("{}\n\n{}",
+          ast.root.decls.iter()
+          .map(|d| pp_decl(d, &ast.symbols))
+          .collect::<Vec<String>>().join("\n"),
+          pp_expr(&ast.root.body, &ast.symbols))
+}
+
+fn pp_decl<T>(decl: &Decl<T>, symbols: &[String]) -> String {
+  format!("def {}({}):\n{}",
+          symbols[decl.name],
+          decl.args.iter()
+          .map(|x| format!("{}", symbols[*x]))
+          .collect::<Vec<String>>().join(","),
+          pp_expr(&decl.body, symbols))
 }
 
 fn pp_expr<T>(expr: &Expr<T>, symbols: &[String]) -> String {
@@ -767,16 +811,5 @@ fn pp_expr<T>(expr: &Expr<T>, symbols: &[String]) -> String {
                                  pp_expr(cc, symbols),
                                  pp_expr(th, symbols),
                                  pp_expr(el, symbols)),
-    Decl(n, ids, body, _) => format!("def {}({}):\n{}",
-                                     symbols[*n],
-                                     ids.iter()
-                                     .map(|x| format!("{}", symbols[*x]))
-                                     .collect::<Vec<String>>().join(","),
-                                     pp_expr(body, symbols)),
-    Prog(defs, body, _) => format!("{}{}",
-                                   defs.iter()
-                                   .map(|d| pp_expr(d, symbols))
-                                   .collect::<Vec<String>>().join("\n"),
-                                   pp_expr(body, symbols)),
   }
 }
