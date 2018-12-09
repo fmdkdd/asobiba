@@ -17,14 +17,17 @@ fn number<T>(ast: AST<T>) -> AST<(usize, T)> {
 fn tag_prog<T>(prog: Prog<T>, seed: usize) -> (Prog<(usize, T)>, usize) {
   let mut decls = Vec::new();
 
+  let mut s = seed;
   for d in prog.decls {
-    let (d_t, seed) = tag_decl(d, seed);
+    let (d_t, s1) = tag_decl(d, s);
+    s = s1;
     decls.push(d_t);
   }
 
-  let (body, seed) = tag_expr(prog.body, seed);
+  let (body, s1) = tag_expr(prog.body, s);
+  s = s1;
 
-  (Prog { decls, body }, seed)
+  (Prog { decls, body }, s)
 }
 
 fn tag_decl<T>(decl: Decl<T>, seed: usize) -> (Decl<(usize, T)>, usize) {
@@ -102,7 +105,8 @@ enum Arg {
   Const(i32),
   HexConst(i32),
   Reg(Reg),
-  RegOffset(Reg, usize),
+  RegMinus(Reg, usize),
+  RegPlus(Reg, usize),
   Sized(ArgSize, Box<Arg>),
 }
 
@@ -188,7 +192,10 @@ pub fn debug<T>(ast: AST<T>) {
   // And finally we emit ASM as a string
   let asm = emit_asm(&instrs);
 
-  println!("==== ASM ====\n{}", asm);
+  let mut n = 1;
+  println!("==== ASM ====\n{}",
+           asm.split('\n').map(|line| format!("{:<5}{}", (n, n+=1).0, line))
+           .collect::<Vec<String>>().join("\n"));
 }
 
 // Return the greatest number of variables we need at once, in order to make
@@ -212,14 +219,17 @@ fn count_vars<T>(expr: &Expr<T>) -> usize {
 fn compile_ast<T>(ast: &AST<(usize, T)>) -> Vec<(String, Vec<Instr>)> {
   let mut v = Vec::new();
   for d in &ast.root.decls {
-    v.push((ast.symbols[d.name].clone(), compile_body(&d.body, &ast.symbols, &d.args)));
+    v.push((ast.symbols[d.name].clone(), compile_body(&d.body, &ast.symbols,
+                                                      &vec![], &d.args)));
   }
 
-  v.push(("entry_point".to_string(), compile_body(&ast.root.body, &ast.symbols, &vec![])));
+  v.push(("entry_point".to_string(), compile_body(&ast.root.body, &ast.symbols,
+                                                  &vec![], &vec![])));
   v
 }
 
-fn compile_body<T>(body: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -> Vec<Instr> {
+fn compile_body<T>(body: &Expr<(usize, T)>, symbols: &[String],
+                   env: &Vec<usize>, args: &[usize]) -> Vec<Instr> {
   use self::Instr::*;
   use self::Arg::*;
   use self::Reg::*;
@@ -232,7 +242,7 @@ fn compile_body<T>(body: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>
   if vars > 0 {
       v.push(Sub(Reg(ESP), Const((vars * 4) as i32)));
   }
-  v.append(&mut compile_expr(&body, &symbols, env));
+  v.append(&mut compile_expr(&body, &symbols, env, args));
 
   v.push(Mov(Reg(ESP), Reg(EBP)));
   v.push(Pop(Reg(EBP)));
@@ -244,7 +254,8 @@ static BOOL_TRUE  : i32 = -1;
 static BOOL_FALSE : i32 = 0x7fffffff;
 static OVERFLOW   : &'static str = "error_overflow";
 
-fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -> Vec<Instr> {
+fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String],
+                   env: &Vec<usize>, args: &[usize]) -> Vec<Instr> {
   use self::Instr::*;
   use self::Prim1::*;
   use self::Prim2;
@@ -262,16 +273,22 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       }
     }
 
-    Id(s, _) => match lookup(*s, env) {
-      Some(n) => vec![Mov(Reg(EAX), Sized(Dword, Box::new(RegOffset(EBP, n))))],
-      None => panic!("Identifier not bound '{}'", symbols[*s]),
+    Id(s, _) => match lookup(*s, args) {
+      // Function arguments are passed by the caller, so are higher in the
+      // stack, and the first one start at ebp+ (hence the n+1).
+      Some(n) => vec![Mov(Reg(EAX), Sized(Dword, Box::new(RegPlus(EBP, n+1))))],
+      None => match lookup(*s, env) {
+        // Local variables start and ebp-4 and go down the stack.
+        Some(n) => vec![Mov(Reg(EAX), Sized(Dword, Box::new(RegMinus(EBP, n))))],
+        None => panic!("Identifier not bound '{}'", symbols[*s]),
+      }
     }
 
     Bool(true, _)  => vec![Mov(Reg(EAX), HexConst(BOOL_TRUE))],
     Bool(false, _) => vec![Mov(Reg(EAX), HexConst(BOOL_FALSE))],
 
     Prim1(Not, ex, _) => {
-      let mut v = compile_expr(ex, symbols, env);
+      let mut v = compile_expr(ex, symbols, env, args);
       v.push(Push(Reg(EAX)));
       v.push(Call(Runtime::BoolCheck));
       v.push(Pop(Reg(EAX)));
@@ -285,11 +302,11 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
         panic!("Binary expression not in ANF");
       }
 
-      let mut v = compile_expr(l, symbols, env);
+      let mut v = compile_expr(l, symbols, env, args);
       // Now we know that `r` is immediate, so it's either a Number or an Id,
       // and we can use the right-hand side of the compiled instruction
       // directly to replace the Mov by the adequate arithmetic operation.
-      let b = if let Some(Mov(_, b)) = compile_expr(r, symbols, env).pop() {
+      let b = if let Some(Mov(_, b)) = compile_expr(r, symbols, env, args).pop() {
         b
       } else {
         unreachable!();
@@ -359,11 +376,11 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       v
     }
 
-    Apply(name, args, _) => {
+    Apply(name, params, _) => {
       let mut v = Vec::new();
 
-      for a in args {
-        let mut v2 = compile_expr(a, symbols, env);
+      for a in params {
+        let mut v2 = compile_expr(a, symbols, env, args);
         v.append(&mut v2);
         v.push(Push(Reg(EAX)));
       }
@@ -385,7 +402,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
           _ => {},
       }
 
-      v.push(Add(Reg(ESP), Const(4 * args.len() as i32))); // Discard argument
+      v.push(Add(Reg(ESP), Const(4 * args.len() as i32))); // Discard arguments
       v
     }
 
@@ -403,18 +420,18 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       }
 
       for (x, ex) in bindings {
-        v.append(&mut compile_expr(ex, symbols, &env2));
+        v.append(&mut compile_expr(ex, symbols, &env2, args));
         env2.push(*x);
-        v.push(Mov(RegOffset(EBP, env2.len()), Reg(EAX)));
+        v.push(Mov(RegMinus(EBP, env2.len()), Reg(EAX)));
       }
 
-      v.append(&mut compile_expr(body, symbols, &mut env2));
+      v.append(&mut compile_expr(body, symbols, &mut env2, args));
       v
     }
 
     If(cond, then, els, (n, _)) => {
       let mut v = Vec::new();
-      v.append(&mut compile_expr(cond, symbols, env));
+      v.append(&mut compile_expr(cond, symbols, env, args));
       v.push(Push(Reg(EAX)));
       v.push(Call(Runtime::IfCondCheck));
       v.push(Pop(Reg(EAX)));
@@ -422,10 +439,10 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String], env: &Vec<usize>) -
       let if_false = format!("if_false_{}", n);
       let done = format!("done_{}", n);
       v.push(Je(if_false.clone()));
-      v.append(&mut compile_expr(then, symbols, env));
+      v.append(&mut compile_expr(then, symbols, env, args));
       v.push(Jmp(done.clone()));
       v.push(Label(if_false));
-      v.append(&mut compile_expr(els, symbols, env));
+      v.append(&mut compile_expr(els, symbols, env, args));
       v.push(Label(done));
       v
     }
@@ -478,7 +495,8 @@ impl Display for Arg {
       Const(n)        => write!(f, "{}", n),
       HexConst(n)     => write!(f, "0x{:x}", n),
       Reg(r)          => write!(f, "{}", r),
-      RegOffset(r, o) => write!(f, "[{}-{}]", r, 4 * o),
+      RegMinus(r, o)  => write!(f, "[{}-{}]", r, 4 * o),
+      RegPlus(r, o)   => write!(f, "[{}+{}]", r, 4 * o),
       Sized(s, a)     => write!(f, "{} {}", s, a)
     }
   }
