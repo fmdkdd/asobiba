@@ -108,6 +108,10 @@ fn parse_prog(input: &mut TokenStream) -> Prog<()> {
 
   let body = parse_expr(input);
 
+  if !input.is_eof() {
+    panic!("Expected end of file, got '{:?}'", input.peek().kind);
+  }
+
   Prog { decls, body }
 }
 
