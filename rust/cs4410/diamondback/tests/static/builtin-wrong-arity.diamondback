@@ -1,0 +1,2 @@
+# expect:0:0:error: Function `add1` expects 1 arguments, got 3
+add1(1,2,3)

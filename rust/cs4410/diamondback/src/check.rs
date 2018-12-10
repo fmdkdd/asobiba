@@ -3,7 +3,7 @@ use crate::parse::{AST, Expr};
 // TODO: change run-tests script to check for static errors
 
 pub enum CheckErrorKind {
-  ArityError,
+  Arity,
   UnboundFun,
 }
 
@@ -35,7 +35,7 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
 
   let mut errors = Vec::new();
 
-  // For each Call, check there is one matching Decl
+  // For each Apply, check there is one matching Decl
   // TODO: populate that from the Runtime enum to stay DRY
   let builtins = [
     "add1", "sub1",
@@ -46,12 +46,53 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
   let calls = all_of(ast, &Expr::Apply(0, vec![], ()));
   let decls = &ast.root.decls;
   for c in calls {
-    if let Expr::Apply(name, _, _) = c {
-      if decls.iter().all(|d| &d.name != name)
-        && builtins.iter().all(|b| *b != ast.symbols[*name]) {
+    if let Expr::Apply(n, args, _) = c {
+      let name = &ast.symbols[*n];
+      let actual = args.len();
+
+      // It's a user-defined function
+      if let Some(decl) = decls.iter().find(|d| &d.name == n) {
+        // Check the arity
+        let formal = decl.args.len();
+
+        if formal != actual {
+          errors.push(CheckError {
+            kind: Arity,
+            msg: format!("Function `{}` expects {} arguments, got {}",
+                         name, formal, actual),
+
+            // TODO: keep this info when parsing
+            filename: "<stdin>".to_string(),
+            line: 0,
+            column: 0,
+          });
+        }
+      }
+
+      // It's a built-in?
+      else if let Some(_) = builtins.iter().find(|b| *b == name) {
+        // Check the arity
+        let formal = 1; // all builtins have only 1 argument for now
+
+        if formal != actual {
+          errors.push(CheckError {
+            kind: Arity,
+            msg: format!("Function `{}` expects {} arguments, got {}",
+                         name, formal, actual),
+
+            // TODO: keep this info when parsing
+            filename: "<stdin>".to_string(),
+            line: 0,
+            column: 0,
+          });
+        }
+      }
+
+      // Then it's undefined!
+      else {
         errors.push(CheckError {
           kind: UnboundFun,
-          msg: format!("Calling unknown function `{}`", ast.symbols[*name]),
+          msg: format!("Calling unknown function `{}`", name),
 
           // TODO: keep this info when parsing
           filename: "<stdin>".to_string(),
