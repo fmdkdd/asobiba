@@ -1,3 +1,6 @@
+use std::collections::HashSet;
+use std::hash::Hash;
+
 use crate::parse::{AST, Expr};
 
 // TODO: change run-tests script to check for static errors
@@ -5,6 +8,8 @@ use crate::parse::{AST, Expr};
 pub enum CheckErrorKind {
   Arity,
   UnboundFun,
+  DuplicateFun,
+  DuplicateId,
 }
 
 pub struct CheckError {
@@ -35,16 +40,55 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
 
   let mut errors = Vec::new();
 
-  // For each Apply, check there is one matching Decl
   // TODO: populate that from the Runtime enum to stay DRY
   let builtins = [
     "add1", "sub1",
     "print",
     "isbool", "isnum",
-    ];
+  ];
 
-  let calls = all_of(ast, &Expr::Apply(0, vec![], ()));
+  // Check for duplicate function declarations
   let decls = &ast.root.decls;
+  let mut uniq = HashSet::new();
+  for b in &builtins {
+    uniq.insert(*b);
+  }
+
+  for d in decls {
+    let name = &ast.symbols[d.name];
+    // Check for duplicate
+    if !uniq.insert(name) {
+      errors.push(CheckError {
+        kind: DuplicateFun,
+        msg: format!("Duplicate declaration of function `{}`", name),
+
+        // TODO: keep this info when parsing
+        filename: "<stdin>".to_string(),
+        line: 0,
+        column: 0,
+      });
+    }
+
+    // Check argument list is well-formed
+    let mut uniq_args = HashSet::new();
+    for a in &d.args {
+      if !uniq_args.insert(a) {
+        errors.push(CheckError {
+          kind: DuplicateId,
+          msg: format!("Duplicate argument `{}` in declaration of function `{}`",
+                       ast.symbols[*a], name),
+
+          // TODO: keep this info when parsing
+          filename: "<stdin>".to_string(),
+          line: 0,
+          column: 0,
+        });
+      }
+    }
+  }
+
+  // For each Apply, check there is one matching Decl
+  let calls = all_of(ast, &Expr::Apply(0, vec![], ()));
   for c in calls {
     if let Expr::Apply(n, args, _) = c {
       let name = &ast.symbols[*n];
@@ -103,14 +147,32 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
     }
   }
 
+  // Check for duplicate bindings in Let
+  let lets = all_of(ast, &Expr::Let(vec![], Box::new(Expr::Number(0, ())), ()));
+  for l in lets {
+    if let Expr::Let(bindings, _, _) = l {
+      let mut uniq = HashSet::new();
+      for (b, _) in bindings {
+        if !uniq.insert(b) {
+          errors.push(CheckError {
+            kind: DuplicateId,
+            msg: format!("Duplicate let binding `{}`", ast.symbols[*b]),
+
+            // TODO: keep this info when parsing
+            filename: "<stdin>".to_string(),
+            line: 0,
+            column: 0,
+          });
+        }
+      }
+    }
+  }
+
   errors
 }
 
-
-/// Return all instances of EXPR in AST
+/// Return all instances of EXPR in AST.
 fn all_of<'a, T>(ast: &'a AST<T>, expr: &Expr<T>) -> Vec<&'a Expr<T>> {
-  use self::Expr::*;
-
   let prog = &ast.root;
 
   // Collect root exprs
@@ -120,8 +182,6 @@ fn all_of<'a, T>(ast: &'a AST<T>, expr: &Expr<T>) -> Vec<&'a Expr<T>> {
 
   let mut instances = Vec::new();
   for e in roots {
-
-
     instances.append(&mut all_of1(e, expr));
   }
 
@@ -176,7 +236,7 @@ fn all_of1<'a, T>(e: &'a Expr<T>, expr: &Expr<T>) -> Vec<&'a Expr<T>> {
   instances
 }
 
-/// Whether two values are the same variants of an enum
+/// Whether two values are the same variants of an enum.
 fn variant_eq<T>(a: &T, b: &T) -> bool {
   std::mem::discriminant(a) == std::mem::discriminant(b)
 }

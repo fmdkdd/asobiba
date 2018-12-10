@@ -1,0 +1,4 @@
+# expect:0:0:error: Duplicate declaration of function `foo`
+def foo(): 0
+def foo(): 1
+2

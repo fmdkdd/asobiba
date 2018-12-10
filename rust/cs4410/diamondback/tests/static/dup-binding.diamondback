@@ -1,0 +1,6 @@
+# expect:0:0:error: Duplicate let binding `bla`
+let foo = 0,
+    bla = 1,
+    bar = 2,
+    bla = 3
+in 4

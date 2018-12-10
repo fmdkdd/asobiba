@@ -357,7 +357,7 @@ fn parse_primary(input: &mut TokenStream) -> Expr<()> {
       }
     }
 
-    _ => unreachable!()
+    _ => panic!("Expected an expression, got {:?}", t.kind)
   }
 }
 
