@@ -1,9 +1,15 @@
+// Run static checks to ensure the AST is well-formed.
+//
+// The point is to collect all errors to give useful feedback to the user.  We
+// could collect errors as we compile, but then it's unclear how to keep
+// compiling with an ill-formed AST.  It's cleaner and simpler to do all checks
+// upfront, and let the compiling code assumes the AST is well-formed, although
+// it might not be the most performant solution.
+
 use std::collections::HashSet;
 use std::hash::Hash;
 
 use crate::parse::{AST, Expr};
-
-// TODO: change run-tests script to check for static errors
 
 pub enum CheckErrorKind {
   Arity,
@@ -11,6 +17,8 @@ pub enum CheckErrorKind {
   DuplicateId,
   Overflow,
   UnboundFun,
+  UnboundId,
+  ShadowId,
 }
 
 pub struct CheckError {
@@ -184,6 +192,94 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
           column: 0,
         });
       }
+    }
+  }
+
+  // Check all identifiers are bound
+  errors.append(&mut check_ids(ast));
+
+  errors
+}
+
+fn check_ids(ast: &AST<()>) -> Vec<CheckError> {
+  let mut errors = Vec::new();
+
+  for decl in &ast.root.decls {
+    let mut env = HashSet::new();
+    for a in &decl.args {
+      env.insert(*a);
+    }
+    errors.append(&mut check_ids_in_env(&decl.body, &env, &ast.symbols));
+  }
+
+  let env = HashSet::new();
+  errors.append(&mut check_ids_in_env(&ast.root.body, &env, &ast.symbols));
+
+  errors
+}
+
+fn check_ids_in_env(expr: &Expr<()>, env: &HashSet<usize>, symbols: &[String]) -> Vec<CheckError> {
+  let mut errors = Vec::new();
+
+  use self::Expr::*;
+  match expr {
+    Number(_, _) => {}
+    Bool(_, _)   => {}
+
+    Prim1(_, e, _) =>
+      errors.append(&mut check_ids_in_env(e, env, symbols)),
+
+    Prim2(_, l, r, _) => {
+      errors.append(&mut check_ids_in_env(l, env, symbols));
+      errors.append(&mut check_ids_in_env(r, env, symbols));
+    }
+
+    Apply(_, args, _) => {
+      for a in args {
+        errors.append(&mut check_ids_in_env(a, env, symbols));
+      }
+    }
+
+    If(c, t, e, _) => {
+      errors.append(&mut check_ids_in_env(c, env, symbols));
+      errors.append(&mut check_ids_in_env(t, env, symbols));
+      errors.append(&mut check_ids_in_env(e, env, symbols));
+    }
+
+    Id(x, _) => {
+      if !env.contains(x) {
+        errors.push(CheckError {
+          kind: CheckErrorKind::UnboundId,
+          msg: format!("Unbound identifier `{}`", symbols[*x]),
+
+          // TODO: keep this info when parsing
+          filename: "<stdin>".to_string(),
+          line: 0,
+          column: 0,
+        });
+      }
+    }
+
+    Let(bindings, body, _) => {
+      let mut env2 = env.clone();
+      for (x, e) in bindings {
+        // Check for shadowing
+        if env.contains(x) {
+          errors.push(CheckError {
+            kind: CheckErrorKind::ShadowId,
+            msg: format!("Invalid shadowing binding"),
+
+            // TODO: keep this info when parsing
+            filename: "<stdin>".to_string(),
+            line: 0,
+            column: 0,
+          });
+        }
+
+        env2.insert(*x);
+        errors.append(&mut check_ids_in_env(e, &env2, symbols));
+      }
+      errors.append(&mut check_ids_in_env(body, &env2, symbols));
     }
   }
 

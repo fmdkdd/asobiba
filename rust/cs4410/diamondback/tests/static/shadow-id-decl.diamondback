@@ -1,0 +1,3 @@
+# expect:0:0:error: Invalid shadowing binding
+def foo(a): let a = 0 in a
+0

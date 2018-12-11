@@ -1,0 +1,3 @@
+# expect:0:0:error: Unbound identifier `b`
+def foo(a): a + b
+0
