@@ -15607,3 +15607,81 @@ Now the app is complaining we have unapplied migrations.
 
 After that, going to the index page fails because the DB is empty.  The fix is
 to correctly make all migrations before hand, then apply them.
+
+* [2018-12-11 mar.]
+** Revamping my JS course                                       :teaching:js:
+The big things happening in JS right now are:
+
+- TypeScript + VS Code, which greatly improves the /tooling/ around JS.
+  Types, auto-completion, debugging...
+
+  Does not change anything about the /runtime/ though.
+
+- React (and React-inspired frameworks).  'Solve' the MVC problem by letting the
+  dev write the presentation declaratively, and not care (too much) about the
+  details of updating parts of the view.
+
+  That one is really more related to web programming though.
+
+- Async/await to simply asynchronous calls.
+
+  This I can use.  It gives me an opportunity to talk about the execution model
+  (single-threaded, but with the ability to write asynchronous code).
+
+  Asynchronous code is relevant: its the foundation of nodejs, but it's also
+  very important in web apps.  An AJAX call is asynchronous; any event handling
+  in the browser in asynchronous.
+
+  Promises and async/await were added to deal with asynchronous code.  At its
+  heart the model is simple.
+
+*** Using s3c for promises                                              :s3c:
+Didn't work.  It's because I was killing the worker right after evaluating the
+code, and not waiting for the event loop to be empty.
+
+I don't think there is (or at least didn't find) a way to figure whether the
+event loop is empty.
+
+But not killing the worker works, and using the timeout mechanism already in s3c
+is enough.
+
+Took me way to long to find the cause though, because I forgot to ~make~ the s3c
+bundle when testing...
+
+*** Notes about promises                                           :promises:
+[[https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises][This guide for now]].  Interesting tidbits:
+
+Promise.all and Promise.race are pretty cool combinators for promises.
+Coordinating asynchronous events can quickly get dirty when done by hand.
+
+On timing:
+
+#+BEGIN_QUOTE
+To avoid surprises, functions passed to then() will never be called
+synchronously, [...]
+
+Instead of running immediately, the passed-in function is put on a microtask
+queue, which means it runs later when the queue is emptied at the end of the
+current run of the JavaScript event loop, i.e. pretty soon:
+#+END_QUOTE
+
+So it's not a setTimeout(_, 0): it doesn't put the task at the end of the queue,
+instead it doesn't wait until the next tick.  So:
+
+#+BEGIN_SRC js
+console.log('before')
+setTimeout(_ => console.log('timeout'), 0)
+Promise.resolve().then(_ => console.log('promise'))
+console.log('after')
+#+END_SRC
+
+yields:
+
+#+BEGIN_EXAMPLE
+before
+after
+promise
+timeout
+#+END_EXAMPLE
+
+There is a potential latency gain when the event queue is long.
