@@ -266,11 +266,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String],
 
   match e {
     Number(n, _) => {
-      if *n > ((1 << 30) - 1) || *n < -(1 << 30) {
-        panic!("Integer is too large to be represented: {}", n);
-      } else {
-        vec![Mov(Reg(EAX), Const(n << 1))]
-      }
+      vec![Mov(Reg(EAX), Const(n << 1))]
     }
 
     Id(s, _) => match lookup(*s, args) {
@@ -409,15 +405,6 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String],
     Let(bindings, body, _) => {
       let mut env2 = env.clone();
       let mut v = Vec::new();
-
-      // Check for duplicate bindings first, which are forbidden by the
-      // language.
-      let mut b : Vec<usize> = bindings.iter().map(|&(id,_)| id).collect();
-      b.sort();
-      b.dedup();
-      if b.len() != bindings.len() {
-        panic!("Duplicate bindings in `let`");
-      }
 
       for (x, ex) in bindings {
         v.append(&mut compile_expr(ex, symbols, &env2, args));

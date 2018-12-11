@@ -7,9 +7,10 @@ use crate::parse::{AST, Expr};
 
 pub enum CheckErrorKind {
   Arity,
-  UnboundFun,
   DuplicateFun,
   DuplicateId,
+  Overflow,
+  UnboundFun,
 }
 
 pub struct CheckError {
@@ -164,6 +165,24 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
             column: 0,
           });
         }
+      }
+    }
+  }
+
+  // Check all numbers are in range
+  let nums = all_of(ast, &Expr::Number(0, ()));
+  for num in nums {
+    if let Expr::Number(n, _) = num {
+      if *n > ((1 << 30) - 1) || *n < -(1 << 30) {
+        errors.push(CheckError {
+          kind: Overflow,
+          msg: format!("Integer is too large to be represented"),
+
+          // TODO: keep this info when parsing
+          filename: "<stdin>".to_string(),
+          line: 0,
+          column: 0,
+        });
       }
     }
   }

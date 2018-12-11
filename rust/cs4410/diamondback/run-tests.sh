@@ -30,6 +30,7 @@ for file in `find tests/static/ -name "*${SUFFIX}" | sort`; do
         echo -e "${GREEN}pass${NC}:" "$base"
     else
         echo -e "${RED}FAIL${NC}:" "$base": expected \"$expect\", got \"$actual\"
+        $COMP < $file
         ret=1
     fi
 done
