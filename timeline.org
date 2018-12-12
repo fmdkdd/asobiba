@@ -15685,3 +15685,31 @@ timeout
 #+END_EXAMPLE
 
 There is a potential latency gain when the event queue is long.
+
+* [2018-12-12 mer.]
+** Strange behavior with Promises in workers                    :promises:js:
+When trying to upgrade s3c to work with Promises, I encountered a strange
+behavior.
+
+Evaluating the following code:
+
+#+BEGIN_SRC js
+Promise.resolve().then(_ => aoreisnt())
+#+END_SRC
+
+triggers an error in the JS console:
+
+: Unresolved promise rejection: aoreisnt is not defined
+
+But evaluating it inside s3c does not show any error.  The worker.onerror
+callback is not triggered by it.
+
+In fact, having a worker with just that line above does /not/ trigger an
+Unresolved promise rejection in Firefox.  It /does/ produce an
+
+: Uncaught (in promise) ReferenceError: aoreisnt is not defined
+
+in Chromium, but that error is /not/ a worker error that can be caught using the
+onerror callback.
+
+So, in fact, there appears to be no way of catching this error from the spawner.
