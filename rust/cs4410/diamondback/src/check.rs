@@ -7,9 +7,8 @@
 // it might not be the most performant solution.
 
 use std::collections::HashSet;
-use std::hash::Hash;
 
-use crate::parse::{AST, Expr};
+use crate::parse::{AST, Expr, Loc, loc};
 
 pub enum CheckErrorKind {
   Arity,
@@ -25,8 +24,8 @@ pub struct CheckError {
   kind: CheckErrorKind,
   msg: String,
   filename: String,
-  line: usize,
-  column: usize,
+  line: u32,
+  column: u32,
 }
 
 // impl CheckError {
@@ -44,7 +43,7 @@ impl core::fmt::Display for CheckError {
 }
 
 /// Report all static errors in program AST.
-pub fn check(ast: &AST<()>) -> Vec<CheckError> {
+pub fn check(ast: &AST<Loc>) -> Vec<CheckError> {
   use self::CheckErrorKind::*;
 
   let mut errors = Vec::new();
@@ -70,11 +69,9 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
       errors.push(CheckError {
         kind: DuplicateFun,
         msg: format!("Duplicate declaration of function `{}`", name),
-
-        // TODO: keep this info when parsing
         filename: "<stdin>".to_string(),
-        line: 0,
-        column: 0,
+        line: d.loc.start.line,
+        column: d.loc.start.column,
       });
     }
 
@@ -86,20 +83,18 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
           kind: DuplicateId,
           msg: format!("Duplicate argument `{}` in declaration of function `{}`",
                        ast.symbols[*a], name),
-
-          // TODO: keep this info when parsing
           filename: "<stdin>".to_string(),
-          line: 0,
-          column: 0,
+          line: d.loc.start.line,
+          column: d.loc.start.column,
         });
       }
     }
   }
 
   // For each Apply, check there is one matching Decl
-  let calls = all_of(ast, &Expr::Apply(0, vec![], ()));
+  let calls = all_of(ast, &Expr::Apply(0, vec![], Default::default()));
   for c in calls {
-    if let Expr::Apply(n, args, _) = c {
+    if let Expr::Apply(n, args, loc) = c {
       let name = &ast.symbols[*n];
       let actual = args.len();
 
@@ -113,11 +108,9 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
             kind: Arity,
             msg: format!("Function `{}` expects {} arguments, got {}",
                          name, formal, actual),
-
-            // TODO: keep this info when parsing
             filename: "<stdin>".to_string(),
-            line: 0,
-            column: 0,
+            line: loc.start.line,
+            column: loc.start.column,
           });
         }
       }
@@ -132,11 +125,9 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
             kind: Arity,
             msg: format!("Function `{}` expects {} arguments, got {}",
                          name, formal, actual),
-
-            // TODO: keep this info when parsing
             filename: "<stdin>".to_string(),
-            line: 0,
-            column: 0,
+            line: loc.start.line,
+            column: loc.start.column,
           });
         }
       }
@@ -146,31 +137,29 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
         errors.push(CheckError {
           kind: UnboundFun,
           msg: format!("Calling unknown function `{}`", name),
-
-          // TODO: keep this info when parsing
           filename: "<stdin>".to_string(),
-          line: 0,
-          column: 0,
+          line: loc.start.line,
+          column: loc.start.column,
         });
       }
     }
   }
 
   // Check for duplicate bindings in Let
-  let lets = all_of(ast, &Expr::Let(vec![], Box::new(Expr::Number(0, ())), ()));
+  let lets = all_of(ast, &Expr::Let(vec![],
+                                    Box::new(Expr::Number(0, Default::default())),
+                                    Default::default()));
   for l in lets {
     if let Expr::Let(bindings, _, _) = l {
       let mut uniq = HashSet::new();
-      for (b, _) in bindings {
+      for (b, ex) in bindings {
         if !uniq.insert(b) {
           errors.push(CheckError {
             kind: DuplicateId,
             msg: format!("Duplicate let binding `{}`", ast.symbols[*b]),
-
-            // TODO: keep this info when parsing
             filename: "<stdin>".to_string(),
-            line: 0,
-            column: 0,
+            line: loc(&ex).start.line,
+            column: loc(&ex).start.column,
           });
         }
       }
@@ -178,18 +167,16 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
   }
 
   // Check all numbers are in range
-  let nums = all_of(ast, &Expr::Number(0, ()));
+  let nums = all_of(ast, &Expr::Number(0, Default::default()));
   for num in nums {
-    if let Expr::Number(n, _) = num {
+    if let Expr::Number(n, loc) = num {
       if *n > ((1 << 30) - 1) || *n < -(1 << 30) {
         errors.push(CheckError {
           kind: Overflow,
           msg: format!("Integer is too large to be represented"),
-
-          // TODO: keep this info when parsing
           filename: "<stdin>".to_string(),
-          line: 0,
-          column: 0,
+          line: loc.start.line,
+          column: loc.start.column,
         });
       }
     }
@@ -201,7 +188,7 @@ pub fn check(ast: &AST<()>) -> Vec<CheckError> {
   errors
 }
 
-fn check_ids(ast: &AST<()>) -> Vec<CheckError> {
+fn check_ids(ast: &AST<Loc>) -> Vec<CheckError> {
   let mut errors = Vec::new();
 
   for decl in &ast.root.decls {
@@ -218,7 +205,7 @@ fn check_ids(ast: &AST<()>) -> Vec<CheckError> {
   errors
 }
 
-fn check_ids_in_env(expr: &Expr<()>, env: &HashSet<usize>, symbols: &[String]) -> Vec<CheckError> {
+fn check_ids_in_env(expr: &Expr<Loc>, env: &HashSet<usize>, symbols: &[String]) -> Vec<CheckError> {
   let mut errors = Vec::new();
 
   use self::Expr::*;

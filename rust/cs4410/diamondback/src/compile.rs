@@ -37,7 +37,8 @@ fn tag_decl<T>(decl: Decl<T>, seed: usize) -> (Decl<(usize, T)>, usize) {
   (Decl {
     name: decl.name,
     args: decl.args,
-    body
+    loc: decl.loc,
+    body,
   }, seed)
 }
 
@@ -744,7 +745,8 @@ fn into_anf<T>(mut ast: AST<(usize, T)>) -> AST<()> {
     decls.push(Decl {
       name: d.name,
       args: d.args,
-      body
+      loc: d.loc,
+      body,
     })
   }
 

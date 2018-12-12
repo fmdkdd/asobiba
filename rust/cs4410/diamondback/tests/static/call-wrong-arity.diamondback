@@ -1,4 +1,4 @@
-# expect:0:0:error: Function `foo` expects 2 arguments, got 0
+# expect:4:0:error: Function `foo` expects 2 arguments, got 0
 def foo(a,b): 0
 
 foo()

@@ -8,7 +8,7 @@ use std::str::Chars;
 // This is only to record position, line and column information when building
 // the tokens
 
-#[derive(PartialEq, Debug, Copy, Clone)]
+#[derive(PartialEq, Debug, Copy, Clone, Default)]
 pub struct TextPosition {
   pub pos: u32,                     // absolute character position
   pub line: u32,                    // line number (starts at 1)

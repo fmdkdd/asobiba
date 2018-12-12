@@ -1,2 +1,2 @@
-# expect:0:0:error: Integer is too large to be represented
+# expect:2:0:error: Integer is too large to be represented
 1073741824

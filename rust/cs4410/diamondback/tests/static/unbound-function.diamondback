@@ -1,2 +1,2 @@
-# expect:0:0:error: Calling unknown function `foo`
+# expect:2:0:error: Calling unknown function `foo`
 foo()
