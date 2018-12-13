@@ -57,34 +57,10 @@ void num_check(int n) {
   }
 }
 
-void num_check2(int a, int b) {
-  if (is_num(a) == BOOL_FALSE) {
-    fprintf(stderr, "Error: expected a number, got ");
-    _print(a, stderr);
-    exit(Arith_Expect_Num);
-  } else if (is_num(b) == BOOL_FALSE) {
-    fprintf(stderr, "Error: expected a number, got ");
-    _print(b, stderr);
-    exit(Arith_Expect_Num);
-  }
-}
-
 void bool_check(int n) {
   if (is_bool(n) == BOOL_FALSE) {
     fprintf(stderr, "Error: expected a boolean, got ");
     _print(n, stderr);
-    exit(Comp_Expect_Num);
-  }
-}
-
-void bool_check2(int a, int b) {
-  if (is_bool(a) == BOOL_FALSE) {
-    fprintf(stderr, "Error: expected a boolean, got ");
-    _print(a, stderr);
-    exit(Comp_Expect_Num);
-  } else if (is_bool(b) == BOOL_FALSE) {
-    fprintf(stderr, "Error: expected a boolean, got ");
-    _print(b, stderr);
     exit(Comp_Expect_Num);
   }
 }
@@ -100,10 +76,6 @@ void if_cond_check(int n) {
 void overflow() {
   fprintf(stderr, "Error: integer overflow");
   exit(Overflow);
-}
-
-int max(int a, int b) {
-  return a > b ? a : b;
 }
 
 int add1(int a) {

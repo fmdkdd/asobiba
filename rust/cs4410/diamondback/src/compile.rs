@@ -145,7 +145,7 @@ enum Instr {
   Ret,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 enum Runtime {
   Print,
   Add1,
@@ -153,9 +153,7 @@ enum Runtime {
   IsNum,
   IsBool,
   NumCheck,
-  NumCheck2,
   BoolCheck,
-  BoolCheck2,
   IfCondCheck,
   User(String),
 }
@@ -294,54 +292,37 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String],
     }
 
     Prim2(op, l, r, (n, _)) => {
-      // If l and r aren't immediate, we cannot compile
-      if !is_imm(l) || !is_imm(r) {
-        panic!("Binary expression not in ANF");
+      // Figure out the runtime check we need to call
+      let check = match op {
+        Prim2::Eq => None, // Eq doesn't need runtime checks
+        _ =>
+          match op {
+            Prim2::And | Prim2::Or => Some(Runtime::BoolCheck),
+            _                      => Some(Runtime::NumCheck),
+          }
+      };
+
+      // Compile l, add runtime checks, then put it in ECX
+      let mut v = compile_expr(l, symbols, env, args);
+
+      // Save a to the stack, as `b` will overwrite EAX
+      v.push(Push(Reg(EAX)));
+      if let Some(ref c) = check {
+        v.push(Call(c.clone()));
       }
 
-      let mut v = compile_expr(l, symbols, env, args);
-      // Now we know that `r` is immediate, so it's either a Number or an Id,
-      // and we can use the right-hand side of the compiled instruction
-      // directly to replace the Mov by the adequate arithmetic operation.
-      let b = if let Some(Mov(_, b)) = compile_expr(r, symbols, env, args).pop() {
-        b
-      } else {
-        unreachable!();
-      };
-      // Combine the two, and add runtime checks
+      // Compile r, add runtime checks, then put it in EAX
+      v.append(&mut compile_expr(r, symbols, env, args));
+      v.push(Push(Reg(EAX)));
+      if let Some(c) = check {
+        v.push(Call(c));
+      }
+      v.push(Pop(Reg(ECX))); // b in ECX
+      v.push(Pop(Reg(EAX))); // a in EAX
+
       let a = Reg(EAX);
-
-      match op {
-        Prim2::Plus | Prim2::Minus | Prim2::Mult |
-        Prim2::Greater | Prim2::GreaterEq |
-        Prim2::Less | Prim2::LessEq => {
-          // So this is tricky: the calling convention wants us to push
-          // arguments in reverse order, so intuitively we want to push b,
-          // then a.  But!  We need to preserve EAX (a), and we don't care
-          // about b.  So, we push a last, so that when popping, the second
-          // pop restores EAX.
-          v.push(Push(a.clone()));
-          v.push(Push(b.clone()));
-          v.push(Call(Runtime::NumCheck2));
-          v.push(Pop(Reg(EAX)));
-          v.push(Pop(Reg(EAX)));
-        }
-
-        Prim2::And | Prim2::Or => {
-          // Idem
-          v.push(Push(a.clone()));
-          v.push(Push(b.clone()));
-          v.push(Call(Runtime::BoolCheck2));
-          v.push(Pop(Reg(EAX)));
-          v.push(Pop(Reg(EAX)));
-        }
-
-        // Eq compares anything
-        Prim2::Eq => {}
-      };
-
+      let b = Reg(ECX);
       let overflow = OVERFLOW.to_string();
-
       v.append(&mut match op {
         Prim2::Plus  => vec![Add(a, b), Jo(overflow)],
         Prim2::Minus => vec![Sub(a, b), Jo(overflow)],
@@ -423,7 +404,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String],
       v.push(Push(Reg(EAX)));
       v.push(Call(Runtime::IfCondCheck));
       v.push(Pop(Reg(EAX)));
-      v.push(Cmp(Reg(EAX), Const(BOOL_FALSE)));
+      v.push(Cmp(Reg(EAX), HexConst(BOOL_FALSE)));
       let if_false = format!("if_false_{}", n);
       let done = format!("done_{}", n);
       v.push(Je(if_false.clone()));
@@ -445,9 +426,7 @@ extern print
 extern add1
 extern sub1
 extern num_check
-extern num_check2
 extern bool_check
-extern bool_check2
 extern if_cond_check
 extern overflow
 global entry_point
@@ -545,9 +524,7 @@ impl Display for Runtime {
       IsBool      => write!(f, "is_bool"),
       IsNum       => write!(f, "is_num"),
       NumCheck    => write!(f, "num_check"),
-      NumCheck2   => write!(f, "num_check2"),
       BoolCheck   => write!(f, "bool_check"),
-      BoolCheck2  => write!(f, "bool_check2"),
       IfCondCheck => write!(f, "if_cond_check"),
       User(n)     => write!(f, "{}", n),
     }
