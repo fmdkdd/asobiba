@@ -1,5 +1,8 @@
 #!/bin/bash
 
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
 # Exit on first failure
 set -e
 
@@ -14,10 +17,10 @@ make
 # the adder file)
 set +e
 
-echo == Running valgrind on tests...
+echo -e "${YELLOW}== Running valgrind on tests...${NC}"
 for file in `find build/ -executable -type f | sort`; do
     bin=`basename "$file"`
-    echo Running: $bin...
+    echo -e "${YELLOW}Running: $bin...${NC}"
     valgrind --quiet ./$file
     echo
 done
