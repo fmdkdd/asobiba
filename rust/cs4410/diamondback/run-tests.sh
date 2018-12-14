@@ -45,6 +45,7 @@ for file in `find build/ -executable -type f | sort`; do
         echo -e "${GREEN}pass${NC}:" "$bin"
     else
         echo -e "${RED}FAIL${NC}:" "$bin": expected \"$expect\", got \"$actual\"
+        ./$file
         ret=1
     fi
 done

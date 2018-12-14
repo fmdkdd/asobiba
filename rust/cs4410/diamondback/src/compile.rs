@@ -357,7 +357,7 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String],
     Apply(name, params, _) => {
       let mut v = Vec::new();
 
-      for a in params {
+      for a in params.iter().rev() {
         let mut v2 = compile_expr(a, symbols, env, args);
         v.append(&mut v2);
         v.push(Push(Reg(EAX)));
@@ -430,11 +430,11 @@ extern bool_check
 extern if_cond_check
 extern overflow
 global entry_point
-{}
 
+{}
 {}:
   call overflow",
-          blocks.iter().map(|b| format!("{}:\n{}",
+          blocks.iter().map(|b| format!("{}:\n{}\n",
                                         b.0,
                                         b.1.iter().map(|i| format!("{}", i)).collect::<String>()))
           .collect::<String>(),
