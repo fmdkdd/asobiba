@@ -11,7 +11,7 @@ cargo build
 
 # Build all the tests/*.diamondback files to build/* binaries
 echo == Building tests...
-make
+make -j4
 
 # Check the output of each binary against the expected output (the first line of
 # the adder file)

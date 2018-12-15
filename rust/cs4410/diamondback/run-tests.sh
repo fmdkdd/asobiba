@@ -14,7 +14,7 @@ cargo build || exit 2
 
 # Build all the tests/*.diamondback files to build/* binaries
 echo -e "${YELLOW}== Building dynamic tests...${NC}"
-make || exit 3
+make -j4 || exit 3
 
 # Return value
 ret=0
