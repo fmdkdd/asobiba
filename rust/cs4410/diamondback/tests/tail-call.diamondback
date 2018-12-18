@@ -1,6 +1,6 @@
-# expect: 101
+# expect: 1000001
 def add(a, b):
   if b <= 0: a
   else     : add(a+1, b-1)
 
-add(1, 100)
+add(1, 1000000)

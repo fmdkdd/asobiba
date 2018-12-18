@@ -179,6 +179,16 @@ fn tag_cexpr<T>(expr: CExpr<T>, seed: usize) -> (CExpr<(usize, T)>, usize) {
       }
       (Apply(id, exps_t, (seed, t)), seed+1)
     }
+    TailCall(id, exps, t) => {
+      let mut exps_t = Vec::new();
+      let mut seed = seed;
+      for e in exps {
+        let (e_t, s1) = tag_immexpr(e, seed);
+        exps_t.push(e_t);
+        seed = s1;
+      }
+      (TailCall(id, exps_t, (seed, t)), seed+1)
+    }
     If(cond, then, els, t) => {
       let (c, seed) = tag_immexpr(cond, seed);
       let (th, seed) = tag_aexpr(*then, seed);
@@ -285,9 +295,12 @@ pub fn compile<T>(ast: AST<T>) -> String {
   // compile binary expressions.
   let anf_ast = into_anf(number(ast));
 
+  // Apply ANF optimizations
+  let opt_ast = optimize_anf(anf_ast);
+
   // Then we emit a list of assembly instructions (we renumber since the ANF
   // transformtion lost the numerotation)
-  let instrs = compile_ast(&number_anf(anf_ast));
+  let instrs = compile_ast(&number_anf(opt_ast));
 
   // And finally we emit ASM as a string
   emit_asm(&instrs)
@@ -299,9 +312,14 @@ pub fn debug<T>(ast: AST<T>) {
   // Same as compile, but printing the intermediate steps.
   let anf_ast = into_anf(number(ast));
 
-  println!("==== ANF ====\n{}", pp_anf(&anf_ast));
+  println!("==== RAW ANF ====\n{}", pp_anf(&anf_ast));
 
-  let instrs = compile_ast(&number_anf(anf_ast));
+  // Apply ANF optimizations
+  let opt_ast = optimize_anf(anf_ast);
+
+  println!("==== OPT ANF ====\n{}", pp_anf(&opt_ast));
+
+  let instrs = compile_ast(&number_anf(opt_ast));
 
   // And finally we emit ASM as a string
   let asm = emit_asm(&instrs);
@@ -333,16 +351,21 @@ fn compile_ast<T>(ast: &ANF_AST<(usize, T)>) -> Vec<(String, Vec<Instr>)> {
   let mut v = Vec::new();
   for d in &ast.root.decls {
     v.push((ast.symbols[d.name].clone(), compile_body(&d.body, &ast.symbols,
-                                                      &vec![], &d.args)));
+                                                      &vec![], &d.args, Some(d.name))));
   }
 
   v.push(("entry_point".to_string(), compile_body(&ast.root.body, &ast.symbols,
-                                                  &vec![], &vec![])));
+                                                  &vec![], &vec![], None)));
   v
 }
 
+// The label used for TCO on function FUN
+fn tail_call_label(fun: &String) -> String {
+  format!("{}$tco", fun)
+}
+
 fn compile_body<T>(body: &AExpr<(usize, T)>, symbols: &[String],
-                   env: &Vec<usize>, args: &[usize]) -> Vec<Instr> {
+                   env: &Vec<usize>, args: &[usize], fun: Option<usize>) -> Vec<Instr> {
   use self::Instr::*;
   use self::Arg::*;
   use self::Reg::*;
@@ -355,6 +378,11 @@ fn compile_body<T>(body: &AExpr<(usize, T)>, symbols: &[String],
   if vars > 0 {
       v.push(Sub(Reg(ESP), Const((vars * 4) as i32)));
   }
+
+  if let Some(f) = fun {
+    v.push(Label(tail_call_label(&symbols[f])));
+  }
+
   v.append(&mut compile_aexpr(&body, &symbols, env, args));
 
   v.push(Mov(Reg(ESP), Reg(EBP)));
@@ -393,6 +421,7 @@ fn compile_cexpr<T>(e: &CExpr<(usize, T)>, symbols: &[String],
                     env: &Vec<usize>, args: &[usize]) -> Vec<Instr> {
   use self::Instr::*;
   use self::Arg::*;
+  use self::ArgSize::*;
   use self::Reg::*;
   use self::Prim1;
   use self::Prim2;
@@ -507,6 +536,22 @@ fn compile_cexpr<T>(e: &CExpr<(usize, T)>, symbols: &[String],
       v
     }
 
+    TailCall(name, params, _) => {
+      let mut v = Vec::new();
+
+      // Reuse the current stack to put the arguments.
+      // Doing it backwards just out of habit.
+      for i in (0..params.len()).rev() {
+        let arg = compile_immexpr(&params[i], symbols, env, args);
+        v.push(Mov(Reg(EAX), arg));
+        v.push(Mov(Sized(Dword, Box::new(RegPlus(EBP, i+2))), Reg(EAX)));
+      }
+
+      // Then jump to the function instead of calling
+      v.push(Jmp(tail_call_label(&symbols[*name])));
+      v
+    }
+
     If(cond, then, els, (n, _)) => {
       let mut v = Vec::new();
       let c = compile_immexpr(cond, symbols, env, args);
@@ -571,7 +616,9 @@ global entry_point
   call overflow",
           blocks.iter().map(|b| format!("{}:\n{}\n",
                                         b.0,
-                                        b.1.iter().map(|i| format!("{}", i)).collect::<String>()))
+                                        b.1.iter()
+                                        .map(|i| format!("{}", i))
+                                        .collect::<String>()))
           .collect::<String>(),
           OVERFLOW)
 }
@@ -607,6 +654,7 @@ pub enum CExpr<T> {
   Prim1(Prim1, ImmExpr<T>, T),
   Prim2(Prim2, ImmExpr<T>, ImmExpr<T>, T),
   Apply(usize, Vec<ImmExpr<T>>, T),
+  TailCall(usize, Vec<ImmExpr<T>>, T),
   If(ImmExpr<T>, Box<AExpr<T>>, Box<AExpr<T>>, T),
 }
 
@@ -781,6 +829,68 @@ fn into_anf<T>(mut ast: AST<(usize, T)>) -> ANF_AST<()> {
 
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Optimizer
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+fn optimize_anf<T>(ast: ANF_AST<T>) -> ANF_AST<T> {
+  // Apply tail-call optimization
+  let mut decls = Vec::new();
+  for d in ast.root.decls {
+    decls.push(opt_tco(d));
+  }
+
+  ANF_AST {
+    root: ANF_Prog { decls, body: ast.root.body },
+    symbols: ast.symbols,
+  }
+}
+
+fn opt_tco<T>(decl: ANF_Decl<T>) -> ANF_Decl<T> {
+  // Find all tail-calls and rewrite them
+
+  ANF_Decl {
+    name: decl.name,
+    args: decl.args,
+    body: opt_tco_aexpr(decl.body)
+  }
+}
+
+fn opt_tco_aexpr<T>(expr: AExpr<T>) -> AExpr<T> {
+  use self::AExpr::*;
+
+  match expr {
+    Let(x, e, body, t) =>
+    // The trick to finding the tail calls is to ensure we only recurse on the
+    // body here, and *not* on the binding expression.  Only the body can
+    // contain a tail-call!
+      Let(x, e, Box::new(opt_tco_aexpr(*body)), t),
+
+    Expr(e) => Expr(opt_tco_cexpr(e)),
+  }
+}
+
+fn opt_tco_cexpr<T>(expr: CExpr<T>) -> CExpr<T> {
+  use self::CExpr::*;
+
+  match expr {
+    // Transform
+    Apply(f, params, t) =>
+      TailCall(f, params, t),
+
+    // Recurse
+    If(cnd, thn, els, t) =>
+      If(cnd, Box::new(opt_tco_aexpr(*thn)), Box::new(opt_tco_aexpr(*els)), t),
+
+    // Pass through
+    Imm(e) => Imm(e),
+    Prim1(op, e, t) => Prim1(op, e, t),
+    Prim2(op, l, r, t) => Prim2(op, l, r, t),
+    TailCall(f, params, t) => TailCall(f, params, t),
+  }
+}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Pretty printer
 //
 // We can't simply implement the Display trait for AST, because we need to pass
@@ -880,7 +990,9 @@ fn pp_cexpr<T>(expr: &CExpr<T>, symbols: &[String]) -> String {
     Apply(f, args, _) => format!("{}({})", symbols[*f],
                                  args.iter().map(|a| pp_immexpr(a, symbols))
                                  .collect::<Vec<String>>().join(", ")),
-
+    TailCall(f, args, _) => format!("{}*({})", symbols[*f],
+                                    args.iter().map(|a| pp_immexpr(a, symbols))
+                                    .collect::<Vec<String>>().join(", ")),
     If(cc, th, el, _) => format!("if {}:\n{}\nelse:\n{}",
                                  pp_immexpr(cc, symbols),
                                  pp_aexpr(th, symbols),
