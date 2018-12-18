@@ -55,7 +55,7 @@ pub struct AST<T> {
   pub symbols: Vec<String>,
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, Clone, Copy)]
 pub struct Loc {
   pub start: TextPosition,
   pub end: TextPosition,

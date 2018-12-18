@@ -2,8 +2,9 @@ use std::fmt::Display;
 
 use crate::parse::{AST, Decl, Expr, Prim1, Prim2, Prog};
 
+
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Compiler
+// Tagging
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 // Number each node of the AST
@@ -93,6 +94,115 @@ fn tag_bindings<T>(bindings: Vec<(usize, Expr<T>)>, mut seed: usize)
   (ret, seed)
 }
 
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Tagging for ANF
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+// Number each node of the AST
+fn number_anf<T>(ast: ANF_AST<T>) -> ANF_AST<(usize, T)> {
+  ANF_AST {
+    root: tag_anf_prog(ast.root, 1).0,
+    symbols: ast.symbols.clone(),
+  }
+}
+
+fn tag_anf_prog<T>(prog: ANF_Prog<T>, seed: usize) -> (ANF_Prog<(usize, T)>, usize) {
+  let mut decls = Vec::new();
+
+  let mut s = seed;
+  for d in prog.decls {
+    let (d_t, s1) = tag_anf_decl(d, s);
+    s = s1;
+    decls.push(d_t);
+  }
+
+  let (body, s1) = tag_aexpr(prog.body, s);
+  s = s1;
+
+  (ANF_Prog { decls, body }, s)
+}
+
+fn tag_anf_decl<T>(decl: ANF_Decl<T>, seed: usize) -> (ANF_Decl<(usize, T)>, usize) {
+
+  let (body, seed) = tag_aexpr(decl.body, seed);
+
+  (ANF_Decl {
+    name: decl.name,
+    args: decl.args,
+    body,
+  }, seed)
+}
+
+fn tag_aexpr<T>(expr: AExpr<T>, seed: usize) -> (AExpr<(usize, T)>, usize) {
+  use self::AExpr::*;
+
+  match expr {
+    Let(b, e, body, t) => {
+      let (e, seed) = tag_cexpr(e, seed);
+      let (body, seed) = tag_aexpr(*body, seed);
+      (Let(b, e, Box::new(body), (seed, t)), seed+1)
+    }
+
+    Expr(e) => {
+      let (e, seed) = tag_cexpr(e, seed);
+      (Expr(e), seed)
+    }
+  }
+}
+
+fn tag_cexpr<T>(expr: CExpr<T>, seed: usize) -> (CExpr<(usize, T)>, usize) {
+  use self::CExpr::*;
+
+  match expr {
+    Imm(e) => {
+      let (e, seed) = tag_immexpr(e, seed);
+      (Imm(e), seed)
+    }
+
+    Prim1(op, exp, t) => {
+      let (e, seed) = tag_immexpr(exp, seed);
+      (Prim1(op, e, (seed, t)), seed+1)
+    }
+    Prim2(op, left, right, t) => {
+      let (l, seed) = tag_immexpr(left, seed);
+      let (r, seed) = tag_immexpr(right, seed);
+      (Prim2(op, l, r, (seed, t)), seed+1)
+    }
+    Apply(id, exps, t) => {
+      let mut exps_t = Vec::new();
+      let mut seed = seed;
+      for e in exps {
+        let (e_t, s1) = tag_immexpr(e, seed);
+        exps_t.push(e_t);
+        seed = s1;
+      }
+      (Apply(id, exps_t, (seed, t)), seed+1)
+    }
+    If(cond, then, els, t) => {
+      let (c, seed) = tag_immexpr(cond, seed);
+      let (th, seed) = tag_aexpr(*then, seed);
+      let (el, seed) = tag_aexpr(*els, seed);
+      (If(c, Box::new(th), Box::new(el), (seed, t)), seed+1)
+    }
+  }
+}
+
+fn tag_immexpr<T>(expr: ImmExpr<T>, seed: usize) -> (ImmExpr<(usize, T)>, usize) {
+  use self::ImmExpr::*;
+
+  match expr {
+    Number(n, t) => (Number(n, (seed, t)), seed+1),
+    Id(s, t) => (Id(s, (seed, t)), seed+1),
+    Bool(b, t) => (Bool(b, (seed, t)), seed+1),
+  }
+}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// ASM representation
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 #[derive(Debug, Clone, Copy)]
 enum Reg {
   EAX,
@@ -164,6 +274,11 @@ fn lookup(id: usize, env: &[usize]) -> Option<usize> {
   env.iter().rposition(|&n| n == id).map(|n| n+1)
 }
 
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Compilation: turning the AST into an ASM string
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 pub fn compile<T>(ast: AST<T>) -> String {
   // First we tag each node with a unique number.  This is needed for compiling
   // IF and for transforming into ANF.  Then we reduce to ANF in order to
@@ -172,7 +287,7 @@ pub fn compile<T>(ast: AST<T>) -> String {
 
   // Then we emit a list of assembly instructions (we renumber since the ANF
   // transformtion lost the numerotation)
-  let instrs = compile_ast(&number(anf_ast));
+  let instrs = compile_ast(&number_anf(anf_ast));
 
   // And finally we emit ASM as a string
   emit_asm(&instrs)
@@ -184,9 +299,9 @@ pub fn debug<T>(ast: AST<T>) {
   // Same as compile, but printing the intermediate steps.
   let anf_ast = into_anf(number(ast));
 
-  println!("==== ANF ====\n{}", pp(&anf_ast));
+  println!("==== ANF ====\n{}", pp_anf(&anf_ast));
 
-  let instrs = compile_ast(&number(anf_ast));
+  let instrs = compile_ast(&number_anf(anf_ast));
 
   // And finally we emit ASM as a string
   let asm = emit_asm(&instrs);
@@ -199,23 +314,17 @@ pub fn debug<T>(ast: AST<T>) {
 
 // Return the greatest number of variables we need at once, in order to make
 // room on the stack.
-fn count_vars<T>(expr: &Expr<T>) -> usize {
-  use self::Expr::*;
+fn count_vars<T>(expr: &AExpr<T>) -> usize {
+  use self::AExpr::*;
 
   match expr {
     // Only `let` can create variables
-    Let(bs, e, _)     => bs.len() + count_vars(e),
-
-    Prim1(_, e, _)    => count_vars(e),
-    Prim2(_, l, r, _) => usize::max(count_vars(l), count_vars(r)),
-    If(cc, th, el, _) => *[count_vars(cc), count_vars(th), count_vars(el)]
-      .iter().max().unwrap(),
-
-    _                 => 0
+    Let(_, _, body, _) => 1 + count_vars(body),
+    Expr(_)            => 0,
   }
 }
 
-fn compile_ast<T>(ast: &AST<(usize, T)>) -> Vec<(String, Vec<Instr>)> {
+fn compile_ast<T>(ast: &ANF_AST<(usize, T)>) -> Vec<(String, Vec<Instr>)> {
   let mut v = Vec::new();
   for d in &ast.root.decls {
     v.push((ast.symbols[d.name].clone(), compile_body(&d.body, &ast.symbols,
@@ -227,7 +336,7 @@ fn compile_ast<T>(ast: &AST<(usize, T)>) -> Vec<(String, Vec<Instr>)> {
   v
 }
 
-fn compile_body<T>(body: &Expr<(usize, T)>, symbols: &[String],
+fn compile_body<T>(body: &AExpr<(usize, T)>, symbols: &[String],
                    env: &Vec<usize>, args: &[usize]) -> Vec<Instr> {
   use self::Instr::*;
   use self::Arg::*;
@@ -241,7 +350,7 @@ fn compile_body<T>(body: &Expr<(usize, T)>, symbols: &[String],
   if vars > 0 {
       v.push(Sub(Reg(ESP), Const((vars * 4) as i32)));
   }
-  v.append(&mut compile_expr(&body, &symbols, env, args));
+  v.append(&mut compile_aexpr(&body, &symbols, env, args));
 
   v.push(Mov(Reg(ESP), Reg(EBP)));
   v.push(Pop(Reg(EBP)));
@@ -253,42 +362,51 @@ static BOOL_TRUE  : i32 = -1;
 static BOOL_FALSE : i32 = 0x7fffffff;
 static OVERFLOW   : &'static str = "error_overflow";
 
-fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String],
-                   env: &Vec<usize>, args: &[usize]) -> Vec<Instr> {
+fn compile_aexpr<T>(e: &AExpr<(usize, T)>, symbols: &[String],
+                    env: &Vec<usize>, args: &[usize]) -> Vec<Instr> {
   use self::Instr::*;
-  use self::Prim1::*;
-  use self::Prim2;
   use self::Arg::*;
-  use self::ArgSize::*;
   use self::Reg::*;
-  use self::Expr::*;
+  use self::AExpr::*;
 
   match e {
-    Number(n, _) => {
-      vec![Mov(Reg(EAX), Const(n << 1))]
-    }
-
-    Id(s, _) => match lookup(*s, args) {
-      // Function arguments are passed by the caller, so are higher in the
-      // stack, and the first one start at ebp+ (hence the n+1).
-      Some(n) => vec![Mov(Reg(EAX), Sized(Dword, Box::new(RegPlus(EBP, n+1))))],
-      None => match lookup(*s, env) {
-        // Local variables start and ebp-4 and go down the stack.
-        Some(n) => vec![Mov(Reg(EAX), Sized(Dword, Box::new(RegMinus(EBP, n))))],
-        None => panic!("Identifier not bound '{}'", symbols[*s]),
-      }
-    }
-
-    Bool(true, _)  => vec![Mov(Reg(EAX), HexConst(BOOL_TRUE))],
-    Bool(false, _) => vec![Mov(Reg(EAX), HexConst(BOOL_FALSE))],
-
-    Prim1(Not, ex, _) => {
-      let mut v = compile_expr(ex, symbols, env, args);
-      v.push(Push(Reg(EAX)));
-      v.push(Call(Runtime::BoolCheck));
-      v.push(Pop(Reg(EAX)));
-      v.push(Xor(Reg(EAX), HexConst(1 << 31)));
+    Let(b, e, body, _) => {
+      let mut env2 = env.clone();
+      let mut v = Vec::new();
+      v.append(&mut compile_cexpr(e, symbols, &env2, args));
+      env2.push(*b);
+      v.push(Mov(RegMinus(EBP, env2.len()), Reg(EAX)));
+      v.append(&mut compile_aexpr(body, symbols, &mut env2, args));
       v
+    }
+
+    Expr(e) => compile_cexpr(e, symbols, env, args)
+  }
+}
+
+fn compile_cexpr<T>(e: &CExpr<(usize, T)>, symbols: &[String],
+                    env: &Vec<usize>, args: &[usize]) -> Vec<Instr> {
+  use self::Instr::*;
+  use self::Arg::*;
+  use self::Reg::*;
+  use self::Prim1;
+  use self::Prim2;
+  use self::CExpr::*;
+
+  match e {
+    Imm(e) => {
+      let a = compile_immexpr(e, symbols, env, args);
+      vec![Mov(Reg(EAX), a)]
+    }
+
+    Prim1(Prim1::Not, ex, _) => {
+      let a = compile_immexpr(ex, symbols, env, args);
+      vec![
+        Push(a),
+        Call(Runtime::BoolCheck),
+        Pop(Reg(EAX)),
+        Xor(Reg(EAX), HexConst(1 << 31)),
+      ]
     }
 
     Prim2(op, l, r, (n, _)) => {
@@ -302,18 +420,19 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String],
           }
       };
 
-      // Compile l, add runtime checks, then put it in ECX
-      let mut v = compile_expr(l, symbols, env, args);
+      // Compile l, add runtime checks
+      let l = compile_immexpr(l, symbols, env, args);
 
+      let mut v = Vec::new();
       // Save a to the stack, as `b` will overwrite EAX
-      v.push(Push(Reg(EAX)));
+      v.push(Push(l));
       if let Some(ref c) = check {
         v.push(Call(c.clone()));
       }
 
       // Compile r, add runtime checks, then put it in EAX
-      v.append(&mut compile_expr(r, symbols, env, args));
-      v.push(Push(Reg(EAX)));
+      let r = compile_immexpr(r, symbols, env, args);
+      v.push(Push(r));
       if let Some(c) = check {
         v.push(Call(c));
       }
@@ -358,9 +477,8 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String],
       let mut v = Vec::new();
 
       for a in params.iter().rev() {
-        let mut v2 = compile_expr(a, symbols, env, args);
-        v.append(&mut v2);
-        v.push(Push(Reg(EAX)));
+        let arg = compile_immexpr(a, symbols, env, args);
+        v.push(Push(arg));
       }
 
       let f = symbols[*name].as_str();
@@ -384,37 +502,49 @@ fn compile_expr<T>(e: &Expr<(usize, T)>, symbols: &[String],
       v
     }
 
-    Let(bindings, body, _) => {
-      let mut env2 = env.clone();
-      let mut v = Vec::new();
-
-      for (x, ex) in bindings {
-        v.append(&mut compile_expr(ex, symbols, &env2, args));
-        env2.push(*x);
-        v.push(Mov(RegMinus(EBP, env2.len()), Reg(EAX)));
-      }
-
-      v.append(&mut compile_expr(body, symbols, &mut env2, args));
-      v
-    }
-
     If(cond, then, els, (n, _)) => {
       let mut v = Vec::new();
-      v.append(&mut compile_expr(cond, symbols, env, args));
-      v.push(Push(Reg(EAX)));
+      let c = compile_immexpr(cond, symbols, env, args);
+      v.push(Push(c));
       v.push(Call(Runtime::IfCondCheck));
       v.push(Pop(Reg(EAX)));
       v.push(Cmp(Reg(EAX), HexConst(BOOL_FALSE)));
       let if_false = format!("if_false_{}", n);
       let done = format!("done_{}", n);
       v.push(Je(if_false.clone()));
-      v.append(&mut compile_expr(then, symbols, env, args));
+      v.append(&mut compile_aexpr(then, symbols, env, args));
       v.push(Jmp(done.clone()));
       v.push(Label(if_false));
-      v.append(&mut compile_expr(els, symbols, env, args));
+      v.append(&mut compile_aexpr(els, symbols, env, args));
       v.push(Label(done));
       v
     }
+  }
+}
+
+fn compile_immexpr<T>(e: &ImmExpr<(usize, T)>, symbols: &[String],
+                      env: &Vec<usize>, args: &[usize]) -> Arg {
+  use self::Arg::*;
+  use self::ArgSize::*;
+  use self::Reg::*;
+  use self::ImmExpr::*;
+
+  match e {
+    Number(n, _) => Const(n << 1),
+
+    Id(s, _) => match lookup(*s, args) {
+      // Function arguments are passed by the caller, so are higher in the
+      // stack, and the first one start at ebp+ (hence the n+1).
+      Some(n) => Sized(Dword, Box::new(RegPlus(EBP, n+1))),
+      None => match lookup(*s, env) {
+        // Local variables start and ebp-4 and go down the stack.
+        Some(n) => Sized(Dword, Box::new(RegMinus(EBP, n))),
+        None => panic!("Identifier not bound '{}'", symbols[*s]),
+      }
+    }
+
+    Bool(true, _)  => HexConst(BOOL_TRUE),
+    Bool(false, _) => HexConst(BOOL_FALSE),
   }
 }
 
@@ -441,6 +571,437 @@ global entry_point
           OVERFLOW)
 }
 
+fn new_sym(prefix: &str, tag: usize, symbols: &mut Vec<String>) -> usize {
+  let s = format!("{}_{}", prefix, tag);
+  symbols.push(s);
+  symbols.len() - 1
+}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Transformation into ANF
+//
+// Binary expressions of arbitrary size cannot be compiled directly to return to
+// EAX.  We transform the program into an Administrative Normal Form (ANF),
+// which is composed only of *immediate* expressions which can be trivially
+// compiled.
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+// Immediate expressions
+#[derive(Debug, PartialEq)]
+pub enum ImmExpr<T> {
+  Number(i32, T),
+  Id(usize, T),
+  Bool(bool, T),
+}
+
+// Compound expressions
+#[derive(Debug, PartialEq)]
+pub enum CExpr<T> {
+  Imm(ImmExpr<T>),
+  Prim1(Prim1, ImmExpr<T>, T),
+  Prim2(Prim2, ImmExpr<T>, ImmExpr<T>, T),
+  Apply(usize, Vec<ImmExpr<T>>, T),
+  If(ImmExpr<T>, Box<AExpr<T>>, Box<AExpr<T>>, T),
+}
+
+// A-Normal form expressions
+#[derive(Debug, PartialEq)]
+pub enum AExpr<T> {
+  Expr(CExpr<T>),
+  Let(usize, CExpr<T>, Box<AExpr<T>>, T),
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ANF_Decl<T> {
+  pub name: usize,
+  pub args: Vec<usize>,
+  pub body: AExpr<T>,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct ANF_Prog<T> {
+  pub decls: Vec<ANF_Decl<T>>,
+  pub body: AExpr<T>,
+}
+
+struct ANF_AST<T> {
+  root: ANF_Prog<T>,
+  symbols: Vec<String>,
+}
+
+// This helper will decompose an expression of arbitrary depth into ANF, where
+// all immediate expressions are put in a single context (second returned arg).
+// After that, into_anf will simply create a single Let expr with this context
+// as bindings.
+fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
+                -> (Expr<()>, Vec<(usize, Expr<()>)>) {
+  use self::Expr::*;
+
+  match expr {
+    Number(n, _) => (Number(n, ()), vec![]),
+    Id(s, _) => (Id(s, ()), vec![]),
+    Bool(b, _) => (Bool(b, ()), vec![]),
+    Prim1(p, e, _) => {
+      let (imm, ctx) = into_anf1(*e, symbols);
+      (Prim1(p, Box::new(imm), ()), ctx)
+    },
+
+    Prim2(p, l, r, (t, _)) => {
+      let (l_imm, mut l_ctx) = into_anf1(*l, symbols);
+      let (r_imm, mut r_ctx) = into_anf1(*r, symbols);
+      let s = new_sym("prim2", t, symbols);
+      l_ctx.append(&mut r_ctx);
+      l_ctx.push((s, Prim2(p, Box::new(l_imm), Box::new(r_imm), ())));
+      (Id(s, ()), l_ctx)
+    }
+
+    Apply(name, args, (t, _)) => {
+      let mut ctx = Vec::new();
+      let mut args_syms = Vec::new();
+      for a in args {
+        let (a_anf, mut c) = into_anf1(a, symbols);
+        ctx.append(&mut c);
+        args_syms.push(a_anf);
+      }
+
+      let s = new_sym("call", t, symbols);
+      ctx.push((s, Apply(name, args_syms, ())));
+
+      (Id(s, ()), ctx)
+    }
+
+    // For Let, we can 'flatten' the context gotten from the recursion.  Instead
+    // of:
+    //
+    //   let a = 1 + 2 + 3
+    //   =>
+    //   let c1 = 1 + 2, c2 = c1 + 3 in let a = c2 in a
+    //
+    // We transform directly to:
+    //
+    //  let c1 = 1 + 2, c2 = c1 + 3, a = c2 in a
+    //
+    // This transformation is incorrect if shadowing is allowed.
+    Let(bs, e, (t, _)) => {
+      let mut ctx = vec![];
+      for (x,b) in bs {
+        let (imm, mut c) = into_anf1(b, symbols);
+        ctx.append(&mut c);
+        ctx.push((x, imm));
+      }
+      let (e_anf, mut c) = into_anf1(*e, symbols);
+      ctx.append(&mut c);
+      let s = new_sym("let", t, symbols);
+      ctx.push((s, e_anf));
+      (Id(s, ()), ctx)
+    }
+
+    If(cc, th, el, (t, _)) => {
+      let (cc_anf, mut ctx) = into_anf1(*cc, symbols);
+      let s = new_sym("if", t, symbols);
+      ctx.push((s, cc_anf));
+      let (th_anf, th_ctx) = into_anf1(*th, symbols);
+      let (el_anf, el_ctx) = into_anf1(*el, symbols);
+      (If(Box::new(Id(s, ())),
+          Box::new(if th_ctx.len() > 0 { Let(th_ctx, Box::new(th_anf), ()) }
+                   else                { th_anf }),
+          Box::new(if el_ctx.len() > 0 { Let(el_ctx, Box::new(el_anf), ()) }
+                   else                { el_anf }),
+          ()),
+       ctx)
+    }
+  }
+}
+
+fn expr_to_immexpr<T>(expr: &Expr<(usize, T)>, symbols: &mut Vec<String>)
+                      -> (ImmExpr<()>, Vec<(usize, CExpr<()>)>) {
+  match expr {
+    Expr::Number(n, _) => (ImmExpr::Number(*n, ()), vec![]),
+    Expr::Id(s, _)     => (ImmExpr::Id(*s, ()),     vec![]),
+    Expr::Bool(b, _)   => (ImmExpr::Bool(*b, ()),   vec![]),
+
+    Expr::Prim1(op, e, (t, _)) => {
+      let (imm, mut setup) = expr_to_immexpr(e, symbols);
+      let s = new_sym("prim1", *t, symbols);
+      setup.push((s, CExpr::Prim1(*op, imm, ())));
+      (ImmExpr::Id(s, ()), setup)
+    }
+
+    Expr::Prim2(op, l, r, (t, _)) => {
+      let (l_imm, mut setup) = expr_to_immexpr(l, symbols);
+      let (r_imm, mut setup2) = expr_to_immexpr(r, symbols);
+      setup.append(&mut setup2);
+      let s = new_sym("prim2", *t, symbols);
+      setup.push((s, CExpr::Prim2(*op, l_imm, r_imm, ())));
+      (ImmExpr::Id(s, ()), setup)
+    }
+
+    Expr::Apply(f, args, (t, _)) => {
+      let mut args_imm = vec![];
+      let mut setup = vec![];
+      for a in args {
+        let (imm, mut setup2) = expr_to_immexpr(a, symbols);
+        setup.append(&mut setup2);
+        args_imm.push(imm);
+      }
+      let s = new_sym("apply", *t, symbols);
+      setup.push((s, CExpr::Apply(*f, args_imm, ())));
+      (ImmExpr::Id(s, ()), setup)
+    }
+
+    Expr::If(cnd, thn, els, (t, _)) => {
+      let (cnd_imm, mut setup) = expr_to_immexpr(cnd, symbols);
+      let thn_blk = expr_to_aexpr(thn, symbols);
+      let els_blk = expr_to_aexpr(els, symbols);
+
+      let s = new_sym("if", *t, symbols);
+      setup.push((s, CExpr::If(cnd_imm, Box::new(thn_blk), Box::new(els_blk), ())));
+      (ImmExpr::Id(s, ()), setup)
+    }
+
+    Expr::Let(bindings, body, _) => {
+      let mut setup = vec![];
+      for (x, e) in bindings {
+        let (imm, mut setup2) = expr_to_immexpr(e, symbols);
+        setup.append(&mut setup2);
+        setup.push((*x, CExpr::Imm(imm)));
+      }
+      let (body_imm, mut setup2) = expr_to_immexpr(body, symbols);
+      setup.append(&mut setup2);
+      (body_imm, setup)
+    }
+  }
+}
+
+fn expr_to_cexpr<T>(expr: &Expr<(usize, T)>, symbols: &mut Vec<String>)
+                    -> (CExpr<()>, Vec<(usize, CExpr<()>)>) {
+  match expr {
+    Expr::Number(_, _) | Expr::Id(_, _) | Expr::Bool(_, _) => {
+      let (imm, setup) = expr_to_immexpr(expr, symbols);
+      (CExpr::Imm(imm), setup)
+    },
+
+    Expr::Prim1(op, e, _) => {
+      let (imm, setup) = expr_to_immexpr(e, symbols);
+      (CExpr::Prim1(*op, imm, ()), setup)
+    }
+
+    Expr::Prim2(op, l, r, _) => {
+      let (l_imm, mut setup) = expr_to_immexpr(l, symbols);
+      let (r_imm, mut setup2) = expr_to_immexpr(r, symbols);
+      setup.append(&mut setup2);
+      (CExpr::Prim2(*op, l_imm, r_imm, ()), setup)
+    }
+
+    Expr::Apply(f, args, _) => {
+      let mut args_imm = vec![];
+      let mut setup = vec![];
+      for a in args {
+        let (imm, mut setup2) = expr_to_immexpr(a, symbols);
+        setup.append(&mut setup2);
+        args_imm.push(imm);
+      }
+      (CExpr::Apply(*f, args_imm, ()), setup)
+    }
+
+    Expr::If(cnd, thn, els, _) => {
+      let (cnd_imm, setup) = expr_to_immexpr(cnd, symbols);
+      let thn_blk = expr_to_aexpr(thn, symbols);
+      let els_blk = expr_to_aexpr(els, symbols);
+      (CExpr::If(cnd_imm, Box::new(thn_blk), Box::new(els_blk), ()), setup)
+    }
+
+    Expr::Let(bindings, body, _) => {
+      let mut setup = vec![];
+      for (x, e) in bindings {
+        let (imm, mut setup2) = expr_to_immexpr(e, symbols);
+        setup.append(&mut setup2);
+        setup.push((*x, CExpr::Imm(imm)));
+      }
+      let (body_imm, mut setup2) = expr_to_cexpr(body, symbols);
+      setup.append(&mut setup2);
+      (body_imm, setup)
+    }
+  }
+}
+
+fn expr_to_aexpr<T>(expr: &Expr<(usize, T)>, symbols: &mut Vec<String>) -> AExpr<()> {
+  let (body, setup) = expr_to_cexpr(expr, symbols);
+
+  let mut ret = AExpr::Expr(body);
+  for (x, b) in setup.into_iter().rev() {
+    ret = AExpr::Let(x, b, Box::new(ret), ());
+  }
+
+  ret
+}
+
+fn into_anf<T>(mut ast: AST<(usize, T)>) -> ANF_AST<()> {
+  // First convert all declarations into anf
+  let mut decls = Vec::new();
+  for d in ast.root.decls {
+    let body = expr_to_aexpr(&d.body, &mut ast.symbols);
+    decls.push(ANF_Decl {
+      name: d.name,
+      args: d.args,
+      body,
+    })
+  }
+
+  // Then the body of the program
+  let body = expr_to_aexpr(&ast.root.body, &mut ast.symbols);
+
+  ANF_AST {
+    root: ANF_Prog { decls, body },
+    symbols: ast.symbols,
+  }
+}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// Pretty printer
+//
+// We can't simply implement the Display trait for AST, because we need to pass
+// down the symbols vec to Expr in order to pretty-print identifiers.
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+fn pp<T>(ast: &AST<T>) -> String {
+  format!("{}\n\n{}",
+          ast.root.decls.iter()
+          .map(|d| pp_decl(d, &ast.symbols))
+          .collect::<Vec<String>>().join("\n"),
+          pp_expr(&ast.root.body, &ast.symbols))
+}
+
+fn pp_decl<T>(decl: &Decl<T>, symbols: &[String]) -> String {
+  format!("def {}({}):\n{}",
+          symbols[decl.name],
+          decl.args.iter()
+          .map(|x| format!("{}", symbols[*x]))
+          .collect::<Vec<String>>().join(","),
+          pp_expr(&decl.body, symbols))
+}
+
+fn pp_expr<T>(expr: &Expr<T>, symbols: &[String]) -> String {
+  use self::Expr::*;
+  use self::Prim2::*;
+
+  match expr {
+    Number(n, _) => format!("{}", n),
+    Id(n, _) => format!("{}", symbols[*n]),
+    Bool(b, _) => format!("{}", b),
+    Prim1(p, e, _) => format!("{:?}({})", p, pp_expr(e, symbols)),
+    Prim2(p, l, r, _) => format!("{} {} {}",
+                                 pp_expr(l, symbols),
+                                 match p {
+                                   Plus      => "+",
+                                   Minus     => "-",
+                                   Mult      => "*",
+                                   And       => "&&",
+                                   Or        => "||",
+                                   Less      => "<",
+                                   LessEq    => "<=",
+                                   Greater   => ">",
+                                   GreaterEq => ">=",
+                                   Eq        => "==",
+                                 },
+                                 pp_expr(r, symbols)),
+    Apply(s, es, _) => format!("{}({})", symbols[*s],
+                               es.iter().map(|e| pp_expr(e, symbols))
+                               .collect::<Vec<String>>().join(", ")),
+    Let(bs, body, _) => format!("let {} in {}",
+                                bs.iter()
+                                .map(|(x,e)| format!("{} = {}",
+                                                     symbols[*x],
+                                                     pp_expr(e, symbols)))
+                                .collect::<Vec<String>>().join(",\n    "),
+                                pp_expr(body, symbols)),
+    If(cc, th, el, _) => format!("if {}:\n{}\nelse:\n{}",
+                                 pp_expr(cc, symbols),
+                                 pp_expr(th, symbols),
+                                 pp_expr(el, symbols)),
+  }
+}
+
+
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// ANF Pretty printer
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+fn pp_anf<T>(ast: &ANF_AST<T>) -> String {
+  format!("{}\n\n{}",
+          ast.root.decls.iter()
+          .map(|d| pp_anf_decl(d, &ast.symbols))
+          .collect::<Vec<String>>().join("\n"),
+          pp_aexpr(&ast.root.body, &ast.symbols))
+}
+
+fn pp_anf_decl<T>(decl: &ANF_Decl<T>, symbols: &[String]) -> String {
+  format!("def {}({}):\n{}",
+          symbols[decl.name],
+          decl.args.iter()
+          .map(|x| format!("{}", symbols[*x]))
+          .collect::<Vec<String>>().join(","),
+          pp_aexpr(&decl.body, symbols))
+}
+
+fn pp_aexpr<T>(expr: &AExpr<T>, symbols: &[String]) -> String {
+  use self::AExpr::*;
+
+  match expr {
+    Expr(e) => pp_cexpr(e, symbols),
+    Let(x, e, body, _) => format!("let {} = {} in {}",
+                                  symbols[*x],
+                                  pp_cexpr(e, symbols),
+                                  pp_aexpr(body, symbols)),
+  }
+}
+
+fn pp_cexpr<T>(expr: &CExpr<T>, symbols: &[String]) -> String {
+  use self::CExpr::*;
+  use self::Prim2::*;
+
+  match expr {
+    Imm(e) => format!("{}", pp_immexpr(e, symbols)),
+    Prim1(op, e, _) => format!("{:?}({})", op, pp_immexpr(e, symbols)),
+    Prim2(op, l, r, _) => format!("{} {} {}",
+                                  pp_immexpr(l, symbols),
+                                  match op {
+                                    Plus      => "+",
+                                    Minus     => "-",
+                                    Mult      => "*",
+                                    And       => "&&",
+                                    Or        => "||",
+                                    Less      => "<",
+                                    LessEq    => "<=",
+                                    Greater   => ">",
+                                    GreaterEq => ">=",
+                                    Eq        => "==",
+                                  },
+                                  pp_immexpr(r, symbols)),
+    Apply(f, args, _) => format!("{}({})", symbols[*f],
+                                 args.iter().map(|a| pp_immexpr(a, symbols))
+                                 .collect::<Vec<String>>().join(", ")),
+
+    If(cc, th, el, _) => format!("if {}:\n{}\nelse:\n{}",
+                                 pp_immexpr(cc, symbols),
+                                 pp_aexpr(th, symbols),
+                                 pp_aexpr(el, symbols)),
+  }
+}
+
+fn pp_immexpr<T>(expr: &ImmExpr<T>, symbols: &[String]) -> String {
+  use self::ImmExpr::*;
+
+  match expr {
+    Number(n, _) => format!("{}", n),
+    Id(n, _) => format!("{}", symbols[*n]),
+    Bool(b, _) => format!("{}", b),
+  }
+}
+
+// For these, we can directly implement Display
 impl Display for Reg {
   fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
     use self::Reg::*;
@@ -544,256 +1105,5 @@ impl Display for Prim2 {
 
       _ => unreachable!(),
     }
-  }
-}
-
-fn new_sym(prefix: &str, tag: usize, symbols: &mut Vec<String>) -> usize {
-  let s = format!("{}_{}", prefix, tag);
-  symbols.push(s);
-  symbols.len() - 1
-  }
-
-// Binary expressions of arbitrary size cannot be compiled directly to return to
-// EAX.  We transform the program into an Administrative Normal Form (ANF),
-// which is composed only of *immediate* expressions which can be trivially
-// compiled.
-
-fn is_anf<T>(expr: &Expr<T>) -> bool {
-  use self::Expr::*;
-
-  match expr {
-    Prim1(_, e, _) => is_anf(e),
-    Prim2(_, l, r, _) => is_imm(l) && is_imm(r),
-    Let(es, e, _) => es.iter().all(|(_,e)| is_anf(e)) && is_anf(e),
-    If(e1, e2, e3, _) => is_imm(e1) && is_anf(e2) && is_anf(e3),
-    Apply(_, args, _) => args.iter().all(|a| is_imm(a)),
-    e => is_imm(e),
-  }
-}
-
-fn is_imm<T>(expr: &Expr<T>) -> bool {
-  use self::Expr::*;
-  match expr {
-    Number(_,_) | Id(_,_) | Bool(_,_) => true,
-    _ => false
-  }
-}
-
-// fn replace<T>(a: usize, b: usize, expr: Expr<T>) -> Expr<T> {
-//   use self::Expr::*;
-
-//   match expr {
-//     Id(n, t) => if n == a { Id(b, t) }
-//                 else      { Id(a, t) },
-//     Prim1(p, e, t) => Prim1(p, Box::new(replace(a, b, *e)), t),
-//     Prim2(p, l, r, t) => Prim2(p,
-//                                Box::new(replace(a, b, *l)),
-//                                Box::new(replace(a, b, *r)),
-//                                t),
-//     If(cc, th, el, t) => If(Box::new(replace(a, b, *cc)),
-//                             Box::new(replace(a, b, *th)),
-//                             Box::new(replace(a, b, *el)),
-//                             t),
-//     Let(bs, body, t) => {
-//       let mut new_bs = Vec::new();
-//       let mut shadow = false;
-//       for (x,e) in bs {
-//         if x == a { shadow = true }
-//         if shadow {
-//           new_bs.push((x, e));
-//         } else {
-//           new_bs.push((x, replace(a, b, e)));
-//         }
-//       }
-//       Let(new_bs, Box::new(if shadow { *body }
-//                            else      { replace(a, b, *body) }), t)
-//     }
-//     _ => expr,
-//   }
-// }
-
-// This helper will decompose an expression of arbitrary depth into ANF, where
-// all immediate expressions are put in a single context (second returned arg).
-// After that, into_anf will simply create a single Let expr with this context
-// as bindings.
-fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
-                -> (Expr<()>, Vec<(usize, Expr<()>)>) {
-  use self::Expr::*;
-
-  match expr {
-    Number(n, _) => (Number(n, ()), vec![]),
-    Id(s, _) => (Id(s, ()), vec![]),
-    Bool(b, _) => (Bool(b, ()), vec![]),
-    Prim1(p, e, _) => {
-      let (imm, ctx) = into_anf1(*e, symbols);
-      (Prim1(p, Box::new(imm), ()), ctx)
-    },
-
-    Prim2(p, l, r, (t, _)) => {
-      let (l_imm, mut l_ctx) = into_anf1(*l, symbols);
-      let (r_imm, mut r_ctx) = into_anf1(*r, symbols);
-      let s = new_sym("prim2", t, symbols);
-      l_ctx.append(&mut r_ctx);
-      l_ctx.push((s, Prim2(p, Box::new(l_imm), Box::new(r_imm), ())));
-      (Id(s, ()), l_ctx)
-    }
-
-    Apply(name, args, (t, _)) => {
-      let mut ctx = Vec::new();
-      let mut args_syms = Vec::new();
-      for a in args {
-        let (a_anf, mut c) = into_anf1(a, symbols);
-        ctx.append(&mut c);
-        args_syms.push(a_anf);
-      }
-
-      let s = new_sym("call", t, symbols);
-      ctx.push((s, Apply(name, args_syms, ())));
-
-      (Id(s, ()), ctx)
-    }
-
-    // For Let, we can 'flatten' the context gotten from the recursion.  Instead
-    // of:
-    //
-    //   let a = 1 + 2 + 3
-    //   =>
-    //   let c1 = 1 + 2, c2 = c1 + 3 in let a = c2 in a
-    //
-    // We transform directly to:
-    //
-    //  let c1 = 1 + 2, c2 = c1 + 3, a = c2 in a
-    //
-    // This transformation is incorrect if shadowing is allowed.
-    Let(bs, e, (t, _)) => {
-      let mut ctx = vec![];
-      for (x,b) in bs {
-        let (imm, mut c) = into_anf1(b, symbols);
-        ctx.append(&mut c);
-        ctx.push((x, imm));
-      }
-      let (e_anf, mut c) = into_anf1(*e, symbols);
-      ctx.append(&mut c);
-      let s = new_sym("let", t, symbols);
-      ctx.push((s, e_anf));
-      (Id(s, ()), ctx)
-    }
-
-    If(cc, th, el, (t, _)) => {
-      let (cc_anf, mut ctx) = into_anf1(*cc, symbols);
-      let s = new_sym("if", t, symbols);
-      ctx.push((s, cc_anf));
-      let (th_anf, th_ctx) = into_anf1(*th, symbols);
-      let (el_anf, el_ctx) = into_anf1(*el, symbols);
-      (If(Box::new(Id(s, ())),
-          Box::new(if th_ctx.len() > 0 { Let(th_ctx, Box::new(th_anf), ()) }
-                   else                { th_anf }),
-          Box::new(if el_ctx.len() > 0 { Let(el_ctx, Box::new(el_anf), ()) }
-                   else                { el_anf }),
-          ()),
-       ctx)
-    }
-  }
-}
-
-fn into_anf_expr<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>) -> Expr<()> {
-  let (e, ctx) = into_anf1(expr, symbols);
-
-  let root = if ctx.len() == 0 {
-    e
-  } else {
-    self::Expr::Let(ctx, Box::new(e), ())
-  };
-
-  if !is_anf(&root) {
-    panic!("Normalization into ANF failed");
-  } else {
-    root
-  }
-}
-
-fn into_anf<T>(mut ast: AST<(usize, T)>) -> AST<()> {
-  // First convert all declarations into anf
-
-  let mut decls = Vec::new();
-
-  for d in ast.root.decls {
-    let body = into_anf_expr(d.body, &mut ast.symbols);
-    decls.push(Decl {
-      name: d.name,
-      args: d.args,
-      loc: d.loc,
-      body,
-    })
-  }
-
-  let body = into_anf_expr(ast.root.body, &mut ast.symbols);
-
-  AST {
-    root: Prog { decls, body },
-    symbols: ast.symbols,
-  }
-}
-
-
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// Pretty printer
-//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-fn pp<T>(ast: &AST<T>) -> String {
-  format!("{}\n\n{}",
-          ast.root.decls.iter()
-          .map(|d| pp_decl(d, &ast.symbols))
-          .collect::<Vec<String>>().join("\n"),
-          pp_expr(&ast.root.body, &ast.symbols))
-}
-
-fn pp_decl<T>(decl: &Decl<T>, symbols: &[String]) -> String {
-  format!("def {}({}):\n{}",
-          symbols[decl.name],
-          decl.args.iter()
-          .map(|x| format!("{}", symbols[*x]))
-          .collect::<Vec<String>>().join(","),
-          pp_expr(&decl.body, symbols))
-}
-
-fn pp_expr<T>(expr: &Expr<T>, symbols: &[String]) -> String {
-  use self::Expr::*;
-  use self::Prim2::*;
-
-  match expr {
-    Number(n, _) => format!("{}", n),
-    Id(n, _) => format!("{}", symbols[*n]),
-    Bool(b, _) => format!("{}", b),
-    Prim1(p, e, _) => format!("{:?}({})", p, pp_expr(e, symbols)),
-    Prim2(p, l, r, _) => format!("{} {} {}",
-                                 pp_expr(l, symbols),
-                                 match p {
-                                   Plus      => "+",
-                                   Minus     => "-",
-                                   Mult      => "*",
-                                   And       => "&&",
-                                   Or        => "||",
-                                   Less      => "<",
-                                   LessEq    => "<=",
-                                   Greater   => ">",
-                                   GreaterEq => ">=",
-                                   Eq        => "==",
-                                 },
-                                 pp_expr(r, symbols)),
-    Apply(s, es, _) => format!("{}({})", symbols[*s],
-                               es.iter().map(|e| pp_expr(e, symbols))
-                               .collect::<Vec<String>>().join(", ")),
-    Let(bs, body, _) => format!("let {} in {}",
-                                bs.iter()
-                                .map(|(x,e)| format!("{} = {}",
-                                                     symbols[*x],
-                                                     pp_expr(e, symbols)))
-                                .collect::<Vec<String>>().join(",\n    "),
-                                pp_expr(body, symbols)),
-    If(cc, th, el, _) => format!("if {}:\n{}\nelse:\n{}",
-                                 pp_expr(cc, symbols),
-                                 pp_expr(th, symbols),
-                                 pp_expr(el, symbols)),
   }
 }
