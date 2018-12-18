@@ -1,3 +1,5 @@
 # expect: -2
-
-if let a = true || false in !!a : let b = 2 - 3 in 2*b else: 4
+if let a = true || false in !!a:
+  let b = 2 - 3 in 2*b
+else:
+  4

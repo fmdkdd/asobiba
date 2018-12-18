@@ -316,11 +316,13 @@ pub fn debug<T>(ast: AST<T>) {
 // room on the stack.
 fn count_vars<T>(expr: &AExpr<T>) -> usize {
   use self::AExpr::*;
+  use self::CExpr::*;
 
   match expr {
     // Only `let` can create variables
-    Let(_, _, body, _) => 1 + count_vars(body),
-    Expr(_)            => 0,
+    Let(_, _, body, _)       => 1 + count_vars(body),
+    Expr(If(_, thn, els, _)) => count_vars(thn) + count_vars(els),
+    _                        => 0
   }
 }
 
@@ -450,7 +452,7 @@ fn compile_cexpr<T>(e: &CExpr<(usize, T)>, symbols: &[String],
         Prim2::Or    => vec![Or(a, b)],
         Prim2::Greater | Prim2::GreaterEq |
         Prim2::Less | Prim2::LessEq | Prim2::Eq => {
-          let target = format!("{}_{}", op, n);
+          let target = format!("{:?}_{}", op, n);
           let done = format!("done_{}", n);
           vec![
             Cmp(a, b),
@@ -498,7 +500,7 @@ fn compile_cexpr<T>(e: &CExpr<(usize, T)>, symbols: &[String],
           _ => {},
       }
 
-      v.push(Add(Reg(ESP), Const(4 * args.len() as i32))); // Discard arguments
+      v.push(Add(Reg(ESP), Const(4 * params.len() as i32))); // Discard arguments
       v
     }
 
@@ -630,90 +632,6 @@ struct ANF_AST<T> {
   symbols: Vec<String>,
 }
 
-// This helper will decompose an expression of arbitrary depth into ANF, where
-// all immediate expressions are put in a single context (second returned arg).
-// After that, into_anf will simply create a single Let expr with this context
-// as bindings.
-fn into_anf1<T>(expr: Expr<(usize, T)>, symbols: &mut Vec<String>)
-                -> (Expr<()>, Vec<(usize, Expr<()>)>) {
-  use self::Expr::*;
-
-  match expr {
-    Number(n, _) => (Number(n, ()), vec![]),
-    Id(s, _) => (Id(s, ()), vec![]),
-    Bool(b, _) => (Bool(b, ()), vec![]),
-    Prim1(p, e, _) => {
-      let (imm, ctx) = into_anf1(*e, symbols);
-      (Prim1(p, Box::new(imm), ()), ctx)
-    },
-
-    Prim2(p, l, r, (t, _)) => {
-      let (l_imm, mut l_ctx) = into_anf1(*l, symbols);
-      let (r_imm, mut r_ctx) = into_anf1(*r, symbols);
-      let s = new_sym("prim2", t, symbols);
-      l_ctx.append(&mut r_ctx);
-      l_ctx.push((s, Prim2(p, Box::new(l_imm), Box::new(r_imm), ())));
-      (Id(s, ()), l_ctx)
-    }
-
-    Apply(name, args, (t, _)) => {
-      let mut ctx = Vec::new();
-      let mut args_syms = Vec::new();
-      for a in args {
-        let (a_anf, mut c) = into_anf1(a, symbols);
-        ctx.append(&mut c);
-        args_syms.push(a_anf);
-      }
-
-      let s = new_sym("call", t, symbols);
-      ctx.push((s, Apply(name, args_syms, ())));
-
-      (Id(s, ()), ctx)
-    }
-
-    // For Let, we can 'flatten' the context gotten from the recursion.  Instead
-    // of:
-    //
-    //   let a = 1 + 2 + 3
-    //   =>
-    //   let c1 = 1 + 2, c2 = c1 + 3 in let a = c2 in a
-    //
-    // We transform directly to:
-    //
-    //  let c1 = 1 + 2, c2 = c1 + 3, a = c2 in a
-    //
-    // This transformation is incorrect if shadowing is allowed.
-    Let(bs, e, (t, _)) => {
-      let mut ctx = vec![];
-      for (x,b) in bs {
-        let (imm, mut c) = into_anf1(b, symbols);
-        ctx.append(&mut c);
-        ctx.push((x, imm));
-      }
-      let (e_anf, mut c) = into_anf1(*e, symbols);
-      ctx.append(&mut c);
-      let s = new_sym("let", t, symbols);
-      ctx.push((s, e_anf));
-      (Id(s, ()), ctx)
-    }
-
-    If(cc, th, el, (t, _)) => {
-      let (cc_anf, mut ctx) = into_anf1(*cc, symbols);
-      let s = new_sym("if", t, symbols);
-      ctx.push((s, cc_anf));
-      let (th_anf, th_ctx) = into_anf1(*th, symbols);
-      let (el_anf, el_ctx) = into_anf1(*el, symbols);
-      (If(Box::new(Id(s, ())),
-          Box::new(if th_ctx.len() > 0 { Let(th_ctx, Box::new(th_anf), ()) }
-                   else                { th_anf }),
-          Box::new(if el_ctx.len() > 0 { Let(el_ctx, Box::new(el_anf), ()) }
-                   else                { el_anf }),
-          ()),
-       ctx)
-    }
-  }
-}
-
 fn expr_to_immexpr<T>(expr: &Expr<(usize, T)>, symbols: &mut Vec<String>)
                       -> (ImmExpr<()>, Vec<(usize, CExpr<()>)>) {
   match expr {
@@ -723,7 +641,7 @@ fn expr_to_immexpr<T>(expr: &Expr<(usize, T)>, symbols: &mut Vec<String>)
 
     Expr::Prim1(op, e, (t, _)) => {
       let (imm, mut setup) = expr_to_immexpr(e, symbols);
-      let s = new_sym("prim1", *t, symbols);
+      let s = new_sym(format!("{:?}", op).as_str(), *t, symbols);
       setup.push((s, CExpr::Prim1(*op, imm, ())));
       (ImmExpr::Id(s, ()), setup)
     }
@@ -732,7 +650,7 @@ fn expr_to_immexpr<T>(expr: &Expr<(usize, T)>, symbols: &mut Vec<String>)
       let (l_imm, mut setup) = expr_to_immexpr(l, symbols);
       let (r_imm, mut setup2) = expr_to_immexpr(r, symbols);
       setup.append(&mut setup2);
-      let s = new_sym("prim2", *t, symbols);
+      let s = new_sym(format!("{:?}", op).as_str(), *t, symbols);
       setup.push((s, CExpr::Prim2(*op, l_imm, r_imm, ())));
       (ImmExpr::Id(s, ()), setup)
     }
@@ -763,9 +681,9 @@ fn expr_to_immexpr<T>(expr: &Expr<(usize, T)>, symbols: &mut Vec<String>)
     Expr::Let(bindings, body, _) => {
       let mut setup = vec![];
       for (x, e) in bindings {
-        let (imm, mut setup2) = expr_to_immexpr(e, symbols);
+        let (e_c, mut setup2) = expr_to_cexpr(e, symbols);
         setup.append(&mut setup2);
-        setup.push((*x, CExpr::Imm(imm)));
+        setup.push((*x, e_c));
       }
       let (body_imm, mut setup2) = expr_to_immexpr(body, symbols);
       setup.append(&mut setup2);
@@ -815,9 +733,9 @@ fn expr_to_cexpr<T>(expr: &Expr<(usize, T)>, symbols: &mut Vec<String>)
     Expr::Let(bindings, body, _) => {
       let mut setup = vec![];
       for (x, e) in bindings {
-        let (imm, mut setup2) = expr_to_immexpr(e, symbols);
+        let (e_c, mut setup2) = expr_to_cexpr(e, symbols);
         setup.append(&mut setup2);
-        setup.push((*x, CExpr::Imm(imm)));
+        setup.push((*x, e_c));
       }
       let (body_imm, mut setup2) = expr_to_cexpr(body, symbols);
       setup.append(&mut setup2);
@@ -885,28 +803,16 @@ fn pp_decl<T>(decl: &Decl<T>, symbols: &[String]) -> String {
 
 fn pp_expr<T>(expr: &Expr<T>, symbols: &[String]) -> String {
   use self::Expr::*;
-  use self::Prim2::*;
 
   match expr {
     Number(n, _) => format!("{}", n),
     Id(n, _) => format!("{}", symbols[*n]),
     Bool(b, _) => format!("{}", b),
-    Prim1(p, e, _) => format!("{:?}({})", p, pp_expr(e, symbols)),
-    Prim2(p, l, r, _) => format!("{} {} {}",
-                                 pp_expr(l, symbols),
-                                 match p {
-                                   Plus      => "+",
-                                   Minus     => "-",
-                                   Mult      => "*",
-                                   And       => "&&",
-                                   Or        => "||",
-                                   Less      => "<",
-                                   LessEq    => "<=",
-                                   Greater   => ">",
-                                   GreaterEq => ">=",
-                                   Eq        => "==",
-                                 },
-                                 pp_expr(r, symbols)),
+    Prim1(op, e, _) => format!("{}{}", op, pp_expr(e, symbols)),
+    Prim2(op, l, r, _) => format!("{} {} {}",
+                                  pp_expr(l, symbols),
+                                  op,
+                                  pp_expr(r, symbols)),
     Apply(s, es, _) => format!("{}({})", symbols[*s],
                                es.iter().map(|e| pp_expr(e, symbols))
                                .collect::<Vec<String>>().join(", ")),
@@ -951,7 +857,7 @@ fn pp_aexpr<T>(expr: &AExpr<T>, symbols: &[String]) -> String {
 
   match expr {
     Expr(e) => pp_cexpr(e, symbols),
-    Let(x, e, body, _) => format!("let {} = {} in {}",
+    Let(x, e, body, _) => format!("let {} = {} in\n{}",
                                   symbols[*x],
                                   pp_cexpr(e, symbols),
                                   pp_aexpr(body, symbols)),
@@ -960,25 +866,13 @@ fn pp_aexpr<T>(expr: &AExpr<T>, symbols: &[String]) -> String {
 
 fn pp_cexpr<T>(expr: &CExpr<T>, symbols: &[String]) -> String {
   use self::CExpr::*;
-  use self::Prim2::*;
 
   match expr {
     Imm(e) => format!("{}", pp_immexpr(e, symbols)),
-    Prim1(op, e, _) => format!("{:?}({})", op, pp_immexpr(e, symbols)),
+    Prim1(op, e, _) => format!("{}{}", op, pp_immexpr(e, symbols)),
     Prim2(op, l, r, _) => format!("{} {} {}",
                                   pp_immexpr(l, symbols),
-                                  match op {
-                                    Plus      => "+",
-                                    Minus     => "-",
-                                    Mult      => "*",
-                                    And       => "&&",
-                                    Or        => "||",
-                                    Less      => "<",
-                                    LessEq    => "<=",
-                                    Greater   => ">",
-                                    GreaterEq => ">=",
-                                    Eq        => "==",
-                                  },
+                                  op,
                                   pp_immexpr(r, symbols)),
     Apply(f, args, _) => format!("{}({})", symbols[*f],
                                  args.iter().map(|a| pp_immexpr(a, symbols))
@@ -1092,18 +986,31 @@ impl Display for Runtime {
   }
 }
 
+impl Display for Prim1 {
+  fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+    use self::Prim1::*;
+
+    match self {
+      Not => write!(f, "!"),
+    }
+  }
+}
+
 impl Display for Prim2 {
    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
     use self::Prim2::*;
 
     match self {
-      Greater   => write!(f, "greater"),
-      GreaterEq => write!(f, "greater_eq"),
-      Less      => write!(f, "less"),
-      LessEq    => write!(f, "less_eq"),
-      Eq        => write!(f, "eq"),
-
-      _ => unreachable!(),
+      Plus      => write!(f, "+"),
+      Minus     => write!(f, "-"),
+      Mult      => write!(f, "*"),
+      And       => write!(f, "&&"),
+      Or        => write!(f, "||"),
+      Less      => write!(f, "<"),
+      LessEq    => write!(f, "<="),
+      Greater   => write!(f, ">"),
+      GreaterEq => write!(f, ">="),
+      Eq        => write!(f, "=="),
     }
   }
 }

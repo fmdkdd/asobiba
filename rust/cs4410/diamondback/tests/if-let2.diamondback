@@ -1,0 +1,5 @@
+# expect: -2
+if true:
+  let b = -1 in 2*b
+else:
+  4
