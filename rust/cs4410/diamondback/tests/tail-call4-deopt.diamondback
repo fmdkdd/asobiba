@@ -1,0 +1,9 @@
+# expect: 101
+def add(a, b):
+  if b <= 0: a
+  else     : foo(a+1, 0, b-1)
+
+def foo(a, b, c):
+  add(a, c)
+
+add(1, 100)

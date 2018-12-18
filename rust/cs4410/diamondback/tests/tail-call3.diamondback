@@ -1,0 +1,16 @@
+# expect: 1000001
+def add(a, b):
+  if b <= 0: a
+  else     : bar(a+1, b-1)
+
+def bar(d, e):
+  let e0 = e,
+      e1 = e0,
+      e2 = e1,
+      e3 = e2 in
+  foo(d, e3)
+
+def foo(a, c):
+  add(a, c)
+
+foo(1, 1000000)

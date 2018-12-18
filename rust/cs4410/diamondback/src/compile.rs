@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::fmt::Display;
 
 use crate::parse::{AST, Decl, Expr, Prim1, Prim2, Prog};
@@ -332,30 +333,92 @@ pub fn debug<T>(ast: AST<T>) {
 
 // Return the greatest number of variables we need at once, in order to make
 // room on the stack.
-fn count_vars<T>(expr: &AExpr<T>) -> usize {
+fn count_vars<T>(ast: &ANF_AST<T>) -> BTreeMap<usize, usize> {
+  let mut vars = BTreeMap::new();
+
+  // First we count the vars without tail calls
+  for d in &ast.root.decls {
+    vars.insert(d.name, count_vars_expr(&d.body));
+  }
+
+  // Then we find the fixpoint when accounting for tail calls
+  let mut fixpoint = false;
+  while !fixpoint {
+    fixpoint = true;
+    for d in &ast.root.decls {
+      let called = tail_called(&d.body);
+
+      if called.len() > 0 {
+        let prev = *vars.get(&d.name).unwrap();
+        let next = called.iter()
+          .map(|f| *vars.get(f).unwrap())
+          .fold(0, usize::max);
+        vars.insert(d.name, usize::max(prev, next));
+        if next != prev {
+          fixpoint = false;
+        }
+      }
+    }
+  }
+
+  vars
+}
+
+// Return the list of function symbols that are tail-called in EXPR.
+fn tail_called<T>(expr: &AExpr<T>) -> Vec<usize> {
+  use self::AExpr::*;
+  use self::CExpr::*;
+
+  match expr {
+    Let(_, _, body, _) => tail_called(body),
+    Expr(e) => match e {
+      Imm(_) |
+      Prim1(_, _, _) |
+      Prim2(_, _, _, _) |
+      Apply(_, _, _)
+        => vec![],
+
+      TailCall(f, _, _) => vec![*f],
+
+      If(_, thn, els, _) => {
+        let mut v = tail_called(thn);
+        v.append(&mut tail_called(els));
+        v
+      },
+    }
+  }
+}
+
+fn count_vars_expr<T>(expr: &AExpr<T>) -> usize {
   use self::AExpr::*;
   use self::CExpr::*;
 
   match expr {
     // Only `let` can create variables
-    Let(_, _, body, _)       => 1 + count_vars(body),
+    Let(_, _, body, _)       => 1 + count_vars_expr(body),
+
     // Paths in `if` are exclusive, so we only have to account to the larger
     // number of variables used in them
-    Expr(If(_, thn, els, _)) => usize::max(count_vars(thn), count_vars(els)),
+    Expr(If(_, thn, els, _)) => usize::max(count_vars_expr(thn), count_vars_expr(els)),
+
     // Other expressions cannot contain `let`
-    _                        => 0
+    _ => 0,
   }
 }
 
 fn compile_ast<T>(ast: &ANF_AST<(usize, T)>) -> Vec<(String, Vec<Instr>)> {
   let mut v = Vec::new();
+  let depth = count_vars(ast);
+
   for d in &ast.root.decls {
-    v.push((ast.symbols[d.name].clone(), compile_body(&d.body, &ast.symbols,
-                                                      &vec![], &d.args, Some(d.name))));
+    let vars = depth.get(&d.name).unwrap();
+    v.push((ast.symbols[d.name].clone(),
+            compile_body(&d.body, *vars, &ast.symbols, &vec![], &d.args, Some(d.name))));
   }
 
-  v.push(("entry_point".to_string(), compile_body(&ast.root.body, &ast.symbols,
-                                                  &vec![], &vec![], None)));
+  v.push(("entry_point".to_string(),
+          compile_body(&ast.root.body, count_vars_expr(&ast.root.body),
+                       &ast.symbols, &vec![], &vec![], None)));
   v
 }
 
@@ -364,7 +427,7 @@ fn tail_call_label(fun: &String) -> String {
   format!("{}$tco", fun)
 }
 
-fn compile_body<T>(body: &AExpr<(usize, T)>, symbols: &[String],
+fn compile_body<T>(body: &AExpr<(usize, T)>, vars: usize, symbols: &[String],
                    env: &Vec<usize>, args: &[usize], fun: Option<usize>) -> Vec<Instr> {
   use self::Instr::*;
   use self::Arg::*;
@@ -374,7 +437,6 @@ fn compile_body<T>(body: &AExpr<(usize, T)>, symbols: &[String],
     Push(Reg(EBP)),
     Mov(Reg(EBP), Reg(ESP)),
   ];
-  let vars = count_vars(&body);
   if vars > 0 {
       v.push(Sub(Reg(ESP), Const((vars * 4) as i32)));
   }
@@ -848,14 +910,16 @@ fn optimize_anf<T>(ast: ANF_AST<T>) -> ANF_AST<T> {
 fn opt_tco<T>(decl: ANF_Decl<T>) -> ANF_Decl<T> {
   // Find all tail-calls and rewrite them
 
+  let args_len = decl.args.len();
+
   ANF_Decl {
     name: decl.name,
     args: decl.args,
-    body: opt_tco_aexpr(decl.body)
+    body: opt_tco_aexpr(decl.body, args_len)
   }
 }
 
-fn opt_tco_aexpr<T>(expr: AExpr<T>) -> AExpr<T> {
+fn opt_tco_aexpr<T>(expr: AExpr<T>, args_len: usize) -> AExpr<T> {
   use self::AExpr::*;
 
   match expr {
@@ -863,23 +927,31 @@ fn opt_tco_aexpr<T>(expr: AExpr<T>) -> AExpr<T> {
     // The trick to finding the tail calls is to ensure we only recurse on the
     // body here, and *not* on the binding expression.  Only the body can
     // contain a tail-call!
-      Let(x, e, Box::new(opt_tco_aexpr(*body)), t),
+      Let(x, e, Box::new(opt_tco_aexpr(*body, args_len)), t),
 
-    Expr(e) => Expr(opt_tco_cexpr(e)),
+    Expr(e) => Expr(opt_tco_cexpr(e, args_len)),
   }
 }
 
-fn opt_tco_cexpr<T>(expr: CExpr<T>) -> CExpr<T> {
+fn opt_tco_cexpr<T>(expr: CExpr<T>, args_len: usize) -> CExpr<T> {
   use self::CExpr::*;
 
   match expr {
     // Transform
     Apply(f, params, t) =>
-      TailCall(f, params, t),
+    // Applying TCO on a function that has more arguments than us requires
+    // more work.  For now, we just don't optimize it.
+      if params.len() > args_len {
+        Apply(f, params, t)
+      } else {
+        TailCall(f, params, t)
+      },
 
     // Recurse
     If(cnd, thn, els, t) =>
-      If(cnd, Box::new(opt_tco_aexpr(*thn)), Box::new(opt_tco_aexpr(*els)), t),
+      If(cnd,
+         Box::new(opt_tco_aexpr(*thn, args_len)),
+         Box::new(opt_tco_aexpr(*els, args_len)), t),
 
     // Pass through
     Imm(e) => Imm(e),
