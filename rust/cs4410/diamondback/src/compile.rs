@@ -321,7 +321,10 @@ fn count_vars<T>(expr: &AExpr<T>) -> usize {
   match expr {
     // Only `let` can create variables
     Let(_, _, body, _)       => 1 + count_vars(body),
-    Expr(If(_, thn, els, _)) => count_vars(thn) + count_vars(els),
+    // Paths in `if` are exclusive, so we only have to account to the larger
+    // number of variables used in them
+    Expr(If(_, thn, els, _)) => usize::max(count_vars(thn), count_vars(els)),
+    // Other expressions cannot contain `let`
     _                        => 0
   }
 }

@@ -1,0 +1,5 @@
+# expect: -1
+def foo(a, b):
+  a - b
+
+foo(4,5)
