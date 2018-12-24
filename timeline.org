@@ -15714,6 +15714,35 @@ onerror callback.
 
 So, in fact, there appears to be no way of catching this error from the spawner.
 
+* [2018-12-24 lun.]
+** Trying out Rust for a cross-platform GUI app                    :rust:gui:
+Ek.  So, Electron is the easy choice I would be the most familiar with which
+would give me the same behavior in all platforms.  Upsides: familiarity,
+consistent UX and fine-grained control using HTML+CSS.  Downsides: bundles Blink
+and V8, which eats loads of RAM and gives you huge binaries.
+
+Also, I would have prefered doing it in Rust.  Found [[https://github.com/Boscop/web-view][webview]] which is kinda the
+same thing as Electron, but instead of bundling Blink, it uses the webview
+that's available natively on the platform.  Upsides: same control as Electron,
+but without the bloated binary.  Downsides: still eats loads of RAM (we /are/
+running a browser view), and now you have to worry about platform differences.
+
+I tested webkit2gtk and MSHTML.  The latter does not support ES6 syntax.  Both
+are also rather slow when displaying 10 images in a window...
+
+I tried [[https://github.com/vurtun/nuklear][nuklear]].  There are rust bindings.  Somehow, I find the font rendering
+blurry.  The UI feels snappy, but it uses even more RAM than webview, and of
+course more CPU (because it's an immediate UI).  No cross-platform differences
+though.
+
+I also tried [[https://github.com/LeoTindall/libui-rs][libui]].  Looks more interesting than nuklear, as it's using native
+UI toolkits behind the scenes, but it's /very incomplete/.  The rust bindings
+don't have a way to include an image (which the upstream only added in August).
+
+So it looks like the sanest solution is to use webview.  It would be great if
+webview supported using EdgeHTML on Win10 instead of IE.  Hopefully the app will
+not feel too sluggish.
+
 * [2019-01-08 mar.]
 ** Fixing a bug with s3c and lambda syntax                              :s3c:
 In the following code, the evaluation comment does not bind to anything:
