@@ -15713,3 +15713,134 @@ in Chromium, but that error is /not/ a worker error that can be caught using the
 onerror callback.
 
 So, in fact, there appears to be no way of catching this error from the spawner.
+
+* [2019-01-08 mar.]
+** Fixing a bug with s3c and lambda syntax                              :s3c:
+In the following code, the evaluation comment does not bind to anything:
+
+#+BEGIN_SRC js
+let f = x => x //:
+f(1)
+#+END_SRC
+
+Now, I was expecting the evaluation marker to show ~1~, since it's the value of
+the preceding expression.  It does work if I use a block for the lambda:
+
+#+BEGIN_SRC js
+let f = x => {
+  x //: 1
+}
+f(1)
+#+END_SRC
+
+So one solution is to transform all lambda calls to have a block ending with a
+~return~, in order to preserve the semantics.
+
+But wait, when you add the ~return~, the evaluation marker does not behave as
+expected:
+
+#+BEGIN_SRC js
+let f = x => {
+  return x //:
+}
+f(1)
+#+END_SRC
+
+Still empty.  Well, let's look at the AST then:
+
+#+BEGIN_EXAMPLE
+ArrowFunctionExpression
+- BlockStatement
+  - ReturnStatement
+    - Identifier 'x'
+#+END_EXAMPLE
+
+There is no ExpressionStatement anywhere before the marker, so we cannot bind to
+anything.  In fact, this happens with any declaration:
+
+: var f = 0 //:
+
+Well, for this example it's a bit silly to expect a value, since a ~var~ has
+none.  The same could be argued for ~return~: it's not an expression, and thus
+has no value.  In fact, the ~return~ doesn't bind to markers in standard
+functions as well:
+
+#+BEGIN_SRC js
+function f(x) {
+  return x //:
+}
+f(1)
+#+END_SRC
+
+So we could try to bind the marker to the argument of the return.
+
+I did just that.  More complicated than expected because of the way the code
+worked.  But in the end it allows us to use a marker on a return, which is a
+good thing.
+
+However, the issue with arrow functions is still not fixed, because there's an
+ambiguity.  Should the marker bind to the function expression, or to the body
+expression?  Should we expect:
+
+#+BEGIN_SRC js
+f = x => x //: function
+f(1)
+#+END_SRC
+
+or:
+
+#+BEGIN_SRC js
+f = x => x //: 1
+f(1)
+#+END_SRC
+
+I prefer the latter, because the former does not give any useful information.
+It's likely that using a marker in an arrow function is for probing at the body,
+not at the arrow function itself.
+
+But it may introduce a precedent: should we expect the markers to always report
+the value of the nearest expression?  What of:
+
+#+BEGIN_SRC js
+x = 10
+f = x + 1 //:
+#+END_SRC
+
+Should the marker show '11', the value of the right-hand of the assignment, or
+'1', the value of the nearest expression (the literal '1')?
+
+More special cases... On the other hand, if I special-case arrow functions, I
+can also special-case variable declarations to yield:
+
+#+BEGIN_SRC js
+let x = 1 //: 1
+#+END_SRC
+
+Because currently the marker will not bind to anything.
+
+Essentially, the problem is a mix of assigning a value to statements in JS, and
+coming up with helpful values to show when placing the marker.
+
+Wait, what if we have:
+
+#+BEGIN_SRC js
+a = x => x //: ??
+#+END_SRC
+
+Do we show the value of ~x~, or the right-hand side of the assignment?  The
+former would be more consistent, but it basically means that anywhere arrow
+functions may appear, we need to look for them first, and bind the markers to
+their body.
+
+I'm warry of doing this, since then we have to make sure the arrow function is
+next to the marker physically...
+
+It gives me an idea: maybe we can actually walk back from the location of the
+marker until we hit a node.  Then we would have to determine the parent
+expression that would give the marker its value.  It might yield more intuitive
+results using the "trailingComments" method currently.
+
+In any case, it's too complex a refactoring for what I wanted to do today.  I'll
+ship the ~return~ patch and stop here.
+
+It's only a minor inconvenience anyway.
