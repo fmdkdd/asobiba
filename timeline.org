@@ -15844,3 +15844,32 @@ In any case, it's too complex a refactoring for what I wanted to do today.  I'll
 ship the ~return~ patch and stop here.
 
 It's only a minor inconvenience anyway.
+
+* [2019-02-01 ven.]
+** Turing quote on emergent system properties                         :quote:
+Once, as I attended a talk by a prominent researcher in programming languages,
+I heard something that didn't seem right.  He said that if you are given the
+grammar of a language, then you know everything about that language.
+
+I beg to differ.  The grammar does not give you one clue about the semantics.
+Yes, you know how to combine the syntactic elements to form valid sentences, but
+that is just the start.
+
+To use a programming, you need to know its idioms, how some tasks are usually
+written, and ultimately, to construct a mental model of its semantics in order
+to achieve your goals.
+
+Anyway, I learned that day that prominent researchers could be dead wrong.
+
+This quote by Turing always reminds me of that event:
+
+#+BEGIN_QUOTE
+The view that machines cannot give rise to surprises is due, I believe, to a
+fallacy to which philosophers and mathematicians are particularly subject.  This
+is the assumption that as soon as a fact is presented to a mind all consequences
+of that fact spring into the mind simultaneously with it.  It is a very useful
+assumption under many circumstances, but one too easily forgets that it is
+false.  A natural consequence of doing so is that one then assumes that there is
+no virtue in the mere working out of consequences from data and general
+principles.
+#+END_QUOTE
