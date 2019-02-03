@@ -35,14 +35,11 @@ new ws.Server({server: httpServer}).on('connection', async ws => {
 
   dc.onopen = () => {
     console.log('Data channel open')
+    start(pc, dc)
   }
 
   dc.onclose = () => {
     console.log('Data channel closed')
-  }
-
-  dc.onmessage = msg => {
-    console.log('Data channel message: ', msg.data)
   }
 
   console.log('Sending offer')
@@ -76,3 +73,60 @@ new ws.Server({server: httpServer}).on('connection', async ws => {
     console.log('WebSocket closed')
   })
 })
+
+function start(pc, dc) {
+  const UP    = 1
+  const DOWN  = 2
+  const LEFT  = 4
+  const RIGHT = 8
+
+  const player = {
+    x: 100,
+    y: 100,
+    input: 0
+  }
+
+  let latched_input = 0
+  dc.onmessage = msg => {
+    player.input = msg.data
+    latched_input |= player.input
+  }
+
+  let last_frame = process.hrtime.bigint()
+
+  loop()
+
+  function loop() {
+    const now = process.hrtime.bigint()
+    const dt = Number((now - last_frame) / 1000000n)
+    last_frame = now
+
+    // TODO: Problem with polling inputs.  If the server updates at a low
+    // frequency, we may miss short key presses from the player.  Latching
+    // inputs ensures we don't miss them, but then we play them for too long: a
+    // 100ms press is interpreted as a 1s press.  We need to know how long the
+    // key press was in order to correctly interpret it server-side.
+
+    // Poll input and update state
+    const speed = .2
+
+    if (latched_input & RIGHT)
+      player.x += speed * dt
+    if (latched_input & LEFT)
+      player.x -= speed * dt
+    if (latched_input & UP)
+      player.y -= speed * dt
+    if (latched_input & DOWN)
+      player.y += speed * dt
+
+    latched_input = player.input
+
+    // Send state to client
+    dc.send(JSON.stringify({
+      x: Math.round(player.x),
+      y: Math.round(player.y),
+    }))
+
+    setTimeout(loop, 1000)
+  }
+}
