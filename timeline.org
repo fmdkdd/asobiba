@@ -15902,3 +15902,43 @@ false.  A natural consequence of doing so is that one then assumes that there is
 no virtue in the mere working out of consequences from data and general
 principles.
 #+END_QUOTE
+
+However, there is maybe one interesting observation to salvage from the
+speaker's comment: it makes me think about the usefulness of isomorphic
+languages; languages that have different syntaxes and grammars, but isomorphic
+semantics.
+
+* [2019-03-22 ven.]
+** Trying out Haxe                                                     :haxe:
+I was looking for a programming language in which I could prototype, but also
+reasonably take that prototype into a full product without having to rewrite it
+in another language.
+
+I wanted something reasonably performant, ideally able to generate native
+binaries.  C is nice, but not so fast at prototyping, and also lacks nice
+language conveniences like pattern matching or actual types.  Rust is too
+verbose and cumbersome to prototype with.  JS is too loose to be used for a real
+product, and also lacks niceties.  Typescript has better features but again it's
+restricting the output.
+
+I looked at getting back to some Lisp.  Looked briefly at Clojure, but I don't
+think it's suited for games.  Too much mutable state.
+
+Then I remembered about Haxe.  It's main purpose is to be a game programming
+language.  It's used to ship real games on desktop, mobile and consoles.  The
+language has nice features, and the syntax is close enough to JS so it should be
+easy to pick up and prototype with, while leaving the possibility of compiling
+to native code.
+
+There are a few libraries for games.  The mature ones are mostly about graphics,
+but at least there's choice.
+
+Tried out Heaps, which can compile to HTML5 and native code.  Both work nicely,
+although the tooling is a bit rough.  Compiling to C requires finding out the
+right gcc invocation.  Also it didn't seem to work correctly without the latest
+Haxe 4.0 (+ Hashlink 1.9) which is currently a preview release.
+
+It's all open source.  The community looks small, but focused on games and game
+tools.
+
+Will try to play with it some more.
