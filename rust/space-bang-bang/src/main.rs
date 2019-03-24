@@ -1,51 +1,17 @@
-#[macro_use]
-extern crate glium;
-#[macro_use]
-extern crate imgui;
-
 use std::io::BufReader;
 use std::fs::File;
 use std::time::Instant;
 
-use glium::glutin::{Event, ElementState, VirtualKeyCode, MouseButton,
-                    MouseScrollDelta, TouchPhase};
-
+use glium::{Display, Surface, VertexBuffer, IndexBuffer, Program, implement_vertex, uniform};
 use glium::backend::Facade;
 use glium::index::PrimitiveType;
-use glium::{DisplayBuild, Surface, VertexBuffer, IndexBuffer, Program};
+use glium::glutin::{self, ElementState, VirtualKeyCode};
 use glium::texture::{UncompressedFloatFormat, MipmapsOption};
 use glium::texture::texture2d::Texture2d;
 use glium::uniforms::{MagnifySamplerFilter, MinifySamplerFilter};
 
-use imgui::ImGui;
-
-// The state we hold for ImGUI
-struct UiState {
-  mouse_pos: (i32, i32),
-  mouse_pressed: (bool, bool, bool),
-  mouse_wheel: f32,
-}
-
-impl UiState {
-  fn new() -> UiState {
-    UiState {
-      mouse_pos: (0,0),
-      mouse_pressed: (false, false, false),
-      mouse_wheel: 0.0,
-    }
-  }
-
-  fn update_mouse(&mut self, imgui: &mut ImGui) {
-    imgui.set_mouse_pos(self.mouse_pos.0 as f32, self.mouse_pos.1 as f32);
-    imgui.set_mouse_down(&[self.mouse_pressed.0, self.mouse_pressed.1,
-                           self.mouse_pressed.2, false, false]);
-    imgui.set_mouse_wheel(self.mouse_wheel);
-
-    // Need to clear the mouse wheel value for this frame after feeding to
-    // ImGUI, otherwise... see what happens.
-    self.mouse_wheel = 0.0;
-  }
-}
+use imgui::{ImGui, im_str};
+use imgui_winit_support;
 
 const HEADING_TO_RADS: f32 = std::f32::consts::PI / (128 as f32);
 
@@ -69,7 +35,7 @@ struct BulletDrawer {
 
 impl BulletDrawer {
   fn new<F: Facade>(display: &F) -> Self {
-    let stl_file = File::open("../assets/bullet.stl").unwrap();
+    let stl_file = File::open("assets/bullet.stl").unwrap();
     let mut stl_reader = BufReader::new(stl_file);
     let stl_data = stl::read_stl(&mut stl_reader).unwrap();
 
@@ -139,17 +105,20 @@ impl BulletDrawer {
 
 fn main() {
   // Init window
-  let display = glium::glutin::WindowBuilder::new()
-    .with_title("Space Bang Bang")
-    .with_vsync()
-    .build_glium().unwrap();
+  let mut events_loop = glutin::EventsLoop::new();
+  let context = glutin::ContextBuilder::new().with_vsync(true);
+  let builder = glutin::WindowBuilder::new()
+    .with_title("Space Bang Bang");
+  let display = Display::new(builder, context, &events_loop).unwrap();
+  let window = display.gl_window();
 
   // Init ImGui
   let mut imgui = ImGui::init();
-  let mut imgui_renderer = imgui::glium_renderer::Renderer::init(
+  let mut imgui_renderer = imgui_glium_renderer::Renderer::init(
     &mut imgui, &display).unwrap();
 
-  let mut ui_state = UiState::new();
+  let hidpi_factor = window.get_hidpi_factor().round();
+
   let mut last_ui_time = Instant::now();
 
   // To hold UI debug info
@@ -159,7 +128,7 @@ fn main() {
   let mut avg_frame_period = 0.0;
 
   // Init the ship
-  let ship_stl_file = File::open("../assets/ship.stl").unwrap();
+  let ship_stl_file = File::open("assets/ship.stl").unwrap();
   let mut ship_stl_reader = BufReader::new(ship_stl_file);
   let ship_stl = stl::read_stl(&mut ship_stl_reader).unwrap();
 
@@ -304,52 +273,62 @@ fn main() {
   let mut bullet_initial_velocity = 0.1f32;
 
   // Main loop
+  let mut quit = false;
+
   'running: loop {
-    for event in display.poll_events() {
-      match event {
-        Event::Closed
-          | Event::KeyboardInput(ElementState::Pressed, _, Some(VirtualKeyCode::Escape))
-          => { break 'running },
+    events_loop.poll_events(|event| {
+      use glutin::{Event, KeyboardInput, WindowEvent};
 
-        Event::KeyboardInput(ElementState::Pressed, _, Some(vkey)) => {
-          match vkey {
-            VirtualKeyCode::A => turning_left = true,
-            VirtualKeyCode::S => turning_right = true,
-            VirtualKeyCode::W => boosting = true,
-            VirtualKeyCode::R => braking = true,
-            VirtualKeyCode::Space => firing = true,
-            _ => ()
-          }
-        },
+      imgui_winit_support::handle_event(
+        &mut imgui, &event, window.get_hidpi_factor(), hidpi_factor);
 
-        Event::KeyboardInput(ElementState::Released, _, Some(vkey)) => {
-          match vkey {
-            VirtualKeyCode::A => turning_left = false,
-            VirtualKeyCode::S => turning_right = false,
-            VirtualKeyCode::W => boosting = false,
-            VirtualKeyCode::R => braking = false,
-            VirtualKeyCode::Space => firing = false,
-            _ => ()
-          }
-        },
+      if let Event::WindowEvent { event, .. } = event {
+        match event {
+          WindowEvent::CloseRequested => { quit = true },
 
-        Event::MouseMoved(x, y) => ui_state.mouse_pos = (x, y),
-        Event::MouseInput(state, MouseButton::Left) =>
-          ui_state.mouse_pressed.0 = state == ElementState::Pressed,
-        Event::MouseInput(state, MouseButton::Right) =>
-          ui_state.mouse_pressed.1 = state == ElementState::Pressed,
-        Event::MouseInput(state, MouseButton::Middle) =>
-          ui_state.mouse_pressed.2 = state == ElementState::Pressed,
-        Event::MouseWheel(MouseScrollDelta::LineDelta(_, y), TouchPhase::Moved) =>
-          ui_state.mouse_wheel = y,
-        Event::MouseWheel(MouseScrollDelta::PixelDelta(_, y), TouchPhase::Moved) =>
-          ui_state.mouse_wheel = y,
+          WindowEvent::KeyboardInput { input, .. } => {
+            use ElementState::{Pressed, Released};
 
-        _ => {}
+            match input {
+              KeyboardInput { state: Pressed, virtual_keycode: Some(VirtualKeyCode::Escape), .. }
+              => { quit = true },
+
+              KeyboardInput { state: Pressed, virtual_keycode: Some(vkey), .. } => {
+                match vkey {
+                  VirtualKeyCode::A => turning_left = true,
+                  VirtualKeyCode::S => turning_right = true,
+                  VirtualKeyCode::W => boosting = true,
+                  VirtualKeyCode::R => braking = true,
+                  VirtualKeyCode::Space => firing = true,
+                  _ => ()
+                }
+              },
+
+              KeyboardInput { state: Released, virtual_keycode: Some(vkey), .. } => {
+                match vkey {
+                  VirtualKeyCode::A => turning_left = false,
+                  VirtualKeyCode::S => turning_right = false,
+                  VirtualKeyCode::W => boosting = false,
+                  VirtualKeyCode::R => braking = false,
+                  VirtualKeyCode::Space => firing = false,
+                  _ => ()
+                }
+              },
+
+              _ => ()
+            }
+          },
+
+          _ => ()
+        }
       }
+    });
+
+    if quit {
+      break 'running;
     }
 
-    ui_state.update_mouse(&mut imgui);
+    imgui_winit_support::update_mouse_cursor(&imgui, &window);
 
     // Time how long we spend between frames
     let now = Instant::now();
@@ -471,15 +450,13 @@ fn main() {
 
 
     // Draw the GUI
-    let window = display.get_window().unwrap();
-    let size_points = window.get_inner_size_points().unwrap();
-    let size_pixels = window.get_inner_size_pixels().unwrap();
-    let ui = imgui.frame(size_points, size_pixels, frame_period_s);
+    let frame_size = imgui_winit_support::get_frame_size(&window, hidpi_factor).unwrap();
+    let ui = imgui.frame(frame_size, frame_period_s);
 
-    ui.text(format!("position: {:?}", position).into());
-    ui.text(format!("heading: {}", heading).into());
-    ui.text(format!("velocity: {:?}", velocity).into());
-    ui.text(format!("bullets count: {}", bullets.len()).into());
+    ui.text(im_str!("position: {:?}", position));
+    ui.text(im_str!("heading: {}", heading));
+    ui.text(im_str!("velocity: {:?}", velocity));
+    ui.text(im_str!("bullets count: {}", bullets.len()));
 
     ui.window(im_str!("Framerate"))
       .build(|| {
@@ -491,8 +468,7 @@ fn main() {
           / FRAME_PERIOD_HISTORY_SIZE as f32;
 
         ui.plot_histogram(
-          format!("frame period (ms)\navg: {:.3}ms",
-                  avg_frame_period).into(), &frame_period_history)
+          im_str!("frame period (ms)\navg: {:.3}ms", avg_frame_period), &frame_period_history)
           .values_offset(frame_period_history_idx)
           .graph_size(imgui::ImVec2::new(FRAME_PERIOD_HISTORY_SIZE as f32, 40.0))
           .scale_min(0.0)
@@ -595,19 +571,19 @@ mod stl {
   }
 
   fn read_point<T: ReadBytesExt>(input: &mut T) -> Result<[f32; 3]> {
-    let x1 = try!(input.read_f32::<LittleEndian>());
-    let x2 = try!(input.read_f32::<LittleEndian>());
-    let x3 = try!(input.read_f32::<LittleEndian>());
+    let x1 = input.read_f32::<LittleEndian>()?;
+    let x2 = input.read_f32::<LittleEndian>()?;
+    let x3 = input.read_f32::<LittleEndian>()?;
 
     Ok([x1, x2, x3])
   }
 
   fn read_triangle<T: ReadBytesExt>(input: &mut T) -> Result<Triangle> {
-    let normal = try!(read_point(input));
-    let v1 = try!(read_point(input));
-    let v2 = try!(read_point(input));
-    let v3 = try!(read_point(input));
-    let attr_count = try!(input.read_u16::<LittleEndian>());
+    let normal = read_point(input)?;
+    let v1 = read_point(input)?;
+    let v2 = read_point(input)?;
+    let v3 = read_point(input)?;
+    let attr_count = input.read_u16::<LittleEndian>()?;
 
     Ok(Triangle { normal: normal,
                   v1: v1, v2: v2, v3: v3,
@@ -628,7 +604,7 @@ mod stl {
       Err(e) => return Err(e)
     };
 
-    let num_triangles = try!(input.read_u32::<LittleEndian>());
+    let num_triangles = input.read_u32::<LittleEndian>()?;
 
     Ok(BinaryStlHeader{ header: header, num_triangles: num_triangles })
   }
@@ -636,11 +612,11 @@ mod stl {
   pub fn read_stl<T: ReadBytesExt>(input: &mut T) -> Result<BinaryStlFile> {
 
     // read the header
-    let header = try!(read_header(input));
+    let header = read_header(input)?;
 
     let mut triangles = Vec::new();
     for _ in 0 .. header.num_triangles {
-      triangles.push(try!(read_triangle(input)));
+      triangles.push(read_triangle(input)?);
     }
 
     Ok(BinaryStlFile {
