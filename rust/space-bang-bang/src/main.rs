@@ -428,6 +428,10 @@ fn main() {
       bullet_drawer.draw(&mut framebuffer, &view, &b);
     }
 
+    // Remove offscreen bullets
+    bullets.retain(|b| b.position[0] > -10.0 && b.position[0] < 10.0
+                   && b.position[1] > -10.0 && b.position[1] < 10.0);
+
     // Draw the framebuffer to the actual screen
 
     // This stretches the virtual framebuffer to fill the screen while
