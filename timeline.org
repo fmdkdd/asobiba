@@ -15942,3 +15942,78 @@ It's all open source.  The community looks small, but focused on games and game
 tools.
 
 Will try to play with it some more.
+
+* [2019-03-30 sam.]
+** Table of contents                                         :emulators:book:
+To have a good start with emulation, here is a first draft:
+
+*** Contents
+Intro
+1. What you'll learn
+   - how emulators (and interpreters/VMs) work
+   - how 8bit/16bit machines work (sprites systems, sound generators)
+2. What you won't learn
+   - how to emulate modern machines
+
+Part I: The first emulator (CHIP8/CHIP16)
+1. Overview
+   - what's in an emulator
+   - how we develop it
+2. The fetch-decode-execute loop
+   - nothing without a ROM
+3. Arithmetic and control instructions
+   - Registers, memory layout
+4. Graphics
+   - sprites, layers
+   - pixel pipeline
+5. Sound
+   - how sound is produced and heard
+   - timing
+6. What's next
+   - increasing correctness (testing)
+   - adding cool features (save states, rewind, networked multiplayer)
+   - optimizing
+
+Part II: Beyond
+1. Ways to implement opcodes
+   - big switch
+   - big table
+   - generated code
+2. Debugging
+   - Debugging non-working games
+     - Reproduce
+     - Gather data
+     - Compare against hardware/other emu
+     - Check specs
+   - Adding debugging tools
+     - A CPU debugger
+     - A view into the graphics system
+3. Testing
+   - Test components separately
+   - Test games with input record & replay
+4. Optimizing
+   - Profiling
+   - Threaded code
+   - Dynamic recompilation
+   - Multithreading
+     - run graphics and sounds in parallel
+
+5. Reverse engineering hardware (guest chapter?)
+
+Appendix (knowledge reader will need but may not have):
+- hexadecimal reference
+- C basics?
+*** Choices
+Still on the fence about CHIP16.  CHIP8 is definitely too simple to prepare you
+for GB, but you have to start somewhere right?  CHIP8 is good for that because
+it's very simple, so you can actually finish it in reasonable time.
+
+However, GB is better because of nostalgia factor, and there are plenty of games
+you can run in order to improve the emu.  But Tetris is simple enough to have as
+a target for the book (does not need full compatibility).
+
+Programming language.  Rust is trendy, but it's also a barrier to entry for
+readers.  C feels like a better choice: larger audience, and Rust enthusiasts
+should still be able to follow.  Downsides: have to be careful about
+portability.  Multithreading section in particular may be tricky, but I can also
+drop that one.  It doesn't have to be exhaustive.
