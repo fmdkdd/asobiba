@@ -16017,3 +16017,27 @@ readers.  C feels like a better choice: larger audience, and Rust enthusiasts
 should still be able to follow.  Downsides: have to be careful about
 portability.  Multithreading section in particular may be tricky, but I can also
 drop that one.  It doesn't have to be exhaustive.
+
+* [2019-03-31 dim.]
+** Trying out space invaders                                 :emulators:book:
+Pain points:
+
+- How to get ROM.  Dump?  Hard to find a copy, unlike Tetris.  Makes it non-self
+  contained.  Don't want to encourage grabbing a ROM of the internet.
+
+  At least providing a checksum ensures we have the same file to work from.
+
+- Implement opcodes as you go along
+
+- Endianness and constructing/desconstructing addresses from parts.
+
+- Disassembler alone is not useful since data is mixed with code.  Even
+  implementing only control instructions is not enough, since branches need flag
+  info.
+
+- Implementing the opcodes in the naive way has lot of redundancy, so
+  error-prone.  Errors that are hard to track down.  Might be better to define a
+  mini-DSL using macros (especially to check flags).
+
+  Also, often there is a regularity in opcode that can be exploited: DEC B, C,
+  D, E will all share the same opcode, with just two bits changing.
