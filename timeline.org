@@ -16159,3 +16159,13 @@ sound itself can change dramatically.
 
 So I'll try the same approach: buffer YM3438 samples for a full frame, use a
 proper resampler (blip_buf, same as Genesis Plus), and give that to SDL.
+
+Hmm, so I did manage to integrate blip, but the results are actually worse.  So
+there's probably something I didn't understand along the way.  Ahhhh. That's
+always the annoying part of writing emulators: there's just too much data coming
+in and out that so when it goes wrong, it goes wrong /fast/, and you have
+garbage everywhere.  It's also tedious to step through it because there's just
+too much data.
+
+Maybe I should try blip & YM3438 on the GYM player where there are fewer moving
+parts.
