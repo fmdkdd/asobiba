@@ -16041,3 +16041,121 @@ Pain points:
 
   Also, often there is a regularity in opcode that can be exploited: DEC B, C,
   D, E will all share the same opcode, with just two bits changing.
+
+* [2019-04-01 lun.]
+** Plugging the YM3438 into megado                            :megado:ym2612:
+Found [[https://github.com/nukeykt/Nuked-OPN2][this YM3438 implementation]], which is compatible with the YM2612.  The API
+seems simple enough, so I tried to plug it in megado to hear how it sounds.
+
+First difficulty: what exactly is OPN2_Write accepting?  Is it the addresses
+used by the MD, or is it something else?  The MD has a small ceremony in order
+to write to the YM2612 using only one bus: first write an address (of an
+internal register to the YM2612), then data.  In particular, there are two
+"parts", corresponding to channels 1-3 and 4-6, you can address.
+
+Contrast that to GYM opcodes, which write directly to part I or part II,
+bypassing the indirect addressing of the MD.
+
+It looks like the YM3438 implementation matches what the MD does.  Looking at
+[[https://github.com/nukeykt/Genesis-Plus-GX/commit/68e047bd4c68bed4ab0b688051760bf2c1e527f1][this patch of GenesisPlusGX]] was helpful.
+
+I our ym2612 implementation to delegate to YM3438, but it did not produce any
+sound.  Looking at OPN2_Write and the patch above, they run differently than we
+run the YM2612 in megado.  In megado, the main loop is this:
+
+#+BEGIN_SRC c
+// The m68k can halt prematurely due to breakpoint
+uint32_t actual_cycles = m68k_run_cycles(g->m68k, cycles);
+
+// Let the other systems catch up
+z80_run_cycles(g->z80, actual_cycles);
+psg_run_cycles(g->psg, actual_cycles);
+ym2612_run_cycles(g->ym2612, actual_cycles);
+vdp_run_cycles(g->vdp, actual_cycles);
+#+END_SRC
+
+This emulates the m68k first, counts the actual elapsed time in master cycles,
+then run all the other systems to catch up.  In practice we run this loop for
+one frame of cycles, and it works fine for most things.
+
+But it is incorrect of course: in real hardware, all these systems run in
+parallel.
+
+Genesis Plus GX does things differently, at least for the FM chip.  Whenever a
+write is done to the FM chip, that chip is immediately emulated to catch up with
+the CPU, then the write is actually done.
+
+It's actually the smart way to do it without threading: as long as the CPU does
+not touch the FM chip, you may as well ignore the FM.  When the CPU does need to
+communicate with the FM chip, then you synchronize the chip.
+
+In fact, the YM3438 is written to work like this.  See OPN2_Write:
+
+#+BEGIN_SRC c
+void OPN2_Write(ym3438_t *chip, Bit32u port, Bit8u data)
+{
+    port &= 3;
+    chip->write_data = ((port << 7) & 0x100) | data;
+    if (port & 1)
+    {
+        /* Data */
+        chip->write_d |= 1;
+    }
+    else
+    {
+        /* Address */
+        chip->write_a |= 1;
+    }
+}
+#+END_SRC
+
+It emulates nothing.  It does not even write to the actual register of the FM
+chip!  It just latches the address written by the CPU for the ceremonious
+protocol of the MD.  This means that, in megado, when emulating the m68k, we
+may call this write function multiple times, which erases previous calls,
+without hitting the FM chip at all!
+
+The solution is to catch-up the YM2612 whenever we write to it, like Genesis
+Plus GX does.  This means we don't even need to catch up the YM2612 in the main
+loop anymore.  We can just catch up on read/write.  The same principle can be
+applied to other systems as well, but this would require a larger rewriting.
+
+Now, after this fix, it does sound okayish, but not very good.  When looking at
+the Genesis Plus patch, I'm seeing that YM3438_Update is buffering all the
+samples used by a frame:
+
+#+BEGIN_SRC c
+/* FM output buffer (large enough to hold a whole frame at original chips rate) */
+static int fm_buffer[1080 * 2 * 24];
+
+void YM3438_Update(int *buffer, int length)
+{
+  int i, j;
+  for (i = 0; i < length; i++)
+  {
+    OPN2_Clock(&ym3438, ym3438_accm[ym3438_cycles]);
+    ym3438_cycles = (ym3438_cycles + 1) % 24;
+    if (ym3438_cycles == 0)
+    {
+      ym3438_sample[0] = 0;
+      ym3438_sample[1] = 0;
+      for (j = 0; j < 24; j++)
+      {
+        ym3438_sample[0] += ym3438_accm[j][0];
+        ym3438_sample[1] += ym3438_accm[j][1];
+      }
+    }
+    *buffer++ = ym3438_sample[0] * 8;
+    *buffer++ = ym3438_sample[1] * 8;
+  }
+}
+#+END_SRC
+
+Instead, what megado does right now is to poll the YM2612 for samples, after we
+have emulated enough for a frame.  The megado approach has the advantage of
+getting exactly the right number of samples (not too many).  But it has the
+downsides that you can't just drop audio samples like you drop video frames: the
+sound itself can change dramatically.
+
+So I'll try the same approach: buffer YM3438 samples for a full frame, use a
+proper resampler (blip_buf, same as Genesis Plus), and give that to SDL.
