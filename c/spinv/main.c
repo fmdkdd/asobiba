@@ -16,14 +16,41 @@ typedef struct CPU {
     struct { u8  b, c, d, e, h, l; };
     struct { u16 bc,   de,   hl; };
   };
+  union {
+    u8 flags;
+    struct { u8 z : 1, s : 1, p : 1, cy : 1, ac: 1; };
+  };
   u16 pc, sp;
   u8 ram[RAM_SIZE];
 } CPU;
 
-// TODO: flags, but better yet reduce the redundancy with macros
+typedef enum {
+  Z  = 0x01,
+  S  = 0x02,
+  P  = 0x04,
+  CY = 0x08,
+  AC = 0x10,
+} FLAGS;
+
+// TODO: result is first argument of opcode.  How to obtain it in general
+// without too much verbosity?  Same problem for carry: needs to know the
+// arguments to compute them in u16.  Maybe use generic variables?
+// TODO: other flags
+
+#define OP(code, name, size, flags, expr)                               \
+  case (code): {                                                        \
+    printf("%04x " name "\n", cpu.pc);                                  \
+    expr;                                                               \
+    if ((flags) & Z) { cpu.z = r == 0 ? 1 : 0; }                        \
+    cpu.pc += (size);                                                   \
+  }                                                                     \
+  break;
+
+#define TO16(H,L) ((H) << 8 | (L))
+
+// TODO: eliminate redundancy of Register / Immediate / Memory accesses
 
 int main() {
-
   CPU cpu;
 
   // Zero it out
@@ -36,113 +63,36 @@ int main() {
 
   // Fetch and decode
   while (true) {
+    u8 r;
+
     u8 *op = &cpu.ram[cpu.pc];
 
-    printf("%04x ", cpu.pc);
-
     switch (op[0]) {
-      // NOP
-    case 0x00: case 0x08: case 0x10: case 0x20: {
-      printf("NOP\n");
-      cpu.pc++;
-      break;
-    }
+    case 0x08: case 0x10: case 0x20:
+      // TODO: show immediate values for D8, D16?
+      // Or better yet, the output could show values for all arguments
+      // (registers included) as well as before/after for relevant registers
+      // TODO: opcode size should be determined by pattern (D8 = +1, D16 = +2, addr = +2)
+      OP(0x00, "NOP"       , 1, 0       , {});
+      OP(0x05, "DCR B"     , 1, Z|S|P|AC, { r = cpu.b--; });
+      OP(0x06, "MVI B,D8"  , 2, 0       , { cpu.b = op[1]; });
+      OP(0x11, "LXI DE,D16", 3, 0       , { cpu.de = TO16(op[2], op[1]); });
+      OP(0x13, "INX DE"    , 1, 0       , { cpu.de++; });
+      OP(0x1a, "LDAX DE"   , 1, 0       , { cpu.a = cpu.ram[cpu.de]; });
+      OP(0x21, "LXI HL,D16", 3, 0       , { cpu.hl = TO16(op[2], op[1]); });
+      OP(0x23, "INX HL"    , 1, 0       , { cpu.hl++; });
+      OP(0x31, "LXI SP,D16", 3, 0       , { cpu.sp = TO16(op[2], op[1]); });
+      OP(0x77, "MOV (HL),A", 1, 0       , { cpu.ram[cpu.hl] = cpu.a; });
+      // TODO: can we extract the variables from the string?
+      OP(0xc2, "JNZ addr"  , 3, 0       , { u16 addr = TO16(op[2], op[1]); if (!cpu.z) { cpu.pc = addr-3; }; });
+      OP(0xc3, "JMP addr"  , 0, 0       , { u16 addr = TO16(op[2], op[1]); cpu.pc = addr; });
+      // TODO: not sure about the order of args to TO16 here
+      OP(0xc9, "RET"       , 0, 0       , { cpu.pc = TO16(cpu.ram[cpu.sp++], cpu.ram[cpu.sp++]); });
+      OP(0xcd, "CALL addr" , 0, 0       , { u16 addr = TO16(op[2], op[1]);
+                                            cpu.ram[--cpu.sp] = cpu.pc >> 8;
+                                            cpu.ram[--cpu.sp] = cpu.pc;
+                                            cpu.pc = addr; });
 
-      // DCR B
-    case 0x05: {
-      cpu.b--;
-      printf("DCR B\n");
-      cpu.pc++;
-      break;
-    }
-
-      // MVI B, D8
-    case 0x06: {
-      cpu.b = op[1];
-      printf("MVI B, $%02x\n", cpu.b);
-      cpu.pc += 2;
-      break;
-    }
-
-      // LXI DE, D16
-    case 0x11: {
-      printf("LXI DE, $%02x%02x\n", op[2], op[1]);
-      cpu.de = op[2] << 8 | op[1];
-      cpu.pc += 3;
-      break;
-    }
-
-      // INX DE
-    case 0x13: {
-      printf("INX DE\n");
-      cpu.de++;
-      cpu.pc++;
-      break;
-    }
-
-    case 0x1a: {
-      printf("LDAX DE\n");
-      cpu.a = cpu.ram[cpu.de];
-      cpu.pc++;
-      break;
-    }
-
-      // LXI HL, D16
-    case 0x21: {
-      printf("LXI HL, $%02x%02x\n", op[2], op[1]);
-      cpu.hl = op[2] << 8 | op[1];
-      cpu.pc += 3;
-      break;
-    }
-
-      // INX H
-    case 0x23: {
-      cpu.hl++;
-      cpu.pc++;
-      break;
-    }
-
-      // LXI SP, D16
-    case 0x31: {
-      cpu.sp = op[2] << 8 | op[1];
-      printf("LXI SP, $%04x\n", cpu.sp);
-      cpu.pc += 3;
-      break;
-    }
-
-      // JMP
-    case 0xc3: {
-      u16 addr = op[2] << 8 | op[1];
-      printf("JMP $%04x\n", addr);
-      cpu.pc = addr;
-      break;
-    }
-
-      // MOV (HL), A
-    case 0x77: {
-      printf("MOV (HL), A\n");
-      cpu.ram[cpu.hl] = cpu.a;
-      cpu.pc++;
-      break;
-    }
-
-      // CALL addr
-    case 0xcd: {
-      u16 addr = op[2] << 8 | op[1];
-      printf("CALL $%04x\n", addr);
-      cpu.ram[--cpu.sp] = cpu.pc >> 8;
-      cpu.ram[--cpu.sp] = cpu.pc;
-      cpu.pc = addr;
-      break;
-    }
-
-    /*   // RET */
-    /* case 0xc9: { */
-    /*   printf("RET\n"); */
-    /*   cpu.pc = cpu.ram[cpu.sp++]; */
-    /*   cpu.pc = cpu.ram[cpu.sp++]; */
-    /*   break; */
-    /* } */
 
     default:
       printf("unimplemented opcode: $%02x\n", op[0]);
