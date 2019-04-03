@@ -32,6 +32,10 @@ typedef enum {
   AC = 0x10,
 } FLAGS;
 
+typedef enum {
+  _, A, B, C, D, E, BC, DE, HL, SP, D8, D16, ADDR,
+} ARGS;
+
 // TODO: result is first argument of opcode.  How to obtain it in general
 // without too much verbosity?  Same problem for carry: needs to know the
 // arguments to compute them in u16.  Maybe use generic variables?
@@ -44,7 +48,37 @@ typedef enum {
     if ((flags) & Z) { cpu.z = r == 0 ? 1 : 0; }                        \
     cpu.pc += (size);                                                   \
   }                                                                     \
-  break;
+  break
+
+#define OP2(code, name, arg1, arg2, flags, expr)                        \
+  case (code): {                                                        \
+    u16 old_pc = cpu.pc;                                                \
+    printf("%04x %02x ", cpu.pc++, op[0]);                              \
+    OP_ARG(arg1);                                                       \
+    OP_ARG(arg2);                                                       \
+    if (cpu.pc - old_pc > 1) printf("%02x ", op[1]); else printf("   "); \
+    if (cpu.pc - old_pc > 2) printf("%02x ", op[2]); else printf("   "); \
+    printf(#name);                                                      \
+    if ((arg1) != _) printf(" %s", #arg1);                              \
+    if ((arg2) != _) printf(",%s", #arg2);                              \
+    printf("\n");                                                       \
+    expr;                                                               \
+    if ((flags) & Z) { cpu.z = r == 0 ? 1 : 0; }                        \
+  }                                                                     \
+  break
+
+
+//printf(#name " %s=$%02x,%s=$%02x",
+//(#arg1), OP, (#arg2), );
+
+
+#define OP_ARG(arg)                                             \
+  switch (arg) {                                                \
+  case _: case A: case B: case DE: case HL: case SP: break;     \
+  case D8  : d8   = cpu.ram[cpu.pc++]; break;                   \
+  case D16 : d16  = TO16(op[2], op[1]); cpu.pc+=2; break;       \
+  case ADDR: addr = TO16(op[2], op[1]); cpu.pc+=2; break;       \
+  }
 
 #define TO16(H,L) ((H) << 8 | (L))
 
@@ -69,7 +103,8 @@ int main() {
 
   // Fetch and decode
   while (true) {
-    u8 r = 0;
+    u8 r, d8;
+    u16 d16, addr;
 
     u8 *op = &cpu.ram[cpu.pc];
 
@@ -78,24 +113,20 @@ int main() {
       // TODO: show immediate values for D8, D16?
       // Or better yet, the output could show values for all arguments
       // (registers included) as well as before/after for relevant registers
-      // TODO: opcode size should be determined by pattern (D8 = +1, D16 = +2, addr = +2)
-      OP(0x00, "NOP"       , 1, 0       , {});
-      OP(0x05, "DCR B"     , 1, Z|S|P|AC, { r = cpu.b--; });
-      OP(0x06, "MVI B,D8"  , 2, 0       , { cpu.b = op[1]; });
-      OP(0x11, "LXI DE,D16", 3, 0       , { cpu.de = TO16(op[2], op[1]); });
-      OP(0x13, "INX DE"    , 1, 0       , { cpu.de++; });
-      OP(0x1a, "LDAX DE"   , 1, 0       , { cpu.a = cpu.ram[cpu.de]; });
-      OP(0x21, "LXI HL,D16", 3, 0       , { cpu.hl = TO16(op[2], op[1]); });
-      OP(0x23, "INX HL"    , 1, 0       , { cpu.hl++; });
-      OP(0x31, "LXI SP,D16", 3, 0       , { cpu.sp = TO16(op[2], op[1]); });
-      OP(0x77, "MOV (HL),A", 1, 0       , { cpu.ram[cpu.hl] = cpu.a; });
-      // TODO: can we extract the variables from the string?
-      OP(0xc2, "JNZ addr"  , 3, 0       , { u16 addr = TO16(op[2], op[1]); if (!cpu.z) { cpu.pc = addr-3; }; });
-      OP(0xc3, "JMP addr"  , 0, 0       , { u16 addr = TO16(op[2], op[1]); cpu.pc = addr; });
-      // TODO: not sure about the order of args to TO16 here
-      OP(0xc9, "RET"       , 0, 0       , { cpu.pc = TO16(cpu.ram[cpu.sp++], cpu.ram[cpu.sp++]); });
-      OP(0xcd, "CALL addr" , 0, 0       , { u16 addr = TO16(op[2], op[1]);
-                                            cpu.ram[--cpu.sp] = cpu.pc >> 8;
+      OP2(0x00, NOP, _,_      , _       , {});
+      OP2(0x05, DCR, B,_      , Z|S|P|AC, { r = --cpu.b; });
+      OP2(0x06, MVI, B,D8     , _       , { cpu.b = d8; });
+      OP2(0x11, LXI, DE,D16   , _       , { cpu.de = d16; });
+      OP2(0x13, INX, DE,_     , _       , { cpu.de++; });
+      OP2(0x1a, LDAX, DE,_    , _       , { cpu.a = cpu.ram[cpu.de]; });
+      OP2(0x21, LXI, HL,D16   , _       , { cpu.hl = d16; });
+      OP2(0x23, INX, HL,_     , _       , { cpu.hl++; });
+      OP2(0x31, LXI, SP,D16   , _       , { cpu.sp = d16; });
+      OP2(0x77, MOV, (HL),A   , _       , { cpu.ram[cpu.hl] = cpu.a; });
+      OP2(0xc2, JNZ, ADDR,_   , _       , { if (!cpu.z) { cpu.pc = addr; }; });
+      OP2(0xc3, JMP, ADDR,_   , _       , { cpu.pc = addr; });
+      OP2(0xc9, RET, _,_      , _       , { cpu.pc = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
+      OP2(0xcd, CALL, ADDR,_  , _       , { cpu.ram[--cpu.sp] = cpu.pc >> 8;
                                             cpu.ram[--cpu.sp] = cpu.pc;
                                             cpu.pc = addr; });
 
