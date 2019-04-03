@@ -48,6 +48,11 @@ typedef enum {
 
 #define TO16(H,L) ((H) << 8 | (L))
 
+void die(const char *msg) {
+  perror(msg);
+  exit(1);
+}
+
 // TODO: eliminate redundancy of Register / Immediate / Memory accesses
 
 int main() {
@@ -58,12 +63,13 @@ int main() {
 
   // Map ROM
   FILE *rom = fopen("rom/invaders", "rb");
+  if (!rom) die("Cannot open file rom/invaders");
   fread(cpu.ram, sizeof(u8), 0x2000, rom);
   fclose(rom);
 
   // Fetch and decode
   while (true) {
-    u8 r;
+    u8 r = 0;
 
     u8 *op = &cpu.ram[cpu.pc];
 
