@@ -1,99 +1,70 @@
 document.addEventListener('DOMContentLoaded', init)
 
-function init() {
-  var PeerConnection = window.RTCPeerConnection
-        || window.webkitRTCPeerConnection
+async function init() {
+  document.getElementById('initiate')
+    .addEventListener('click', initiate)
 
-  // For local IP addresses
-  var ice = null
+  document.getElementById('receive')
+    .addEventListener('click', receive)
 
-  // For finding the public IP address
-  // var ice = {"iceServers": [
-  //   {"url": "stun:stun.l.google.com:19302"},
-  // ]};
+    document.getElementById('accept')
+    .addEventListener('click', accept)
+}
 
-  var pc = new PeerConnection(ice)
+const pc = new RTCPeerConnection()
 
-  pc.onaddstream = function() {
-    console.log('new data stream?')
-  }
+pc.ondatachannel = (ev) => {
+  console.log('got data channel')
+}
 
-  pc.ondatachannel = function() {
-    console.log('got data channel')
-  }
+pc.onicecandidate = (ev) => {
+  console.log('ice candidate', ev)
+  pc.addIceCandidate(ev.candidate)
+}
 
-  pc.onicecandidate = function(ev) {
-    if (ev.candidate != null)
-      remotepc.addIceCandidate(ev.candidate)
-  }
+pc.oniceconnectionstatechange = (ev) => {
+  console.log('ice statechange', ev)
+}
 
-  pc.oniceconnectionstatechange = function(ev) {
-    console.log('statechange', ev)
-  }
-
-  var dc = pc.createDataChannel('data', {
+async function initiate() {
+  const dc = pc.createDataChannel('data', {
     ordered: false,
     maxRetransmits: 0,
   })
 
-  dc.onopen = function() {
+  dc.onopen = ev => {
     console.log('data channel open')
-    // pc.getStats()
-    //   .then(function(stats) { console.log(stats) })
-    dc.send('bouah')
   }
 
-  dc.onmessage = function() {
-    console.log('data message')
+  dc.onmessage = (ev) => {
+    console.log('data message', ev.data)
   }
 
-  dc.onclose = function() {
+  dc.onclose = (ev) => {
     console.log('data channel closed')
   }
 
-  dc.onerror = function() {
+  dc.onerror = (ev) => {
     console.log('data channel error')
   }
 
-  // Remote peer
-  var remotepc = new PeerConnection(ice)
+  const offer = await pc.createOffer()
+  pc.setLocalDescription(offer)
 
-  remotepc.onicecandidate = function(ev) {
-    if (ev.candidate != null)
-      pc.addIceCandidate(ev.candidate)
-  }
+  document.getElementById('sdp')
+    .value = JSON.stringify(offer)
+}
 
-  remotepc.ondatachannel = function(ev) {
-    console.log('(remote) got data channel')
-    ev.channel.onmessage = function(ev) {
-      console.log('(remote) data message: ', ev.data)
-    }
-  }
+async function receive() {
+  const sdp = JSON.parse(document.getElementById('sdp').value)
 
-  // This spaghetti plate is brought to you by FF and Chrome not having the same
-  // interface.  Chrome uses success and failure callbacks, FF a mix of Promises
-  // and callbacks.
-  var p = pc.createOffer(handleOffer, failure)
-  if (p) p.then(handleOffer)
+  await pc.setRemoteDescription(sdp)
+  const answer = await pc.createAnswer()
+  pc.setLocalDescription(answer)
+  document.getElementById('sdp').value = JSON.stringify(answer)
+}
 
-  function handleOffer(offer) {
-    pc.setLocalDescription(offer, function() {
-      remotepc.setRemoteDescription(
-        pc.localDescription, function() {
-          var p = remotepc.createAnswer(handleAnswer, failure)
-          if (p) p.then(handleAnswer)
-        }, failure)
-    }, failure)
-  }
-
-  function handleAnswer(answer) {
-    remotepc.setLocalDescription(
-      answer, function() {
-        pc.setRemoteDescription(remotepc.localDescription)
-      }, failure)
-  }
-
-  function failure(err) {
-    console.error(err)
-  }
+async function accept() {
+  const sdp = JSON.parse(document.getElementById('sdp').value)
+  await pc.setRemoteDescription(sdp)
 }
