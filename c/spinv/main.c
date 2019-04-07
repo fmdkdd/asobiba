@@ -56,7 +56,7 @@ typedef enum {
     printf("\n");                                                       \
     expr;                                                               \
     if ((flags) & Z)  { cpu.z = r == 0; }                               \
-    if ((flags) & S)  { cpu.s = r & 0x80; }                             \
+    if ((flags) & S)  { cpu.s = (r >> 7) & 1; }                         \
     if ((flags) & CY) { cpu.cy = r > 0xff; }                            \
     if ((flags) & CYB) { cpu.cy = r & 1; }                              \
   }                                                                     \
@@ -69,7 +69,8 @@ typedef enum {
 
 #define OP_ARG(arg)                                                     \
   switch (arg) {                                                        \
-  case _ ... SP: break;                                                 \
+  case _: case A:  case B: case C: case D: case E: case H:              \
+  case L: case BC: case DE: case HL: case SP: break;                    \
   case D8  : d8   = cpu.ram[cpu.pc++]; break;                           \
   case D16 : d16  = TO16(op[2], op[1]); cpu.pc+=2; break;               \
   case ADDR: addr = TO16(op[2], op[1]); cpu.pc+=2; break;               \
@@ -84,18 +85,27 @@ void die(const char *msg) {
 
 // TODO: eliminate redundancy of Register / Immediate / Memory accesses
 
-int main() {
-  CPU cpu;
+int main(int argc, char *argv[]) {
 
-  // Zero it out
+  if (argc != 3) {
+    fprintf(stderr, "Usage: spinv ROM ORIG");
+    exit(1);
+  }
+
+  char *path = argv[1];
+  int orig = strtoul(argv[2], NULL, 0);
+
+  // Init CPU
+  CPU cpu;
   memset(&cpu, 0, sizeof(CPU));
 
   // Map ROM
-  FILE *rom = fopen("rom/invaders", "rb");
-  if (!rom) die("Cannot open file rom/invaders");
-  fread(cpu.ram, sizeof(u8), 0x2000, rom);
+  FILE *rom = fopen(path, "rb");
+  if (!rom) die("Cannot open file ");
+  fread(cpu.ram + orig, sizeof(u8), 0x2000, rom);
   fclose(rom);
 
+  cpu.pc = orig;
   u32 cycles = 0;
 
   // Fetch and decode
