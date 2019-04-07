@@ -18,7 +18,14 @@ typedef struct CPU {
   };
   union {
     u8 flags;
-    struct { u8 z : 1, s : 1, p : 1, cy : 1, ac: 1; };
+    struct {
+      u8 z  : 1;  // 1 = zero
+      u8 s  : 1;  // 1 = negative
+      u8 p  : 1;  // 1 = even
+      u8 cy : 1;  // 1 = carry
+      u8 ac : 1;  // used for BCD
+      u8 _padd: 3;
+    };
   };
   u16 pc, sp;
   u8 ram[RAM_SIZE];
@@ -30,16 +37,13 @@ typedef enum {
   P   = 0x04,
   CY  = 0x08,
   AC  = 0x10,
-  CYB = 0x20,
+  CYR = 0x20,
 } FLAGS;
 
 typedef enum {
- _, A, B, C, D, E, H, L, BC, DE, HL, SP, D8, D16, ADDR,
+ _, A, B, C, D, E, H, L, BC, DE, HL, SP, PSW, D8, D16, ADDR,
 } ARGS;
 
-// TODO: result is first argument of opcode.  How to obtain it in general
-// without too much verbosity?  Same problem for carry: needs to know the
-// arguments to compute them in u16.  Maybe use generic variables?
 // TODO: other flags
 
 #define OP(code, name, arg1, arg2, flags, expr)                         \
@@ -55,28 +59,32 @@ typedef enum {
     if ((arg2) != _) printf(",%s", #arg2);                              \
     printf("\n");                                                       \
     expr;                                                               \
-    if ((flags) & Z)  { cpu.z = r == 0; }                               \
-    if ((flags) & S)  { cpu.s = (r >> 7) & 1; }                         \
-    if ((flags) & CY) { cpu.cy = r > 0xff; }                            \
-    if ((flags) & CYB) { cpu.cy = r & 1; }                              \
+    if ((flags) & Z)   { cpu.z = r == 0; }                              \
+    if ((flags) & S)   { cpu.s = (r >> 7) & 1; }                        \
+    if ((flags) & P)   { cpu.p = parity(r); }                           \
+    if ((flags) & CY)  { cpu.cy = r > 0xff; }                           \
+    if ((flags) & CYR) { cpu.cy = r & 1; }                              \
   }                                                                     \
   break
-
-
-//printf(#name " %s=$%02x,%s=$%02x",
-//(#arg1), OP, (#arg2), );
-
 
 #define OP_ARG(arg)                                                     \
   switch (arg) {                                                        \
   case _: case A:  case B: case C: case D: case E: case H:              \
-  case L: case BC: case DE: case HL: case SP: break;                    \
+  case L: case BC: case DE: case HL: case SP: case PSW: break;          \
   case D8  : d8   = cpu.ram[cpu.pc++]; break;                           \
   case D16 : d16  = TO16(op[2], op[1]); cpu.pc+=2; break;               \
   case ADDR: addr = TO16(op[2], op[1]); cpu.pc+=2; break;               \
   }
 
 #define TO16(H,L) ((H) << 8 | (L))
+#define SWAP(A,B) { u8 t = (A); (A) = (B); (B) = t; }
+
+bool parity(u8 x) {
+  bool p = 0;
+  for (u8 b=0; b < 8; ++b)
+    p ^= (x >> b) & 1;
+  return !p;
+}
 
 void die(const char *msg) {
   perror(msg);
@@ -105,6 +113,10 @@ int main(int argc, char *argv[]) {
   fread(cpu.ram + orig, sizeof(u8), 0x2000, rom);
   fclose(rom);
 
+  // @Temp: should be behind a flag
+  // Tweak the code so we directly fail when jumping to CPUER
+  cpu.ram[0x0689] = 0xfd; // CPUER;
+
   cpu.pc = orig;
   u32 cycles = 0;
 
@@ -120,51 +132,61 @@ int main(int argc, char *argv[]) {
       // TODO: show immediate values for D8, D16?
       // Or better yet, the output could show values for all arguments
       // (registers included) as well as before/after for relevant registers
-      OP(0x00, NOP, _,_      , _       , {});
-      OP(0x01, LXI, BC,D16   , _       , { cpu.bc = d16; });
-      OP(0x05, DCR, B,_      , Z|S|P|AC, { r = cpu.b; r--; cpu.b = r; });
-      OP(0x06, MVI, B,D8     , _       , { cpu.b = d8; });
-      OP(0x09, DAD, BC,_     , CY      , { r = cpu.hl; r += cpu.bc; cpu.hl = r; });
-      OP(0x0d, DCR, C,_      , Z|S|P|AC, { r = cpu.c; r--; cpu.c = r; });
-      OP(0x0e, MVI, C,D8     , _       , { cpu.c = d8; });
-      OP(0x11, LXI, DE,D16   , _       , { cpu.de = d16; });
-      OP(0x13, INX, DE,_     , _       , { cpu.de++; });
-      OP(0x19, DAD, DE,_     , CY      , { r = cpu.hl; r += cpu.de; cpu.hl = r; });
-      OP(0x1a, LDAX, DE,_    , _       , { cpu.a = cpu.ram[cpu.de]; });
-      OP(0x1f, RAR, _,_      , CYB     , { r = cpu.a; cpu.a = (cpu.cy << 7) | (r >> 1); });
-      OP(0x21, LXI, HL,D16   , _       , { cpu.hl = d16; });
-      OP(0x23, INX, HL,_     , _       , { cpu.hl++; });
-      OP(0x24, INR, H,_      , _       , { cpu.h++; });
-      OP(0x26, MVI, H,D8     , _       , { cpu.h = d8; });
-      OP(0x29, DAD, HL,_     , CY      , { r = cpu.hl; r += cpu.hl; cpu.hl = r; });
-      OP(0x31, LXI, SP,D16   , _       , { cpu.sp = d16; });
-      OP(0x36, MVI, (HL),D8  , _       , { cpu.ram[cpu.hl] = d8; });
-      OP(0x44, MOV, B,H      , _       , { cpu.b = cpu.h; });
-      OP(0x49, MOV, C,C      , _       , { cpu.c = cpu.c; });
-      OP(0x6f, MOV, L,A      , _       , { cpu.l = cpu.a; });
-      OP(0x77, MOV, (HL),A   , _       , { cpu.ram[cpu.hl] = cpu.a; });
-      OP(0x7c, MOV, A,H      , _       , { cpu.a = cpu.h; });
-      OP(0xc2, JNZ, ADDR,_   , _       , { if (!cpu.z) { cpu.pc = addr; }; });
-      OP(0xc1, POP, BC,_     , _       , { cpu.bc = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
-      OP(0xc3, JMP, ADDR,_   , _       , { cpu.pc = addr; });
-      OP(0xc5, PUSH, B,_     , _       , { cpu.ram[--cpu.sp] = cpu.b;
-                                           cpu.ram[--cpu.sp] = cpu.c; });
-      OP(0xc9, RET, _,_      , _       , { cpu.pc = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
-      OP(0xcd, CALL, ADDR,_  , _       , { call: cpu.ram[--cpu.sp] = cpu.pc >> 8;
-                                           cpu.ram[--cpu.sp] = cpu.pc;
-                                           cpu.pc = addr; });
-      OP(0xd1, POP, DE,_      , _      , { cpu.de = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
-      OP(0xd3, OUT, D8,_     , _       , { /* special */ });
-      OP(0xd5, PUSH, D,_     , _       , { cpu.ram[--cpu.sp] = cpu.d;
-                                           cpu.ram[--cpu.sp] = cpu.e; });
-      OP(0xe1, POP, HL,_     , _       , { cpu.hl = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
-      OP(0xe5, PUSH, H,_     , _       , { cpu.ram[--cpu.sp] = cpu.h;
-                                           cpu.ram[--cpu.sp] = cpu.l; });
-      OP(0xeb, XCHG, _,_     , _       , { u8 t = cpu.h; cpu.h = cpu.d; cpu.d = t;
-                                              t = cpu.l; cpu.l = cpu.e; cpu.e = t; });
-      OP(0xf3, DI, _,_       , _       , { /* special */ });
-      OP(0xfc, CM, ADDR,_    , _       , { if (!cpu.s) goto call; });
-      OP(0xfe, CPI, D8,_     , Z|S|P|CY|AC, { r = cpu.a - d8; });
+      OP(0x00, NOP, _,_    , _          , {});
+      OP(0x01, LXI, BC,D16 , _          , { cpu.bc = d16; });
+      OP(0x05, DCR, B,_    , Z|S|P|AC   , { r = cpu.b; r--; cpu.b = r; });
+      OP(0x06, MVI, B,D8   , _          , { cpu.b = d8; });
+      OP(0x09, DAD, BC,_   , CY         , { r = cpu.hl; r += cpu.bc; cpu.hl = r; });
+      OP(0x0d, DCR, C,_    , Z|S|P|AC   , { r = cpu.c; r--; cpu.c = r; });
+      OP(0x0e, MVI, C,D8   , _          , { cpu.c = d8; });
+      OP(0x0f, RRC, _,_    , CYR        , { r = cpu.a; cpu.a = ((r&1) << 7) | (r >> 1); });
+      OP(0x11, LXI, DE,D16 , _          , { cpu.de = d16; });
+      OP(0x13, INX, DE,_   , _          , { cpu.de++; });
+      OP(0x19, DAD, DE,_   , CY         , { r = cpu.hl; r += cpu.de; cpu.hl = r; });
+      OP(0x1a, LDAX, DE,_  , _          , { cpu.a = cpu.ram[cpu.de]; });
+      OP(0x1f, RAR, _,_    , CYR        , { r = cpu.a; cpu.a = (cpu.cy << 7) | (r >> 1); });
+      OP(0x21, LXI, HL,D16 , _          , { cpu.hl = d16; });
+      OP(0x23, INX, HL,_   , _          , { cpu.hl++; });
+      OP(0x24, INR, H,_    , _          , { cpu.h++; });
+      OP(0x26, MVI, H,D8   , _          , { cpu.h = d8; });
+      OP(0x29, DAD, HL,_   , CY         , { r = cpu.hl; r += cpu.hl; cpu.hl = r; });
+      OP(0x31, LXI, SP,D16 , _          , { cpu.sp = d16; });
+      OP(0x36, MVI, (HL),D8, _          , { cpu.ram[cpu.hl] = d8; });
+      OP(0x44, MOV, B,H    , _          , { cpu.b = cpu.h; });
+      OP(0x49, MOV, C,C    , _          , { cpu.c = cpu.c; });
+      OP(0x5f, MOV, E,A    , _          , { cpu.e = cpu.a; });
+      OP(0x6f, MOV, L,A    , _          , { cpu.l = cpu.a; });
+      OP(0x77, MOV, (HL),A , _          , { cpu.ram[cpu.hl] = cpu.a; });
+      OP(0x7c, MOV, A,H    , _          , { cpu.a = cpu.h; });
+      OP(0x7d, MOV, A,L    , _          , { cpu.a = cpu.l; });
+      OP(0xc2, JNZ, ADDR,_ , _          , { if (!cpu.z) { cpu.pc = addr; }; });
+      OP(0xc1, POP, BC,_   , _          , { cpu.bc = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
+      OP(0xc3, JMP, ADDR,_ , _          , { cpu.pc = addr; });
+      OP(0xc5, PUSH, BC,_  , _          , { cpu.ram[--cpu.sp] = cpu.b; cpu.ram[--cpu.sp] = cpu.c; });
+      OP(0xc6, ADI, D8,_   , Z|S|P|CY|AC, { r = cpu.a; r += d8; cpu.a = r; });
+      OP(0xc9, RET, _,_    , _          , { cpu.pc = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
+      OP(0xca, JZ, ADDR,_  , _          , { if (cpu.z) cpu.pc = addr; ; });
+      OP(0xcd, CALL, ADDR,_, _          , { call: cpu.ram[--cpu.sp] = cpu.pc >> 8;
+                                              cpu.ram[--cpu.sp] = cpu.pc;
+                                              cpu.pc = addr; });
+      OP(0xd1, POP, DE,_   , _          , { cpu.de = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
+      OP(0xd2, JNC, ADDR,_ , _          , { if (!cpu.cy) cpu.pc = addr; });
+      OP(0xd3, OUT, D8,_   , _          , { /* special */ });
+      OP(0xd5, PUSH, DE,_  , _          , { cpu.ram[--cpu.sp] = cpu.d; cpu.ram[--cpu.sp] = cpu.e; });
+      OP(0xe1, POP, HL,_   , _          , { cpu.hl = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
+      OP(0xe3, XTHL, _,_   , _          , { SWAP(cpu.h, cpu.ram[cpu.sp+1]); SWAP(cpu.l, cpu.ram[cpu.sp]); });
+      OP(0xe5, PUSH, HL,_  , _          , { cpu.ram[--cpu.sp] = cpu.h; cpu.ram[--cpu.sp] = cpu.l; });
+      OP(0xe6, ANI, D8,_   , Z|S|P|CY|AC, { r = cpu.a & d8; });
+      OP(0xea, JPE, ADDR,_ , _          , { if (cpu.p) cpu.pc = addr; });
+      OP(0xeb, XCHG, _,_   , _          , { SWAP(cpu.h, cpu.d); SWAP(cpu.l, cpu.e); });
+      OP(0xf1, POP, PSW,_  , _          , { cpu.flags = cpu.ram[cpu.sp++]; cpu.a = cpu.ram[cpu.sp++]; });
+      OP(0xf2, JP, ADDR,_  , _          , { if (cpu.s) cpu.pc = addr; });
+      OP(0xf3, DI, _,_     , _          , { /* special */ });
+      OP(0xf5, PUSH, PSW,_ , _          , { cpu.ram[--cpu.sp] = cpu.a; cpu.ram[--cpu.sp] = cpu.flags; });
+      OP(0xfa, JM, ADDR,_  , _          , { if (!cpu.s) cpu.pc = addr; });
+      OP(0xfc, CM, ADDR,_  , _          , { if (!cpu.s) goto call; });
+      OP(0xfd, CPUER, _,_  , _          , { printf("CPU diag errored\n"); exit(1); });
+      OP(0xfe, CPI, D8,_   , Z|S|P|CY|AC, { r = cpu.a - d8; });
 
 
     default:
