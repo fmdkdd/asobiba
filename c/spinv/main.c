@@ -91,6 +91,19 @@ void die(const char *msg) {
   exit(1);
 }
 
+#define WRITE(ADDR, V)                                                  \
+  switch (ADDR) {                                                       \
+  case 0x0000 ... 0x1fff:                                               \
+    printf("Invalid write to ROM @%02x\n", (ADDR));                     \
+    break;                                                              \
+  case 0x2400 ... 0x3fff:                                               \
+    printf("Write to video RAM @%02x %02x\n", (ADDR), (V));             \
+    cpu.ram[(ADDR)] = (V);                                              \
+    break;                                                              \
+  default:                                                              \
+    cpu.ram[(ADDR)] = (V);                                              \
+  }
+
 // TODO: eliminate redundancy of Register / Immediate / Memory accesses
 
 int main(int argc, char *argv[]) {
@@ -151,8 +164,12 @@ int main(int argc, char *argv[]) {
       OP(0x26, MVI, H,D8   , _          , { cpu.h = d8; });
       OP(0x29, DAD, HL,_   , CY         , { r = cpu.hl; r += cpu.hl; cpu.hl = r; });
       OP(0x31, LXI, SP,D16 , _          , { cpu.sp = d16; });
-      OP(0x36, MVI, (HL),D8, _          , { cpu.ram[cpu.hl] = d8; });
+      OP(0x32, STA, ADDR,_ , _          , { WRITE(addr, cpu.a); });
+      OP(0x35, DCR, (HL),_ , Z|S|P|AC   , { r = cpu.hl; r--; cpu.hl = r; });
+      OP(0x36, MVI, (HL),D8, _          , { WRITE(cpu.hl, d8); });
+      OP(0x3a, LDA, ADDR,_ , _          , { cpu.a = cpu.ram[addr]; });
       OP(0x3d, DCR, A,_    , Z|S|P|AC   , { r = cpu.a; r--; cpu.a = r; });
+      OP(0x3e, MVI, A,D8   , _          , { cpu.a = d8; });
       OP(0x44, MOV, B,H    , _          , { cpu.b = cpu.h; });
       OP(0x46, MOV, B,(HL) , _          , { cpu.b = cpu.ram[cpu.hl]; });
       OP(0x49, MOV, C,C    , _          , { cpu.c = cpu.c; });
@@ -163,7 +180,7 @@ int main(int argc, char *argv[]) {
       OP(0x66, MOV, H,(HL) , _          , { cpu.h = cpu.ram[cpu.hl]; });
       OP(0x68, MOV, L,B    , _          , { cpu.l = cpu.b; });
       OP(0x6f, MOV, L,A    , _          , { cpu.l = cpu.a; });
-      OP(0x77, MOV, (HL),A , _          , { cpu.ram[cpu.hl] = cpu.a; });
+      OP(0x77, MOV, (HL),A , _          , { WRITE(cpu.hl, cpu.a); });
       OP(0x79, MOV, A,C    , _          , { cpu.a = cpu.c; });
       OP(0x7a, MOV, A,D    , _          , { cpu.a = cpu.d; });
       OP(0x7b, MOV, A,E    , _          , { cpu.a = cpu.e; });
@@ -172,12 +189,13 @@ int main(int argc, char *argv[]) {
       OP(0x7e, MOV, A,(HL) , _          , { cpu.a = cpu.ram[cpu.hl]; });
       OP(0xa7, ANA, A,_    , Z|S|P|CY|AC, { r = cpu.a; r &= cpu.a; cpu.a = r; });
       OP(0xb2, ORA, D,_    , Z|S|P|CY|AC, { r = cpu.a; r |= cpu.d; cpu.a = r; });
-      OP(0xc2, JNZ, ADDR,_ , _          , { if (!cpu.z) { cpu.pc = addr; }; });
       OP(0xc1, POP, BC,_   , _          , { cpu.bc = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
+      OP(0xc2, JNZ, ADDR,_ , _          , { if (!cpu.z) { cpu.pc = addr; }; });
       OP(0xc3, JMP, ADDR,_ , _          , { cpu.pc = addr; });
       OP(0xc5, PUSH, BC,_  , _          , { cpu.ram[--cpu.sp] = cpu.b; cpu.ram[--cpu.sp] = cpu.c; });
       OP(0xc6, ADI, D8,_   , Z|S|P|CY|AC, { r = cpu.a; r += d8; cpu.a = r; });
-      OP(0xc9, RET, _,_    , _          , { cpu.pc = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
+      OP(0xc8, RZ, _,_     , _          , { if (cpu.z) goto ret; });
+      OP(0xc9, RET, _,_    , _          , { ret: cpu.pc = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
       OP(0xca, JZ, ADDR,_  , _          , { if (cpu.z) cpu.pc = addr; ; });
       OP(0xcd, CALL, ADDR,_, _          , { call: cpu.ram[--cpu.sp] = cpu.pc >> 8;
                                               cpu.ram[--cpu.sp] = cpu.pc;
@@ -186,7 +204,9 @@ int main(int argc, char *argv[]) {
       OP(0xd2, JNC, ADDR,_ , _          , { if (!cpu.cy) cpu.pc = addr; });
       OP(0xd3, OUT, D8,_   , _          , { /* special */ });
       OP(0xd5, PUSH, DE,_  , _          , { cpu.ram[--cpu.sp] = cpu.d; cpu.ram[--cpu.sp] = cpu.e; });
-      OP(0xda, JC, ADDR,_ , _           , { if (cpu.cy) cpu.pc = addr; });
+      OP(0xd7, RST, 2,_    , _          , { addr = 0x10; goto call; });
+      OP(0xda, JC, ADDR,_  , _          , { if (cpu.cy) cpu.pc = addr; });
+      OP(0xdb, IN, D8,_    , _          , { /* special */ });
       OP(0xe1, POP, HL,_   , _          , { cpu.hl = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
       OP(0xe2, JPO, ADDR,_ , _          , { if (!cpu.p) cpu.pc = addr; });
       OP(0xe3, XTHL, _,_   , _          , { SWAP(cpu.h, cpu.ram[cpu.sp+1]); SWAP(cpu.l, cpu.ram[cpu.sp]); });
@@ -199,6 +219,7 @@ int main(int argc, char *argv[]) {
       OP(0xf3, DI, _,_     , _          , { /* special */ });
       OP(0xf5, PUSH, PSW,_ , _          , { cpu.ram[--cpu.sp] = cpu.a; cpu.ram[--cpu.sp] = cpu.flags; });
       OP(0xfa, JM, ADDR,_  , _          , { if (cpu.s) cpu.pc = addr; });
+      OP(0xfb, EI, _,_     , _          , { /* special */ });
       OP(0xfc, CM, ADDR,_  , _          , { if (cpu.s) goto call; });
       OP(0xfd, CPUER, _,_  , _          , { printf("CPU diag errored\n"); exit(1); });
       OP(0xfe, CPI, D8,_   , Z|S|P|CY|AC, { r = cpu.a - d8; });
@@ -206,6 +227,13 @@ int main(int argc, char *argv[]) {
 
     default:
       printf("cycle %d: unimplemented opcode: $%02x\n", cycles, op[0]);
+
+      printf("P1\n256 224\n");
+      for (u32 y=0; y < 256; ++y)
+        for (u32 x=0; x < 32; ++x)
+          for (u8 b=0; b < 8; ++b)
+            printf("%d ", (cpu.ram[0x2400 + y*0x20 + x] >> b) & 1);
+
       exit(1);
     }
 
