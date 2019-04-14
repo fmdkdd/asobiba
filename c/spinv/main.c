@@ -93,6 +93,16 @@ void diff_state(CPU *old, CPU *new) {
 #define SWAP(A,B) { u8 t = (A); (A) = (B); (B) = t; }
 #define R(REG,V) { r = (V); REG = r; }
 
+#define MOV_BLOCK(CODE, REG, reg)                                  \
+  OP(CODE + 0, MOV,REG,B   , _, { cpu.reg = cpu.b; });             \
+  OP(CODE + 1, MOV,REG,C   , _, { cpu.reg = cpu.c; });             \
+  OP(CODE + 2, MOV,REG,D   , _, { cpu.reg = cpu.d; });             \
+  OP(CODE + 3, MOV,REG,E   , _, { cpu.reg = cpu.e; });             \
+  OP(CODE + 4, MOV,REG,H   , _, { cpu.reg = cpu.h; });             \
+  OP(CODE + 5, MOV,REG,L   , _, { cpu.reg = cpu.l; });             \
+  OP(CODE + 6, MOV,REG,(HL), _, { cpu.reg = cpu.ram[cpu.hl]; });   \
+  OP(CODE + 7, MOV,REG,A   , _, { cpu.reg = cpu.a; });             \
+
 bool parity(u8 x) {
   bool p = 0;
   for (u8 b=0; b < 8; ++b)
@@ -164,26 +174,36 @@ int main(int argc, char *argv[]) {
     case 0x08: case 0x10: case 0x20:
       // TODO: show immediate values for D8, D16?
       // Or better yet, the output could show values for all arguments
-      // (registers included) as well as before/after for relevant registers
       OP(0x00, NOP, _,_    , _          , {});
       OP(0x01, LXI, BC,D16 , _          , { cpu.bc = d16; });
       OP(0x04, INR, B,_    , Z|S|P|AC   , { R(cpu.b, cpu.b + 1) });
       OP(0x05, DCR, B,_    , Z|S|P|AC   , { R(cpu.b, cpu.b - 1) });
       OP(0x06, MVI, B,D8   , _          , { cpu.b = d8; });
       OP(0x09, DAD, BC,_   , CY         , { R(cpu.hl, cpu.hl + cpu.bc) });
+      OP(0x0c, INR, C,_    , Z|S|P|AC   , { R(cpu.c, cpu.c + 1) });
       OP(0x0d, DCR, C,_    , Z|S|P|AC   , { R(cpu.c, cpu.c - 1) });
       OP(0x0e, MVI, C,D8   , _          , { cpu.c = d8; });
       OP(0x0f, RRC, _,_    , CYR        , { R(cpu.a, ((cpu.a&1) << 7) | (cpu.a >> 1)); });
       OP(0x11, LXI, DE,D16 , _          , { cpu.de = d16; });
       OP(0x13, INX, DE,_   , _          , { cpu.de++; });
+      OP(0x14, INR, D,_    , Z|S|P|AC   , { R(cpu.d, cpu.d + 1); });
+      OP(0x15, DCR, D,_    , Z|S|P|AC   , { R(cpu.d, cpu.d - 1); });
+      OP(0x16, MVI, D,D8   , _          , { cpu.d = d8; });
       OP(0x19, DAD, DE,_   , CY         , { r = cpu.hl; r += cpu.de; cpu.hl = r; });
       OP(0x1a, LDAX, DE,_  , _          , { cpu.a = cpu.ram[cpu.de]; });
+      OP(0x1c, INR, E,_    , Z|S|P|AC   , { R(cpu.e, cpu.e + 1); });
+      OP(0x1d, DCR, E,_    , Z|S|P|AC   , { R(cpu.e, cpu.e - 1); });
+      OP(0x1e, MVI, E,D8   , _          , { cpu.e = d8; });
       OP(0x1f, RAR, _,_    , CYR        , { R(cpu.a, (cpu.cy << 7) | (cpu.a >> 1)); });
       OP(0x21, LXI, HL,D16 , _          , { cpu.hl = d16; });
       OP(0x23, INX, HL,_   , _          , { cpu.hl++; });
-      OP(0x24, INR, H,_    , _          , { cpu.h++; });
+      OP(0x24, INR, H,_    , _          , { R(cpu.h, cpu.h + 1); });
+      OP(0x25, DCR, H,_    , _          , { R(cpu.h, cpu.h - 1); });
       OP(0x26, MVI, H,D8   , _          , { cpu.h = d8; });
       OP(0x29, DAD, HL,_   , CY         , { R(cpu.hl, cpu.hl+cpu.hl) });
+      OP(0x2c, INR, L,_    , _          , { R(cpu.l, cpu.l + 1); });
+      OP(0x2d, DCR, L,_    , _          , { R(cpu.l, cpu.l - 1); });
+      OP(0x2e, MVI, L,D8   , _          , { cpu.l = d8; });
       OP(0x31, LXI, SP,D16 , _          , { cpu.sp = d16; });
       OP(0x32, STA, ADDR,_ , _          , { WRITE(addr, cpu.a); });
       OP(0x35, DCR, (HL),_ , Z|S|P|AC   , { WRITE(cpu.hl, r=cpu.ram[cpu.hl]-1); });
@@ -192,25 +212,19 @@ int main(int argc, char *argv[]) {
       OP(0x3c, INR, A,_    , Z|S|P|AC   , { R(cpu.a, cpu.a + 1); });
       OP(0x3d, DCR, A,_    , Z|S|P|AC   , { R(cpu.a, cpu.a - 1); });
       OP(0x3e, MVI, A,D8   , _          , { cpu.a = d8; });
-      OP(0x44, MOV, B,H    , _          , { cpu.b = cpu.h; });
-      OP(0x46, MOV, B,(HL) , _          , { cpu.b = cpu.ram[cpu.hl]; });
-      OP(0x47, MOV, B,A    , _          , { cpu.b = cpu.a; });
-      OP(0x49, MOV, C,C    , _          , { cpu.c = cpu.c; });
-      OP(0x4e, MOV, C,(HL) , _          , { cpu.c = cpu.ram[cpu.hl]; });
-      OP(0x4f, MOV, C,A    , _          , { cpu.c = cpu.a; });
-      OP(0x56, MOV, D,(HL) , _          , { cpu.d = cpu.ram[cpu.hl]; });
-      OP(0x5f, MOV, E,A    , _          , { cpu.e = cpu.a; });
-      OP(0x66, MOV, H,(HL) , _          , { cpu.h = cpu.ram[cpu.hl]; });
-      OP(0x68, MOV, L,B    , _          , { cpu.l = cpu.b; });
-      OP(0x6f, MOV, L,A    , _          , { cpu.l = cpu.a; });
+      MOV_BLOCK(0x40, B, b);
+      MOV_BLOCK(0x48, C, c);
+      MOV_BLOCK(0x50, D, d);
+      MOV_BLOCK(0x58, E, e);
+      MOV_BLOCK(0x60, H, h);
+      MOV_BLOCK(0x68, L, l);
       OP(0x77, MOV, (HL),A , _          , { WRITE(cpu.hl, cpu.a); });
-      OP(0x79, MOV, A,C    , _          , { cpu.a = cpu.c; });
-      OP(0x7a, MOV, A,D    , _          , { cpu.a = cpu.d; });
-      OP(0x7b, MOV, A,E    , _          , { cpu.a = cpu.e; });
-      OP(0x7c, MOV, A,H    , _          , { cpu.a = cpu.h; });
-      OP(0x7d, MOV, A,L    , _          , { cpu.a = cpu.l; });
-      OP(0x7e, MOV, A,(HL) , _          , { cpu.a = cpu.ram[cpu.hl]; });
+      MOV_BLOCK(0x78, A, a);
+      OP(0x80, ADD, B,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a + cpu.b); });
+      OP(0x81, ADD, C,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a + cpu.c); });
+      OP(0x82, ADD, D,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a + cpu.d); });
       OP(0xa7, ANA, A,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a & cpu.a); });
+      OP(0xaf, XRA, A,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a ^ cpu.a); });
       OP(0xb2, ORA, D,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a | cpu.d); });
       OP(0xc0, RNZ, _,_    , _          , { if (!cpu.z) goto ret; });
       OP(0xc1, POP, BC,_   , _          , { cpu.bc = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
@@ -271,19 +285,11 @@ int main(int argc, char *argv[]) {
 
     default:
       printf("cycle %d: unimplemented opcode: $%02x\n", cycles, op[0]);
-
-      printf("P1\n256 224\n");
-      for (u32 y=0; y < 256; ++y)
-        for (u32 x=0; x < 32; ++x)
-          for (u8 b=0; b < 8; ++b)
-            printf("%d ", (cpu.ram[0x2400 + y*0x20 + x] >> b) & 1);
-
       exit(1);
     }
 
     cycles++;
   }
-
 
   return EXIT_SUCCESS;
 }
