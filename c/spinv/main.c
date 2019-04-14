@@ -44,10 +44,22 @@ typedef enum {
  _, A, B, C, D, E, H, L, BC, DE, HL, SP, PSW, D8, D16, ADDR,
 } ARGS;
 
+#define DIFF(REG) {                                             \
+    if (old->REG != new->REG) printf(#REG ": %02x ", new->REG); \
+    else printf("      ");                                      \
+  }
+
+void diff_state(CPU *old, CPU *new) {
+  printf("\t");
+  DIFF(a); DIFF(b); DIFF(c); DIFF(d); DIFF(e); DIFF(h); DIFF(l);
+  DIFF(z); DIFF(s); DIFF(p); DIFF(cy); DIFF(ac); DIFF(sp);
+}
+
 // TODO: other flags
 
 #define OP(code, name, arg1, arg2, flags, expr)                         \
   case (code): {                                                        \
+    CPU back = cpu;                                                     \
     u16 old_pc = cpu.pc;                                                \
     printf("%04x %02x ", cpu.pc++, op[0]);                              \
     OP_ARG(arg1);                                                       \
@@ -57,13 +69,14 @@ typedef enum {
     printf(#name);                                                      \
     if ((arg1) != _) printf(" %s", #arg1);                              \
     if ((arg2) != _) printf(",%s", #arg2);                              \
-    printf("\n");                                                       \
     expr;                                                               \
     if ((flags) & Z)   { cpu.z = r == 0; }                              \
     if ((flags) & S)   { cpu.s = (r >> 7) & 1; }                        \
     if ((flags) & P)   { cpu.p = parity(r); }                           \
     if ((flags) & CY)  { cpu.cy = r > 0xff; }                           \
     if ((flags) & CYR) { cpu.cy = r & 1; }                              \
+    diff_state(&back, &cpu);                                            \
+    printf("\n");                                                       \
   }                                                                     \
   break
 
