@@ -121,13 +121,18 @@ void die(const char *msg) {
 
 int main(int argc, char *argv[]) {
 
-  if (argc != 3) {
-    fprintf(stderr, "Usage: spinv ROM ORIG");
+  if (argc != 2) {
+    fprintf(stderr, "Usage: spinv ROM");
     exit(1);
   }
 
   char *path = argv[1];
-  int orig = strtoul(argv[2], NULL, 0);
+
+#ifdef CPUDIAG
+  int orig = 0x100;
+#else
+  int orig = 0;
+#endif
 
   // Init CPU
   CPU cpu;
@@ -139,9 +144,10 @@ int main(int argc, char *argv[]) {
   fread(cpu.ram + orig, sizeof(u8), 0x2000, rom);
   fclose(rom);
 
-  // @Temp: should be behind a flag
+#ifdef CPUDIAG
   // Tweak the code so we directly fail when jumping to CPUER
   cpu.ram[0x0689] = 0xfd; // CPUER;
+#endif
 
   cpu.pc = orig;
   u32 cycles = 0;
@@ -237,6 +243,9 @@ int main(int argc, char *argv[]) {
       OP(0xfd, CPUER, _,_  , _          , { printf("CPU diag errored\n"); exit(1); });
       OP(0xfe, CPI, D8,_   , Z|S|P|CY|AC, { r = cpu.a - d8; });
 
+#ifdef CPUDIAG
+      OP(0xfd, CPUER, _,_  , _          , { printf("\nCPU diag errored\n"); exit(1); });
+#endif
 
     default:
       printf("cycle %d: unimplemented opcode: $%02x\n", cycles, op[0]);
