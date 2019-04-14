@@ -56,7 +56,7 @@ typedef enum {
     else printf("      ");                                      \
   }
 
-static void diff_state(CPU *old, CPU *new) {
+static void diff_state(const CPU *const old, const CPU *const new) {
   printf("\t");
   DIFF(a); DIFF(b); DIFF(c); DIFF(d); DIFF(e); DIFF(h); DIFF(l);
   DIFF(z); DIFF(s); DIFF(p); DIFF(cy); DIFF(ac); DIFF(sp);
@@ -120,7 +120,7 @@ static void diff_state(CPU *old, CPU *new) {
   OP(code + 6, name,A,(HL), Z|S|P|CY|AC, { R(cpu->a, cpu->a op cpu->ram[cpu->hl]); }); \
   OP(code + 7, name,A,A   , Z|S|P|CY|AC, { R(cpu->a, cpu->a op cpu->a); });
 
-static bool parity(u8 x) {
+static bool parity(const u8 x) {
   bool p = 0;
   for (u8 b=0; b < 8; ++b)
     p ^= (x >> b) & 1;
@@ -143,7 +143,7 @@ static bool parity(u8 x) {
 
 // TODO: eliminate redundancy of Register / Immediate / Memory accesses
 
-int cpu_step(CPU *cpu) {
+int cpu_step(CPU *const cpu) {
   // Fetch and decode
   u8 d8;
   u16 r, d16, addr;
@@ -247,8 +247,8 @@ int cpu_step(CPU *cpu) {
     OP(0xca, JZ, ADDR,_  , _          , { if (cpu->z) cpu->pc = addr; });
     OP(0xcc, CZ, ADDR,_  , _          , { if (cpu->z) goto call; });
     OP(0xcd, CALL, ADDR,_, _          , { call: cpu->ram[--cpu->sp] = cpu->pc >> 8;
-        cpu->ram[--cpu->sp] = cpu->pc;
-        cpu->pc = addr; });
+                                                cpu->ram[--cpu->sp] = cpu->pc;
+                                                cpu->pc = addr; });
     OP(0xce, ACI, D8,_   , Z|S|P|CY|AC, { R(cpu->a, cpu->a + d8 + cpu->cy); });
     OP(0xd0, RNC, _,_    , _          , { if (!cpu->cy) goto ret; });
     OP(0xd1, POP, DE,_   , _          , { cpu->de = TO16(cpu->ram[cpu->sp+1], cpu->ram[cpu->sp]); cpu->sp+= 2; });

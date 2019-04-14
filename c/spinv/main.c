@@ -10,7 +10,7 @@ typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 
-void die(const char *msg) {
+void die(const char *const msg) {
   perror(msg);
   exit(1);
 }
@@ -22,7 +22,7 @@ int main(int argc, char *argv[]) {
     exit(1);
   }
 
-  char *path = argv[1];
+  const char *path = argv[1];
 
 #ifdef CPUDIAG
   int orig = 0x100;
@@ -35,7 +35,7 @@ int main(int argc, char *argv[]) {
   memset(&cpu, 0, sizeof(CPU));
 
   // Map ROM
-  FILE *rom = fopen(path, "rb");
+  FILE *const rom = fopen(path, "rb");
   if (!rom) die("Cannot open file ");
   fread(cpu.ram + orig, sizeof(u8), 0x2000, rom);
   fclose(rom);
