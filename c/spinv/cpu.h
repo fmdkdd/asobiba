@@ -299,3 +299,9 @@ int cpu_step(CPU *const cpu) {
 
   return 0;
 }
+
+void cpu_interrupt(CPU *const cpu) {
+  cpu->ram[--cpu->sp] = cpu->pc >> 8;
+  cpu->ram[--cpu->sp] = cpu->pc;
+  cpu->pc = 0x10;
+}
