@@ -13,7 +13,13 @@ typedef uint32_t u32;
 typedef struct CPU {
   u8 a;
   union {
+#if   __BYTE_ORDER == __LITTLE_ENDIAN
+    struct { u8  c, b, e, d, l, h; };
+#elif __BYTE_ORDER == __BIG_ENDIAN
     struct { u8  b, c, d, e, h, l; };
+#else
+    #error Unspecified endianness
+#endif
     struct { u16 bc,   de,   hl; };
   };
   union {
@@ -44,8 +50,8 @@ typedef enum {
  _, A, B, C, D, E, H, L, BC, DE, HL, SP, PSW, D8, D16, ADDR,
 } ARGS;
 
-#define DIFF(REG) {                                             \
-    if (old->REG != new->REG) printf(#REG ": %02x ", new->REG); \
+#define DIFF(reg) {                                             \
+    if (old->reg != new->reg) printf(#reg ": %02x ", new->reg); \
     else printf("      ");                                      \
   }
 
@@ -89,19 +95,29 @@ void diff_state(CPU *old, CPU *new) {
   case ADDR: addr = TO16(op[2], op[1]); cpu.pc+=2; break;               \
   }
 
-#define TO16(H,L) ((H) << 8 | (L))
-#define SWAP(A,B) { u8 t = (A); (A) = (B); (B) = t; }
-#define R(REG,V) { r = (V); REG = r; }
+#define TO16(h,l) ((h) << 8 | (l))
+#define SWAP(a,b) { u8 t = (a); (a) = (b); (b) = t; }
+#define R(reg,v) { r = (v); reg = r; }
 
-#define MOV_BLOCK(CODE, REG, reg)                                  \
-  OP(CODE + 0, MOV,REG,B   , _, { cpu.reg = cpu.b; });             \
-  OP(CODE + 1, MOV,REG,C   , _, { cpu.reg = cpu.c; });             \
-  OP(CODE + 2, MOV,REG,D   , _, { cpu.reg = cpu.d; });             \
-  OP(CODE + 3, MOV,REG,E   , _, { cpu.reg = cpu.e; });             \
-  OP(CODE + 4, MOV,REG,H   , _, { cpu.reg = cpu.h; });             \
-  OP(CODE + 5, MOV,REG,L   , _, { cpu.reg = cpu.l; });             \
-  OP(CODE + 6, MOV,REG,(HL), _, { cpu.reg = cpu.ram[cpu.hl]; });   \
-  OP(CODE + 7, MOV,REG,A   , _, { cpu.reg = cpu.a; });             \
+#define MOV_BLOCK(code, REG, reg)                                  \
+  OP(code + 0, MOV,REG,B   , _, { cpu.reg = cpu.b; });             \
+  OP(code + 1, MOV,REG,C   , _, { cpu.reg = cpu.c; });             \
+  OP(code + 2, MOV,REG,D   , _, { cpu.reg = cpu.d; });             \
+  OP(code + 3, MOV,REG,E   , _, { cpu.reg = cpu.e; });             \
+  OP(code + 4, MOV,REG,H   , _, { cpu.reg = cpu.h; });             \
+  OP(code + 5, MOV,REG,L   , _, { cpu.reg = cpu.l; });             \
+  OP(code + 6, MOV,REG,(HL), _, { cpu.reg = cpu.ram[cpu.hl]; });   \
+  OP(code + 7, MOV,REG,A   , _, { cpu.reg = cpu.a; });
+
+#define ARITH_BLOCK(code, name, op)                                     \
+  OP(code + 0, name,A,B   , Z|S|P|CY|AC, { R(cpu.a, cpu.a op cpu.b); }); \
+  OP(code + 1, name,A,C   , Z|S|P|CY|AC, { R(cpu.a, cpu.a op cpu.c); }); \
+  OP(code + 2, name,A,D   , Z|S|P|CY|AC, { R(cpu.a, cpu.a op cpu.d); }); \
+  OP(code + 3, name,A,E   , Z|S|P|CY|AC, { R(cpu.a, cpu.a op cpu.e); }); \
+  OP(code + 4, name,A,H   , Z|S|P|CY|AC, { R(cpu.a, cpu.a op cpu.h); }); \
+  OP(code + 5, name,A,L   , Z|S|P|CY|AC, { R(cpu.a, cpu.a op cpu.l); }); \
+  OP(code + 6, name,A,(HL), Z|S|P|CY|AC, { R(cpu.a, cpu.a op cpu.ram[cpu.hl]); }); \
+  OP(code + 7, name,A,A   , Z|S|P|CY|AC, { R(cpu.a, cpu.a op cpu.a); });
 
 bool parity(u8 x) {
   bool p = 0;
@@ -115,17 +131,18 @@ void die(const char *msg) {
   exit(1);
 }
 
-#define WRITE(ADDR, V)                                                  \
-  switch (ADDR) {                                                       \
+#define WRITE(addr, v)                                                  \
+  switch (addr) {                                                       \
   case 0x0000 ... 0x1fff:                                               \
-    printf("Invalid write to ROM @%02x\n", (ADDR));                     \
+    printf("\nInvalid write to ROM @%02x\n", (addr));                   \
+    cpu.ram[(addr)] = v;                                                \
     break;                                                              \
   case 0x2400 ... 0x3fff:                                               \
-    printf("Write to video RAM @%02x %02x\n", (ADDR), (V));             \
-    cpu.ram[(ADDR)] = (V);                                              \
+    printf("\nWrite to video RAM @%02x %02x\n", (addr), (v));           \
+    cpu.ram[(addr)] = (v);                                              \
     break;                                                              \
   default:                                                              \
-    cpu.ram[(ADDR)] = (V);                                              \
+    cpu.ram[(addr)] = (v);                                              \
   }
 
 // TODO: eliminate redundancy of Register / Immediate / Memory accesses
@@ -176,56 +193,85 @@ int main(int argc, char *argv[]) {
       // Or better yet, the output could show values for all arguments
       OP(0x00, NOP, _,_    , _          , {});
       OP(0x01, LXI, BC,D16 , _          , { cpu.bc = d16; });
+      OP(0x02, STAX,BC,_   , _          , { WRITE(cpu.bc, cpu.a); });
+      OP(0x03, INX, BC,_   , _          , { cpu.bc++; });
       OP(0x04, INR, B,_    , Z|S|P|AC   , { R(cpu.b, cpu.b + 1) });
       OP(0x05, DCR, B,_    , Z|S|P|AC   , { R(cpu.b, cpu.b - 1) });
       OP(0x06, MVI, B,D8   , _          , { cpu.b = d8; });
       OP(0x09, DAD, BC,_   , CY         , { R(cpu.hl, cpu.hl + cpu.bc) });
+      OP(0x0a, LDAX,BC,_   , _          , { cpu.a = cpu.ram[cpu.bc]; });
+      OP(0x0b, DCX, BC,_   , _          , { cpu.bc--; });
       OP(0x0c, INR, C,_    , Z|S|P|AC   , { R(cpu.c, cpu.c + 1) });
       OP(0x0d, DCR, C,_    , Z|S|P|AC   , { R(cpu.c, cpu.c - 1) });
       OP(0x0e, MVI, C,D8   , _          , { cpu.c = d8; });
       OP(0x0f, RRC, _,_    , CYR        , { R(cpu.a, ((cpu.a&1) << 7) | (cpu.a >> 1)); });
       OP(0x11, LXI, DE,D16 , _          , { cpu.de = d16; });
+      OP(0x12, STAX,DE,_   , _          , { WRITE(cpu.de, cpu.a); });
       OP(0x13, INX, DE,_   , _          , { cpu.de++; });
       OP(0x14, INR, D,_    , Z|S|P|AC   , { R(cpu.d, cpu.d + 1); });
       OP(0x15, DCR, D,_    , Z|S|P|AC   , { R(cpu.d, cpu.d - 1); });
       OP(0x16, MVI, D,D8   , _          , { cpu.d = d8; });
       OP(0x19, DAD, DE,_   , CY         , { r = cpu.hl; r += cpu.de; cpu.hl = r; });
-      OP(0x1a, LDAX, DE,_  , _          , { cpu.a = cpu.ram[cpu.de]; });
+      OP(0x1a, LDAX,DE,_   , _          , { cpu.a = cpu.ram[cpu.de]; });
+      OP(0x1b, DCX, DE,_   , _          , { cpu.de--; });
       OP(0x1c, INR, E,_    , Z|S|P|AC   , { R(cpu.e, cpu.e + 1); });
       OP(0x1d, DCR, E,_    , Z|S|P|AC   , { R(cpu.e, cpu.e - 1); });
       OP(0x1e, MVI, E,D8   , _          , { cpu.e = d8; });
       OP(0x1f, RAR, _,_    , CYR        , { R(cpu.a, (cpu.cy << 7) | (cpu.a >> 1)); });
       OP(0x21, LXI, HL,D16 , _          , { cpu.hl = d16; });
+      OP(0x22, SHLD,ADDR,_ , _          , { WRITE(addr, cpu.l); WRITE(addr+1, cpu.h); });
       OP(0x23, INX, HL,_   , _          , { cpu.hl++; });
       OP(0x24, INR, H,_    , _          , { R(cpu.h, cpu.h + 1); });
       OP(0x25, DCR, H,_    , _          , { R(cpu.h, cpu.h - 1); });
       OP(0x26, MVI, H,D8   , _          , { cpu.h = d8; });
+      OP(0x27, DAA, _,_    , _          , { /* special */ });
       OP(0x29, DAD, HL,_   , CY         , { R(cpu.hl, cpu.hl+cpu.hl) });
+      OP(0x2a, LHLD,ADDR,_ , _          , { cpu.l = cpu.ram[addr]; cpu.h = cpu.ram[addr+1]; });
+      OP(0x2b, DCX, HL,_   , _          , { cpu.hl--; });
       OP(0x2c, INR, L,_    , _          , { R(cpu.l, cpu.l + 1); });
       OP(0x2d, DCR, L,_    , _          , { R(cpu.l, cpu.l - 1); });
       OP(0x2e, MVI, L,D8   , _          , { cpu.l = d8; });
+      OP(0x2f, CMA, _,_    , _          , { cpu.a = ~cpu.a; });
       OP(0x31, LXI, SP,D16 , _          , { cpu.sp = d16; });
       OP(0x32, STA, ADDR,_ , _          , { WRITE(addr, cpu.a); });
-      OP(0x35, DCR, (HL),_ , Z|S|P|AC   , { WRITE(cpu.hl, r=cpu.ram[cpu.hl]-1); });
+      OP(0x34, INR, (HL),_ , Z|S|P|AC   , { WRITE(cpu.hl, r=cpu.ram[cpu.hl] + 1); });
+      OP(0x35, DCR, (HL),_ , Z|S|P|AC   , { WRITE(cpu.hl, r=cpu.ram[cpu.hl] - 1); });
       OP(0x36, MVI, (HL),D8, _          , { WRITE(cpu.hl, d8); });
+      OP(0x37, STC, _,_    , _          , { cpu.cy = 1; });
       OP(0x3a, LDA, ADDR,_ , _          , { cpu.a = cpu.ram[addr]; });
       OP(0x3c, INR, A,_    , Z|S|P|AC   , { R(cpu.a, cpu.a + 1); });
       OP(0x3d, DCR, A,_    , Z|S|P|AC   , { R(cpu.a, cpu.a - 1); });
       OP(0x3e, MVI, A,D8   , _          , { cpu.a = d8; });
+      OP(0x3f, CMC, _,_    , _          , { cpu.cy = ~cpu.cy; });
       MOV_BLOCK(0x40, B, b);
       MOV_BLOCK(0x48, C, c);
       MOV_BLOCK(0x50, D, d);
       MOV_BLOCK(0x58, E, e);
       MOV_BLOCK(0x60, H, h);
       MOV_BLOCK(0x68, L, l);
+      OP(0x70, MOV, (HL),B , _          , { WRITE(cpu.hl, cpu.b); });
+      OP(0x71, MOV, (HL),A , _          , { WRITE(cpu.hl, cpu.c); });
+      OP(0x72, MOV, (HL),A , _          , { WRITE(cpu.hl, cpu.d); });
+      OP(0x73, MOV, (HL),A , _          , { WRITE(cpu.hl, cpu.e); });
+      OP(0x74, MOV, (HL),A , _          , { WRITE(cpu.hl, cpu.h); });
+      OP(0x75, MOV, (HL),A , _          , { WRITE(cpu.hl, cpu.l); });
       OP(0x77, MOV, (HL),A , _          , { WRITE(cpu.hl, cpu.a); });
       MOV_BLOCK(0x78, A, a);
-      OP(0x80, ADD, B,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a + cpu.b); });
-      OP(0x81, ADD, C,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a + cpu.c); });
-      OP(0x82, ADD, D,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a + cpu.d); });
-      OP(0xa7, ANA, A,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a & cpu.a); });
-      OP(0xaf, XRA, A,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a ^ cpu.a); });
-      OP(0xb2, ORA, D,_    , Z|S|P|CY|AC, { R(cpu.a, cpu.a | cpu.d); });
+      ARITH_BLOCK(0x80, ADD, +);
+      ARITH_BLOCK(0x88, ADC, + cpu.cy +);
+      ARITH_BLOCK(0x90, SUB, -);
+      ARITH_BLOCK(0x98, SBB, - cpu.cy -);
+      ARITH_BLOCK(0xa0, ANA, &);
+      ARITH_BLOCK(0xa8, XRA, ^);
+      ARITH_BLOCK(0xb0, ORA, |);
+      OP(0xb8, CMP, B,_    , C|S|P|CY|AC, { r = cpu.a - cpu.b; });
+      OP(0xb9, CMP, C,_    , C|S|P|CY|AC, { r = cpu.a - cpu.c; });
+      OP(0xba, CMP, D,_    , C|S|P|CY|AC, { r = cpu.a - cpu.d; });
+      OP(0xbb, CMP, E,_    , C|S|P|CY|AC, { r = cpu.a - cpu.e; });
+      OP(0xbc, CMP, H,_    , C|S|P|CY|AC, { r = cpu.a - cpu.h; });
+      OP(0xbd, CMP, L,_    , C|S|P|CY|AC, { r = cpu.a - cpu.l; });
+      OP(0xbe, CMP, (HL),_ , C|S|P|CY|AC, { r = cpu.a - cpu.ram[cpu.hl]; });
+      OP(0xbf, CMP, A,_    , C|S|P|CY|AC, { r = cpu.a - cpu.a; });
       OP(0xc0, RNZ, _,_    , _          , { if (!cpu.z) goto ret; });
       OP(0xc1, POP, BC,_   , _          , { cpu.bc = TO16(cpu.ram[cpu.sp+1], cpu.ram[cpu.sp]); cpu.sp+= 2; });
       OP(0xc2, JNZ, ADDR,_ , _          , { if (!cpu.z) cpu.pc = addr; });
