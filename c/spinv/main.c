@@ -70,9 +70,9 @@ void diff_state(CPU *old, CPU *new) {
     if ((arg1) != _) printf(" %s", #arg1);                              \
     if ((arg2) != _) printf(",%s", #arg2);                              \
     expr;                                                               \
-    if ((flags) & Z)   { cpu.z = r == 0; }                              \
+    if ((flags) & Z)   { cpu.z = (r&0xff) == 0; }                       \
     if ((flags) & S)   { cpu.s = (r >> 7) & 1; }                        \
-    if ((flags) & P)   { cpu.p = parity(r); }                           \
+    if ((flags) & P)   { cpu.p = parity((r&0xff)); }                    \
     if ((flags) & CY)  { cpu.cy = r > 0xff; }                           \
     if ((flags) & CYR) { cpu.cy = r & 1; }                              \
     diff_state(&back, &cpu);                                            \
