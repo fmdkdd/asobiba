@@ -5,7 +5,7 @@ ifeq ($(CPUDIAG), 1)
 FLAGS += -DCPUDIAG
 endif
 
-spinv: main.c compiler_flags
+spinv: main.c cpu.h compiler_flags
 	$(CC) $< -o $@ -Wall -Wextra -pedantic -std=c17 $(FLAGS)
 
 # Remember last flags used
