@@ -16169,3 +16169,44 @@ too much data.
 
 Maybe I should try blip & YM3438 on the GYM player where there are fewer moving
 parts.
+
+* [2019-04-14 dim.]
+** Space invaders success                                   :emulation:spinv:
+Since I got pretty far today in the cpudiag ROM, I figured I needed to hook the
+display.  The SDL2 docs are really not beginner friendly, but there are useful
+examples hidden inside.
+
+At first I got garbage:
+
+[[file:data/spinv-fail0.png]]
+
+It looked like I wasn't using the full display width.  And indeed I wasn't:
+
+#+BEGIN_SRC c
+for (u32 y=0; y < 256; ++y)
+  for (u32 x=0; x < 32; ++x)
+    for (u8 b=0; b < 8; ++b)
+      if ((cpu.ram[0x2400 + y*32 + x] >> b) & 1)
+        SDL_RenderDrawPoint(renderer, x, y);
+#+END_SRC
+
+x only goes to 31 here, while the width is 224.  Need to account for b:
+
+:       SDL_RenderDrawPoint(renderer, 8*x + b, y);
+
+[[file:data/spinv-success.png]]
+
+Yeah!  Ah well, it needs to be rotated, as was the original cabinet.
+
+It's interesting to see how much a difference some tweaks to the parameters
+make: (x + b, y) yields:
+
+[[file:data/spinv-fail1.png]]
+
+While (x + 8*b, y) gives:
+
+[[file:data/spinv-fail2.png]]
+
+I guess that in both cases you can still see that you we are not using the full
+width, so it's a hint to check the x coordinate again.  But still, these tiny
+errors can have wide repercussions.
