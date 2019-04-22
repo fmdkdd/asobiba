@@ -152,8 +152,6 @@ nmi:
         inc $01
         lda $01
         lsr a
-        lsr a
-        lsr a
         and #3
         sta $00
 
@@ -280,8 +278,9 @@ input_right:
         sta $2000
         lda #%00011110 ; enable sprites, enable background, no clipping on left side
         sta $2001
-        lda #$00                ; tell the ppu there is no background scrolling
+        lda $00
         sta $2005
+        lda #0
         sta $2005
 
         rti
