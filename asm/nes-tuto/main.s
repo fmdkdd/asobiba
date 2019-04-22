@@ -104,18 +104,8 @@ reset:
         lda #%00010000          ; enable sprites
         sta $2001
 
-        ;; palette swap
-        lda #0
+        ;; loop
 :
-        sta $0202
-        sta $0203
-        adc #1
-        sta $0206
-	adc #1
-        sta $020a
-	adc #1
-        sta $020e
-        adc #1
         jmp :-
 
 
@@ -130,6 +120,135 @@ nmi:
 	stx $2003
 	lda #>oam
 	sta $4014
+
+        ;; count up for palette swap
+        inc $01
+        lda $01
+        lsr a
+        lsr a
+        lsr a
+        and #3
+        sta $00
+
+        ;; jiggle sprite 0 up and down
+        lda $204
+        sec
+        sbc #2
+        clc
+        adc $00
+        sta $200
+
+        ;; read controller 1
+        lda #1
+        sta $4016
+        lda #0
+        sta $4016
+
+        ;; player 1 - A
+        lda $4016
+        and #1
+        beq :+
+input_a:
+        ;; palette swap
+	lda $00
+        sta $202
+        clc
+        adc #1
+        sta $206
+        clc
+        adc #1
+        sta $20a
+        clc
+        adc #1
+        sta $20e
+:
+        ;; player 1 - B
+        lda $4016
+        and #1
+        beq :+
+input_b:
+:
+        ;; player 1 - Select
+        lda $4016
+        and #1
+        beq :+
+input_select:
+:
+        ;; player 1 - Start
+        lda $4016
+        and #1
+        beq :+
+input_start:
+:
+        ;; player 1 - Up
+        lda $4016
+        and #1
+        beq :+
+input_up:
+        ;; move up
+	lda $204
+        sec
+        sbc #1
+        sta $200
+        sta $204
+        sta $208
+        sta $20c
+:
+        ;; player 1 - Down
+        lda $4016
+        and #1
+        beq :+
+input_down:
+        ;; move down
+        lda $204
+        clc
+        adc #1
+        sta $200
+        sta $204
+        sta $208
+        sta $20c
+:
+        ;; player 1 - Left
+        lda $4016
+        and #1
+        beq :+
+input_left:
+        ;; move left
+	lda $203
+        sec
+        sbc #1
+        sta $203
+        clc
+        adc #8
+        sta $207
+        clc
+        adc #8
+        sta $20b
+        clc
+        adc #8
+        sta $20f
+:
+        ;; player 1 - Right
+        lda $4016
+        and #1
+        beq :+
+input_right:
+	;; move right
+	lda $203
+        clc
+        adc #1
+        sta $203
+        clc
+        adc #8
+        sta $207
+        clc
+        adc #8
+        sta $20b
+        clc
+        adc #8
+        sta $20f
+:
+
         rti
 
 ;;
