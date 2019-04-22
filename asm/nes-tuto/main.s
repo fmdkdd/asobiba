@@ -76,7 +76,7 @@ reset:
 	;; NES is initialized, ready to begin!
 
         ;; load palettes
-        lda $2002               ; reset PPU status
+        lda $2002               ; reset latch
 	lda #$3F
 	sta $2006
         lda #0
@@ -98,11 +98,38 @@ reset:
         cpx #16
         bcc :-
 
+        ;; load background
+        lda $2002               ; reset latch
+        lda #$20
+        sta $2006
+        lda #$00
+        sta $2006
+
+        lda #6
+        ldx #0
+:
+        sta $2007
+        inx
+        cpx #$ff
+        bcc :-
+
+        ;; set attributes
+        lda $2002               ; reset latch
+        lda #$23
+        sta $2006
+        lda #$c0
+        sta $2006
+
+	ldx #0
+:
+        lda #%11100100
+        sta $2007
+        inx
+        cpx #$10
+        bcc :-
+
         lda #%10000000          ; enable NMI
         sta $2000
-
-        lda #%00010000          ; enable sprites
-        sta $2001
 
         ;; loop
 :
@@ -248,6 +275,14 @@ input_right:
         adc #8
         sta $20f
 :
+
+        lda #%10000000 ; enable NMI, sprites from Pattern Table 0, background from Pattern Table 0
+        sta $2000
+        lda #%00011110 ; enable sprites, enable background, no clipping on left side
+        sta $2001
+        lda #$00                ; tell the ppu there is no background scrolling
+        sta $2005
+        sta $2005
 
         rti
 
