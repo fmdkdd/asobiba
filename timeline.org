@@ -16210,3 +16210,36 @@ While (x + 8*b, y) gives:
 I guess that in both cases you can still see that you we are not using the full
 width, so it's a hint to check the x coordinate again.  But still, these tiny
 errors can have wide repercussions.
+
+* [2019-06-07 ven.]
+** GBS to MIDI                                                :emulation:gbs:
+That was one of the initial point, wasn't it?
+
+Well MIDI format is not that complicated, but I need something a bit simpler to
+start with.  Can I extract "note on"/"note off" events from the GB APU?
+
+Bit 7 of NR14 should be the trigger, so if we look at that only, and look at
+frequencies, we get:
+
+#+BEGIN_EXAMPLE
+note on, 658.65326 0.24609375
+note on, 494.61133 0.24609375
+note on, 524.288 0.24609375
+note on, 587.76685 0.24609375
+note on, 524.288 0.24609375
+note on, 494.61133 0.24609375
+note on, 439.83893 0.24609375
+note on, 439.83893 0.24609375
+note on, 524.288 0.24609375
+note on, 658.65326 0.24609375
+note on, 587.76685 0.24609375
+#+END_EXAMPLE
+
+and it's indeed the first Tetris BGM.  The frequencies are slightly off, when
+compared to A440, but the tune is recognizable.
+
+Second column is supposed to be the length, but it's suspiciously all the same
+values.  I think it's better to watch for the volume going off anyway.
+
+Not sure how MIDI handles envelope though.  But at least, if we add a timing
+information, we could maybe extract an ABC notation from the pulse channels.
