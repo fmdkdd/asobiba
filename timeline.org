@@ -16243,3 +16243,27 @@ values.  I think it's better to watch for the volume going off anyway.
 
 Not sure how MIDI handles envelope though.  But at least, if we add a timing
 information, we could maybe extract an ABC notation from the pulse channels.
+
+* [2019-07-14 dim.]
+** Visualizing memory reads/writes for CHIP8              :chipers:emulation:
+Wanted to see if we could get interesting/pretty pictures or videos out of it.
+
+Just hooked into the memory code: I already had code to count reads and writes
+for the memory viewer.  Unfortunately, chipers failed with a mysterious SIGILL
+when running in release mode.  Updated to latest rust and dependencies... took a
+while to update the API calls.
+
+Then I ran each ROM 10sec, and dumped all reads/writes in a PPM.  Reads in red,
+writes in blue:
+
+[[file:data/blink-reads-writes.png]]
+
+Not particularly interesting.  Most ROMs just writes their program to RAM then
+read a few memory places.
+
+I also extracted videos, by dumping PPM each frame and stitching them with
+ffmpeg.  The result is less static, but not more insightful.
+
+Actually, I wanted to do that for the NES or fancier console, but then I needed
+to go further than the title screens for making it interesting.  That would
+require replaying inputs.  So first step is finding inputs to replay.
