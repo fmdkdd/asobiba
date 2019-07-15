@@ -16267,3 +16267,77 @@ ffmpeg.  The result is less static, but not more insightful.
 Actually, I wanted to do that for the NES or fancier console, but then I needed
 to go further than the title screens for making it interesting.  That would
 require replaying inputs.  So first step is finding inputs to replay.
+
+* [2019-07-15 lun.]
+** Grabbing memory reads/writes of NES games                  :emulation:nes:
+So tasvideos.org has plenty of BizHawk and FCEUX movies.  These movies are
+actually lists of inputs and save states, so exactly what I want.
+
+Both have a Lua API that can be executed on movies.  Not sure the Linux version
+of FCEUX has these features, but in any case, the Lua API only allows you to
+register a callback on mem writes, not reads.
+
+Lua support in BizHawk is Windows-only.  The Lua API doesn't seem to allow you
+to hook into reads/writes either.
+
+So let's hack away!
+
+FCEUX SDL supports movie recording, so presumably playback as well.  Let's build
+that and test movies.  Okay it works.  Now to record reads/writes.
+
+Fascinating.  So this is one of the places where memory reads happen in FCEUX:
+
+#+BEGIN_SRC c
+//normal memory read
+static INLINE uint8 RdMem(unsigned int A)
+{
+ return(_DB=ARead[A](A));
+}
+#+END_SRC
+
+What's this ARead?  An array of functions:
+
+: readfunc ARead[0x10000];
+
+So for each memory address, you can specify a function that handles the actual
+read.  The same thing happens for writes.  It seems FCEUX does this to handle
+the many mappers of NES ROMs: each mapper can override how it deals with mem
+reads/writes on a per-address basis.
+
+Still, there are two other places where ARead functions are called:
+
+#+BEGIN_SRC c
+static INLINE uint8 RdRAM(unsigned int A)
+{
+  //bbit edited: this was changed so cheat substituion would work
+  return(_DB=ARead[A](A));
+  // return(_DB=RAM[A]);
+}
+
+uint8 X6502_DMR(uint32 A)
+{
+ ADDCYC(1);
+ return(X.DB=ARead[A](A));
+}
+#+END_SRC
+
+The second one is identical to the first... but didn't use to!  The third one
+has a side-effect.  I'll hook into the three functions.  There are also a couple
+of obscure mappers that hook into ARead directly.  I think I can safely ignore
+those.
+
+And... voilà!
+
+[[file:data/mario3-mem-rw.png]]
+
+Memory reads (red) / writes (blue) in Mario 3 after the first two levels in [[http://tasvideos.org/6274S.html][this
+run]].  You can clearly see the busy zero page, and the bottom half getting a
+bunch of reads.
+
+Initially I normalized the RGB values to the range [0,255] by scaling from the
+maximum counter value, but we ended up with only a couple lit pixels.  Now I
+just truncate to a byte, so it will saturate at some point.
+
+Maybe some logarithmic scale would be better?
+
+The video may be even more exciting!
