@@ -16341,3 +16341,46 @@ just truncate to a byte, so it will saturate at some point.
 Maybe some logarithmic scale would be better?
 
 The video may be even more exciting!
+
+* [2019-07-16 mar.]
+** More memory maps                                           :nes:emulation:
+So the bottom half is mapped to the ROM, and that's why we get so many reads in
+there.  I actually went and added a counter for every time we executed an
+address from memory and outputted that to the green channel.  The result:
+
+[[file:data/mario3-mem-rwe.png]]
+
+Less synthwave, but the yellow is rather explicit: it's read+exec.  Since we
+also do a read when executing, now we are seeing where the PC is jumping.
+
+It's curious that we are actually seeing green here.  Green would be exec
+without read, but in the CPU loop, I think we should be reading every opcode we
+before executing it...
+
+On the reverse side, the yellow/red lines are striped because the exec counter
+is only counting an access to the first byte of the executed opcode, not the
+full instruction (because, hey, it's simpler!).
+
+Of course mappers complicates the situation a bit.  When we are seeing execs, we
+may actually be hitting ROM parts that have been bank-switched, and here the
+picture folds everything into the bottom 32K range (out of a potential 512K for
+the MMC3 used by SMB3).
+
+I tried extracting a bigger picture but... the board code of FCEUX confuses me.
+
+I'm more interested in producing videos instead.
+
+Hacked FCEUI_Emulate to dump the counters as PPM every frame, but guess what:
+it's expensive to do that 60 times per second!  Even with -O2 the emulator
+struggles.  Good thing I'm replaying inputs, because I don't even have anything
+on screen.
+
+Results are underwhelming so far.  If I slow down the video to 10FPS, truncate
+the counters to 8bit (otherwise hot looping some PPU registers dwarfs anything
+away), and do a fade (*=0.9) instead of zeroing the counters every frame... then
+we start seeing things.
+
+Would be better if faster.  What if I batch the dumps?  Dumping every 100 frame.
+
+Okay, now I'm seeing Mario run, but I have a 5sec pause every 5sec!  Printing
+to stdout is rather slow.  Maybe if I wrote to a file directly?
