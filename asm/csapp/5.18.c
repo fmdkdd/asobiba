@@ -1,122 +1,62 @@
 #include <assert.h>
+#include <math.h>
 #include <stdio.h>
-#include <string.h>
 #include <x86intrin.h>
 
-void* b_memset(void *s, int c, size_t n) {
-  unsigned char *schar = s;
-  for (size_t i=0; i < n; ++i) {
-    *schar++ = (unsigned char) c;
-  }
-  return s;
-}
 
-// Write 8 bytes each time
-void* b_memset2(void *s, int c, size_t n) {
-  unsigned long b = (unsigned char) c;
-  // This assumes word = 64 bits
-  unsigned long d = b | b<<8  | b<<16 | b<<24 | b<<32
-                      | b<<40 | b<<48 | b<<56;
-
-  unsigned long *p = s;
-  unsigned char *pbyte;
-  void *stop = s + n;
-
-  // First align pbyte to unsigned long
- byte_step:
-  pbyte = (void*)p;
- loop:
-  if (pbyte == stop)
-    goto done;
-  if ((unsigned long)pbyte % sizeof(unsigned long) == 0)
-    goto quad_step;
-  *pbyte++ = b;
-  goto loop;
-
-  // Write a quad word each iteration
- quad_step:
-  p = (void*)pbyte;
-  while ((void*)p < (stop-7))
-    *p++ = d;
-
-  // Finish remaining bytes
-  goto byte_step;
-
- done:
-  return s;
-}
-
-// Using a single pointer
-void* b_memset3(void *s, int c, size_t n) {
-  unsigned char b = c;
-  unsigned char *pbyte = s;
-  void *stop = s + n;
-
- byte_step:
-  if (pbyte == stop)
-    goto done;
-  if ((unsigned long)pbyte % sizeof(unsigned long) == 0)
-    goto quad_step;
-  *pbyte++ = b;
-  goto byte_step;
-
- quad_step:
-  while ((void*)pbyte < stop-7) {
-    *(pbyte+1) = b;
-    *(pbyte+2) = b;
-    *(pbyte+3) = b;
-    *(pbyte+4) = b;
-    *(pbyte+5) = b;
-    *(pbyte+6) = b;
-    *(pbyte+7) = b;
-    pbyte+=8;
+double poly(double a[], double x, long degree) {
+  long i;
+  double result = a[0];
+  double xpwr = x;
+  for (i = 1; i <= degree; ++i) {
+    result += a[i] * xpwr;
+    xpwr = x * xpwr;
   }
 
-  goto byte_step;
-
- done:
-  return s;
+  return result;
 }
 
-// Assume n is multiple of 64
-void* b_memset4(void *s, int c, size_t n) {
-  assert (n % 64 == 0);
-
-  unsigned long b = (unsigned char) c;
-  unsigned long d = b | b<<8  | b<<16 | b<<24 | b<<32
-                      | b<<40 | b<<48 | b<<56;
-
-  unsigned long *p0 = s;
-  unsigned long *p1 = p0+1;
-  unsigned long *p2 = p0+2;
-  unsigned long *p3 = p0+3;
-  void *stop = s + n;
-
-  while ((void*)p3 < stop) {
-    *p0 = d;
-    *p1 = d;
-    *p2 = d;
-    *p3 = d;
-    p0 += 4;
-    p1 += 4;
-    p2 += 4;
-    p3 += 4;
+double horner(double a[], double x, long degree) {
+  long i;
+  double result = a[degree];
+  for (i = degree-1; i >= 0; --i) {
+    result = a[i] + x*result;
   }
 
-  while ((void*)p0 < stop)
-    *p0++ = d;
-
-  return s;
+  return result;
 }
 
-//                 100   1000  10000
-// memset -Og      0.39  0.20  3.37
-// b_memset -Og    4.16  3.59  6.01
-// b_memset2 -Og   1.45  0.54  2.95
-// b_memset3 -Og   3.10  2.76  5.13
+// 6x6 unrolling
+double poly2(double a[], double x, long degree) {
+  long i = 1;
+  double result0 = a[0];
+  double result1 = 0;
+  double result2 = 0;
+  double result3 = 0;
+  double result4 = 0;
+  double result5 = 0;
+  double xpwr = x;
+  double x6 = x * x * x * x * x * x;
+  for (; i <= degree-5; i+=6) {
+    result0 += a[i]   * xpwr;
+    result1 += a[i+1] * xpwr;
+    result2 += a[i+2] * xpwr;
+    result3 += a[i+3] * xpwr;
+    result4 += a[i+4] * xpwr;
+    result5 += a[i+5] * xpwr;
+    xpwr *= x6;
+  }
+  for (; i <= degree; ++i) {
+    result0 += a[i] * xpwr;
+    xpwr *= x;
+  }
+  return result0 + x * (result1 + x * (result2 + x * (result3 + x * (result4 + x * (result5)))));
+}
 
-//                 128   1024  8192  16384
-// b_memset4 -Og   0.73  0.46  2.70  3.29
+//               100    1k    10k   100k
+// poly   -Og    27.90  9.17  3.94  3.42
+// horner -Og    29.64  8.04  5.89  5.66
+// poly2  -Og    25.60  5.77  1.46  1.04
 
 // Skylake numbers from https://uops.info/table.html
 //
@@ -127,16 +67,20 @@ void* b_memset4(void *s, int c, size_t n) {
 // mulss     4-11     0.50/0.52
 
 int main() {
-  long n = 16384;
-  int  u[n];
+  long n = 100000;
+  double u[n];
+  double x = 0.12;
+
+  for (long i=0 ; i <= n; ++i) {
+    u[i] = i;
+  }
 
   unsigned long long start = __rdtsc();
-  memset(u, 0, sizeof(u));
+  double r = poly2(u, x, n);
   unsigned long long cycles = __rdtsc() - start;
 
-  int v[n];
-  memset(v, 0, sizeof(v));
-  assert(memcmp(v, u, sizeof(v)) == 0);
+  //printf("%.24lf %.24lf\n", r, poly(u, x, n));
+  assert(fabs(r - poly(u, x, n)) < 0.000001);
 
   printf("%llucy  CPE: %lf\n", cycles, (double)cycles / n);
 }
