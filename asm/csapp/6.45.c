@@ -57,20 +57,31 @@ void transpose3(int *s, int *d, int n) {
   }
 }
 
+#define B 8
+
+void transpose_block(int *s, int *d, int n) {
+  int i,j,ii,jj;
+
+  for (i=0; i < n; i+=B) {
+    for (j=0; j < n; j+=B) {
+      for (ii=i; ii < i+B; ++ii) {
+        for (jj=j; jj < j+B; ++jj) {
+          d[jj*n+ii] = s[ii*n+jj];
+        }
+      }
+    }
+  }
+}
+
 //                  10    100   1k
 // transpose   -Og  3.45  5.15  6.04
 // transpose2  -Og  2.92  4.46  6.02
 // transpose2b -Og  2.67  4.43  5.44
 // transpose3  -Og  2.08  3.70  4.51
+// transpose_block  9.12  5.79  5.49
 
-// Skylake numbers from https://uops.info/table.html
-//
-//         latency   throughput/measured
-// add       1-10     1.00/1.00
-// imul      3-8      1.00/1.00
-// addss     4-11     0.50/0.52
-// mulss     4-11     0.50/0.52
-// divss    11-18     5.00/3.00
+// Though loop blocking is probably one of intended solutions, it is worse than
+// the straightforward transpose.
 
 int main() {
   long n = 1000;
@@ -83,7 +94,7 @@ int main() {
   }
 
   unsigned long long start = __rdtsc();
-  transpose3(s, d, n);
+  transpose_block(s, d, n);
   unsigned long long cycles = __rdtsc() - start;
 
   printf("%llucy  CPE: %lf\n", cycles, (double)cycles / nn);
