@@ -28,11 +28,11 @@ static void print_mnemonic(const char *name, const char *arg1, const char *arg2)
 }
 #endif
 
-static bool parity(const u8 x) {
-  bool p = 0;
-  for (u8 b=0; b < 8; ++b)
-    p ^= (x >> b) & 1;
-  return !p;
+static bool parity(u8 x) {
+  x ^= x >> 4;
+  x ^= x >> 2;
+  x ^= x >> 1;
+  return x&1;
 }
 
 // TODO: eliminate redundancy of Register / Immediate / Memory accesses
