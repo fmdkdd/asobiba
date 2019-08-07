@@ -3,9 +3,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <SDL2/SDL.h>
 
 #include "cpu.h"
+#include "debug.h"
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -81,12 +83,14 @@ int main(const int argc, const char* const argv[]) {
     }
 
     // Emulate for 1/60 second
+    BEGIN_TIME(emulate);
     cpu_interrupt(&cpu);
     while (cycles < 3333) {
       cpu_step(&cpu);
       cycles++;
     }
     cycles = 0;
+    END_TIME(emulate);
 
     // Draw content of video RAM
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
