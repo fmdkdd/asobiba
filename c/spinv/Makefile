@@ -1,4 +1,4 @@
-FLAGS := -Wall -Wextra -pedantic -std=c17 -O3
+FLAGS := -Wall -Wextra -std=c17 -O3
 INCLUDES := -D_REENTRANT -I/usr/include/SDL2
 LIBS := -pthread -lSDL2
 

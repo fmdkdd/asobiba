@@ -4,14 +4,16 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
 
-#define RAM_SIZE 0x10000         // 8080 is 16bit address
+#define RAM_SIZE 0x10000         // 8080 is 16bit addressing
 
 typedef struct CPU {
+  u16 pc, sp;
   u8 a;
   union {
 #if   __BYTE_ORDER == __LITTLE_ENDIAN
@@ -34,7 +36,6 @@ typedef struct CPU {
       u8 _padd: 3;
     };
   };
-  u16 pc, sp;
   u8 ram[RAM_SIZE];
 } CPU;
 
@@ -57,12 +58,26 @@ typedef enum {
   }
 
 static void diff_state(const CPU *const old, const CPU *const new) {
-  printf("\t");
+  printf(" ");
   DIFF(a); DIFF(b); DIFF(c); DIFF(d); DIFF(e); DIFF(h); DIFF(l);
   DIFF(z); DIFF(s); DIFF(p); DIFF(cy); DIFF(ac); DIFF(sp);
 }
 
-// TODO: other flags
+#define MAX_MNEMO_LENGTH 13
+
+static void print_mnemonic(const char *name, const char *arg1, const char *arg2) {
+  char buf[MAX_MNEMO_LENGTH];
+  sprintf(buf, "%s", name);
+  if (strcmp(arg1, "_")) sprintf(buf+strlen(buf), " %s", arg1);
+  if (strcmp(arg2, "_")) sprintf(buf+strlen(buf), ",%s", arg2);
+  // Pad the rest
+  size_t s = strlen(buf);
+  while (s < MAX_MNEMO_LENGTH) {
+    sprintf(buf+s, " ");
+    ++s;
+  }
+  printf("%s", buf);
+}
 
 #define OP(code, name, arg1, arg2, flags, expr)                         \
   case (code): {                                                        \
@@ -73,9 +88,7 @@ static void diff_state(const CPU *const old, const CPU *const new) {
     OP_ARG(arg2);                                                       \
     if (cpu->pc - old_pc > 1) printf("%02x ", op[1]); else printf("   "); \
     if (cpu->pc - old_pc > 2) printf("%02x ", op[2]); else printf("   "); \
-    printf(#name);                                                      \
-    if ((arg1) != _) printf(" %s", #arg1);                              \
-    if ((arg2) != _) printf(",%s", #arg2);                              \
+    print_mnemonic(#name, #arg1, #arg2);                                \
     expr;                                                               \
     if ((flags) & Z)   { cpu->z = (r&0xff) == 0; }                      \
     if ((flags) & S)   { cpu->s = (r >> 7) & 1; }                       \
