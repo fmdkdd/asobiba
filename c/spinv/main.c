@@ -8,6 +8,7 @@
 
 #include "cpu.h"
 #include "debug.h"
+#include "jit.h"
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -86,7 +87,9 @@ int main(const int argc, const char* const argv[]) {
     BEGIN_TIME(emulate);
     cpu_interrupt(&cpu);
     while (cycles < 3333) {
-      cpu_step(&cpu);
+      // TODO: this should return the number of actual cycles, since cpu_step
+      // does a whole instruction, and jit_run a whole block
+      jit_run(&cpu);
       cycles++;
     }
     cycles = 0;
