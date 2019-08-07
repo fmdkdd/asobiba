@@ -16384,3 +16384,17 @@ Would be better if faster.  What if I batch the dumps?  Dumping every 100 frame.
 
 Okay, now I'm seeing Mario run, but I have a 5sec pause every 5sec!  Printing
 to stdout is rather slow.  Maybe if I wrote to a file directly?
+
+* [2019-08-07 mer.]
+** JITing the 8080                                                :spinv:jit:
+I measured how long the CPU emulation of the 8080 in my Space Invaders emulator
+was taking.
+
+51000ns per emulate loop on average, with 3333 calls to cpu_step, so 15ns /
+cpu_step call.
+
+My cpu can turbo to 4GHz, which translates to 0.25ns per cycle.  So around 60
+host cycles to emulate one guest instruction.
+
+Presumably, with a JIT, we should be able to get a 10x improvement, although
+there is an overhead of compiling/caching and looking up the right code cache.
