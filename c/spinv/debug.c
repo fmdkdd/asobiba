@@ -7,7 +7,7 @@ void init_debug_time(debug_time *dt, const char *name) {
   dt->name = name;
 }
 
-void end_debug_time(const debug_time *dt, const char *file, const char *function, int line) {
+void end_debug_time(const debug_time *dt, const char *file, const char *function) {
   struct timespec end;
   clock_gettime(CLOCK_MONOTONIC, &end);
   u64 start_ns = dt->start.tv_sec * 1000*1000*1000 + dt->start.tv_nsec;

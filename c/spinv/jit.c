@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200809L
+
 #include <stdlib.h>
 #include <sys/mman.h>
 
@@ -47,7 +49,7 @@ static jit_function jit_compile(int addr, const CPU *cpu) {
   }
 
  // malloc an aligned code page
- u8 *page;
+ void *page;
  posix_memalign(&page, PAGE_SIZE, PAGE_SIZE);
  // fill with RET
  memset(page, 0xc3, PAGE_SIZE);

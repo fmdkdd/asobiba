@@ -15,13 +15,13 @@ typedef struct {
 } debug_time;
 
 void init_debug_time(debug_time *dt, const char *name);
-void end_debug_time(const debug_time *dt, const char *file, const char *function, int line);
+void end_debug_time(const debug_time *dt, const char *file, const char *function);
 
 #define BEGIN_TIME(name)                        \
   debug_time dt##name;                          \
   init_debug_time(&dt##name, #name);
 
 #define END_TIME(name)                                          \
-  end_debug_time(&dt##name, __FILE__, __func__, __LINE__);
+  end_debug_time(&dt##name, __FILE__, __func__);
 
 #endif
