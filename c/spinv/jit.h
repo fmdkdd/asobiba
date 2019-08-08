@@ -11,6 +11,7 @@ typedef struct {
   bool valid;
 } jit_function_cache;
 
+void jit_init();
 int jit_run(CPU *const cpu);
 
 #endif

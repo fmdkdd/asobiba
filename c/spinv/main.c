@@ -75,6 +75,8 @@ int main(const int argc, const char* const argv[]) {
   if (!renderer)
     sdl_die("Could not create renderer");
 
+  jit_init();
+
   while (true) {
     SDL_Event e;
     if (SDL_PollEvent(&e)) {

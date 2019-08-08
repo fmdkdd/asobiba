@@ -7,6 +7,7 @@
 #include "jit.h"
 
 jit_function_cache jit_cache[100];
+u32 exec_hits[0x10000];
 
 #define PAGE_SIZE 4096
 
@@ -76,10 +77,18 @@ static jit_function jit_fetch(const CPU *cpu) {
   return f->function;
 }
 
+void jit_init() {
+  memset(exec_hits, 0, sizeof(exec_hits));
+  memset(jit_cache, 0, sizeof(jit_cache));
+}
+
 // Look up in the JIT cache, and execute the result.
 int jit_run(CPU *const cpu) {
-
-  // TODO: instead of compiling all functions, maybe just the hot ones?
-
-  return jit_fetch(cpu)(cpu);
+  if (++exec_hits[cpu->pc] > 1000) {
+    printf("hot code at 0x%0x: %u\n", cpu->pc, exec_hits[cpu->pc]);
+    //return jit_fetch(cpu)(cpu);
+    return cpu_step(cpu);
+  } else {
+    return cpu_step(cpu);
+  }
 }
