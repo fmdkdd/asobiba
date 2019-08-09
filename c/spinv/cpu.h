@@ -38,6 +38,7 @@ typedef struct CPU {
     };
   };
   u8 ram[RAM_SIZE];
+  bool is_call;
 } CPU;
 
 typedef enum {
@@ -52,6 +53,10 @@ typedef enum {
 typedef enum {
  _, A, B, C, D, E, H, L, BC, DE, HL, SP, PSW, D8, D16, ADDR,
 } ARGS;
+
+#ifndef BENCH
+void print_mnemonic(const char *name, const char *arg1, const char *arg2);
+#endif
 
 int cpu_step(CPU *const cpu);
 void cpu_interrupt(CPU *const cpu);

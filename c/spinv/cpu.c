@@ -20,7 +20,7 @@ static void diff_state(const CPU *const old, const CPU *const new) {
 
 #define MAX_MNEMO_LENGTH 13
 
-static void print_mnemonic(const char *name, const char *arg1, const char *arg2) {
+void print_mnemonic(const char *name, const char *arg1, const char *arg2) {
   char buf[MAX_MNEMO_LENGTH];
   sprintf(buf, "%s", name);
   if (strcmp(arg1, "_")) sprintf(buf+strlen(buf), " %s", arg1);
@@ -130,6 +130,8 @@ int cpu_step(CPU *const cpu) {
   // Count elpased clock cycles (machine states in the 8080 manual)
   u8 cc;
 
+  cpu->is_call = false;
+
   switch (op[0]) {
   case 0x08: case 0x10: case 0x20:
     // TODO: show immediate values for D8, D16?
@@ -228,7 +230,8 @@ int cpu_step(CPU *const cpu) {
     OP(0xcc, CZ, ADDR,_  ,11, _          , { if (cpu->z) { cc += 6; goto call; } });
     OP(0xcd, CALL, ADDR,_,17, _          , { call: cpu->ram[--cpu->sp] = cpu->pc >> 8;
                                                    cpu->ram[--cpu->sp] = cpu->pc;
-                                                   cpu->pc = addr; });
+                                                   cpu->pc = addr;
+                                                   cpu->is_call = true; });
     OP(0xce, ACI, D8,_   , 7, Z|S|P|CY|AC, { R(cpu->a, cpu->a + d8 + cpu->cy); });
     OP(0xd0, RNC, _,_    , 5, _          , { if (!cpu->cy) { cc += 6; goto ret; } });
     OP(0xd1, POP, DE,_   ,10, _          , { cpu->de = TO16(cpu->ram[cpu->sp+1], cpu->ram[cpu->sp]); cpu->sp+= 2; });
