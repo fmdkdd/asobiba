@@ -13,6 +13,7 @@
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
+typedef int32_t i32;
 
 void die(const char *const msg) {
   perror(msg);
@@ -55,7 +56,7 @@ int main(const int argc, const char* const argv[]) {
 #endif
 
   cpu.pc = orig;
-  u32 cycles = 0;
+  i32 cycles = 0;
 
   // Init SDL
   if (SDL_Init(SDL_INIT_VIDEO) != 0)
@@ -88,13 +89,11 @@ int main(const int argc, const char* const argv[]) {
     // Emulate for 1/60 second
     BEGIN_TIME(emulate);
     cpu_interrupt(&cpu);
-    while (cycles < 3333) {
-      // TODO: this should return the number of actual cycles, since cpu_step
-      // does a whole instruction, and jit_run a whole block
-      jit_run(&cpu);
-      cycles++;
+    // TODO: should run for the actual elapsed time since the last frame
+    cycles += 33333;
+    while (cycles > 0) {
+      cycles -= jit_run(&cpu);
     }
-    cycles = 0;
     END_TIME(emulate);
 
     // Draw content of video RAM
