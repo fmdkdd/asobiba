@@ -16398,3 +16398,35 @@ host cycles to emulate one guest instruction.
 
 Presumably, with a JIT, we should be able to get a 10x improvement, although
 there is an overhead of compiling/caching and looking up the right code cache.
+
+* [2019-08-09 ven.]
+** Finding out basic blocks                                       :spinv:jit:
+Maybe compiling everything is not a good performance compromise?  I would need
+to get some numbers, but I thought I'd try looking at hot code sections first.
+
+Turns out, there are not that many!  At least before you press start, the code
+loops tightly waiting for... you to press start I guess?
+
+#+BEGIN_EXAMPLE
+hot routine at 0x14d8: 8423
+disassembling 0x14d8
+14d8 3a 25 20 LDA ADDR
+14db fe 05    CPI D8
+14dd c8       RZ
+disassembly total cycles: 25
+#+END_EXAMPLE
+
+That's a very small routine.  When executed it goes a bit further:
+
+#+BEGIN_EXAMPLE
+14d8 3a 25 20 LDA ADDR
+14db fe 05    CPI D8
+14dd c8       RZ
+14de fe 02    CPI D8
+14e0 c0       RNZ
+#+END_EXAMPLE
+
+The basic block analysis just bails on the first jump, which is maybe too
+conservative?
+
+So it may make sense to compile everything to machine code in a straight pass.
