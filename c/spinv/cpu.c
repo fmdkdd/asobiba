@@ -273,7 +273,7 @@ int cpu_step(CPU *const cpu) {
     OP(0xfe, CPI, D8,_   , 7, Z|S|P|CY|AC, { r = cpu->a - d8; });
 
 #ifdef CPUDIAG
-    OP(0xfd, CPUER, _,_  , _          , { printf("\nCPU diag errored\n"); exit(1); });
+    OP(0xfd, CPUER, _,_  , 1, _          , { printf("\nCPU diag errored\n"); exit(1); });
 #endif
 
   default:
