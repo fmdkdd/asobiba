@@ -78,11 +78,49 @@ int main(const int argc, const char* const argv[]) {
 
   jit_init();
 
+  cpu.ports[1] = 1 << 3;
+  cpu.ports[2] = 0x81;
+
   while (true) {
     SDL_Event e;
-    if (SDL_PollEvent(&e)) {
-      if (e.type == SDL_QUIT) {
+    while (SDL_PollEvent(&e)) {
+      switch (e.type) {
+      case SDL_QUIT: goto done;
+
+      case SDL_KEYDOWN:
+        switch (e.key.keysym.scancode) {
+        case SDL_SCANCODE_C:      cpu.ports[1] |= 1 << 0; break; // COIN
+        case SDL_SCANCODE_RSHIFT: cpu.ports[1] |= 1 << 1; break; // 2P start
+        case SDL_SCANCODE_LSHIFT: cpu.ports[1] |= 1 << 2; break; // 1P start
+        case SDL_SCANCODE_S:      cpu.ports[1] |= 1 << 4; break; // 1P shoot
+        case SDL_SCANCODE_A:      cpu.ports[1] |= 1 << 5; break; // 1P left
+        case SDL_SCANCODE_D:      cpu.ports[1] |= 1 << 6; break; // 1P right
+
+        case SDL_SCANCODE_K:      cpu.ports[2] |= 1 << 4; break; // 2P shoot
+        case SDL_SCANCODE_J:      cpu.ports[2] |= 1 << 5; break; // 2P left
+        case SDL_SCANCODE_L:      cpu.ports[2] |= 1 << 6; break; // 2P right
+
+        default: break;
+        }
         break;
+
+      case SDL_KEYUP:
+        switch (e.key.keysym.scancode) {
+        case SDL_SCANCODE_C:      cpu.ports[1] &= ~(1 << 0); break; // COIN
+        case SDL_SCANCODE_RSHIFT: cpu.ports[1] &= ~(1 << 1); break; // 2P start
+        case SDL_SCANCODE_RETURN: cpu.ports[1] &= ~(1 << 2); break; // 1P start
+        case SDL_SCANCODE_S:      cpu.ports[1] &= ~(1 << 4); break; // 1P shoot
+        case SDL_SCANCODE_A:      cpu.ports[1] &= ~(1 << 5); break; // 1P left
+        case SDL_SCANCODE_D:      cpu.ports[1] &= ~(1 << 6); break; // 1P right
+
+        case SDL_SCANCODE_K:      cpu.ports[2] &= ~(1 << 4); break; // 2P shoot
+        case SDL_SCANCODE_J:      cpu.ports[2] &= ~(1 << 5); break; // 2P left
+        case SDL_SCANCODE_L:      cpu.ports[2] &= ~(1 << 6); break; // 2P right
+
+        default: break;
+        }
+        break;
+
       }
     }
 
@@ -110,6 +148,8 @@ int main(const int argc, const char* const argv[]) {
 
     SDL_RenderPresent(renderer);
   }
+
+ done:
 
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);

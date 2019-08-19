@@ -38,6 +38,9 @@ typedef struct CPU {
     };
   };
   u8 ram[RAM_SIZE];
+  u8 ports[3];
+  u8 shift_offset;
+  u16 shift_register;
   bool is_call;
 } CPU;
 

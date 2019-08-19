@@ -119,6 +119,30 @@ static bool parity(u8 x) {
     cpu->ram[(addr)] = (v);                                             \
   }
 
+void out(CPU *cpu, u8 x) {
+  switch (x) {
+  case 2:
+    cpu->shift_offset = cpu->a;
+    break;
+
+  case 4:
+    cpu->shift_register >>= 8;
+    cpu->shift_register |= cpu->a << 8;
+    break;
+  }
+  printf("OUT %d = %02x\n", x, cpu->a);
+}
+
+void in(CPU *cpu, u8 x) {
+  switch (x) {
+  case 1: case 2:
+    cpu->a = cpu->ports[x]; break;
+  case 3:
+    cpu->a = cpu->shift_register >> (8-cpu->shift_offset); break;
+  }
+  printf("IN %d = %02x\n", x, cpu->a);
+}
+
 // TODO: eliminate redundancy of Register / Immediate / Memory accesses
 
 int cpu_step(CPU *const cpu) {
@@ -144,6 +168,7 @@ int cpu_step(CPU *const cpu) {
     OP(0x04, INR, B,_    , 5, Z|S|P|AC   , { R(cpu->b, cpu->b + 1) });
     OP(0x05, DCR, B,_    , 5, Z|S|P|AC   , { R(cpu->b, cpu->b - 1) });
     OP(0x06, MVI, B,D8   , 7, _          , { cpu->b = d8; });
+    OP(0x07, RLC, _,_    , 4, CYR        , { R(cpu->a, ((cpu->a << 1) | ((cpu->a >> 7)&1))); });
     OP(0x09, DAD, BC,_   ,10, CY         , { R(cpu->hl, cpu->hl + cpu->bc) });
     OP(0x0a, LDAX,BC,_   , 7, _          , { cpu->a = cpu->ram[cpu->bc]; });
     OP(0x0b, DCX, BC,_   , 5, _          , { cpu->bc--; });
@@ -237,14 +262,14 @@ int cpu_step(CPU *const cpu) {
     OP(0xd0, RNC, _,_    , 5, _          , { if (!cpu->cy) { cc += 6; goto ret; } });
     OP(0xd1, POP, DE,_   ,10, _          , { cpu->de = TO16(cpu->ram[cpu->sp+1], cpu->ram[cpu->sp]); cpu->sp+= 2; });
     OP(0xd2, JNC, ADDR,_ ,10, _          , { if (!cpu->cy) cpu->pc = addr; });
-    OP(0xd3, OUT, D8,_   ,10, _          , { /* special */ });
+    OP(0xd3, OUT, D8,_   ,10, _          , { out(cpu, d8); });
     OP(0xd4, CNC, ADDR,_ ,11, _          , { if (!cpu->cy) { cc += 6; goto call; } });
     OP(0xd5, PUSH, DE,_  ,11, _          , { cpu->ram[--cpu->sp] = cpu->d; cpu->ram[--cpu->sp] = cpu->e; });
     OP(0xd6, SUI, D8,_   , 7, Z|S|P|CY|AC, { R(cpu->a, cpu->a - d8); });
     OP(0xd7, RST, 2,_    ,11, _          , { addr = 0x10; goto call; });
     OP(0xd8, RC, _,_     , 5, _          , { if (cpu->cy) { cc += 6; goto ret; } });
     OP(0xda, JC, ADDR,_  ,10, _          , { if (cpu->cy) cpu->pc = addr; });
-    OP(0xdb, IN, D8,_    ,10, _          , { /* special */ });
+    OP(0xdb, IN, D8,_    ,10, _          , { in(cpu, d8); });
     OP(0xdc, CC, ADDR,_  ,11, _          , { if (cpu->cy) { cc += 6; goto call; } });
     OP(0xde, SBI, D8,_   , 7, Z|S|P|CY|AC, { R(cpu->a, cpu->a - d8 - cpu->cy); });
     OP(0xe0, RPO, _,_    , 5, _          , { if (!cpu->p) { cc += 6; goto ret; } });
@@ -255,6 +280,7 @@ int cpu_step(CPU *const cpu) {
     OP(0xe5, PUSH, HL,_  ,11, _          , { cpu->ram[--cpu->sp] = cpu->h; cpu->ram[--cpu->sp] = cpu->l; });
     OP(0xe6, ANI, D8,_   , 7, Z|S|P|CY|AC, { R(cpu->a, cpu->a & d8); });
     OP(0xe8, RPE, _,_    , 5, _          , { if (cpu->p) { cc+= 6; goto ret; } });
+    OP(0xe9, PCHL, _,_   , 5, _          , { cpu->pc = TO16(cpu->h, cpu->l); });
     OP(0xea, JPE, ADDR,_ ,10, _          , { if (cpu->p) cpu->pc = addr; });
     OP(0xeb, XCHG, _,_   , 4, _          , { SWAP(cpu->h, cpu->d); SWAP(cpu->l, cpu->e); });
     OP(0xec, CPE, ADDR,_ ,11, _          , { if (cpu->p) { cc+= 6; goto call; } });
