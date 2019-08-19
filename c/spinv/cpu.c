@@ -35,6 +35,7 @@ void print_mnemonic(const char *name, const char *arg1, const char *arg2) {
 }
 #endif
 
+// Return 1 if parity of X is odd, 0 if even
 static bool parity(u8 x) {
   x ^= x >> 4;
   x ^= x >> 2;
@@ -63,7 +64,7 @@ static bool parity(u8 x) {
   expr;                                                                 \
   if ((flags) & Z)   { cpu->z = (r&0xff) == 0; }                        \
   if ((flags) & S)   { cpu->s = (r >> 7) & 1; }                         \
-  if ((flags) & P)   { cpu->p = parity((r&0xff)); }                     \
+  if ((flags) & P)   { cpu->p = !parity((r&0xff)); }                    \
   if ((flags) & CY)  { cpu->cy = r > 0xff; }                            \
   if ((flags) & CYR) { cpu->cy = r & 1; }                               \
   DBG(diff_state(&back, cpu));                                          \
