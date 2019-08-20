@@ -47,7 +47,7 @@ int main(const int argc, const char* const argv[]) {
 
   // Init CPU
   CPU cpu;
-  memset(&cpu, 0, sizeof(CPU));
+  cpu_init(&cpu);
 
   // Map ROM
   FILE *const rom = fopen(path, "rb");
@@ -129,7 +129,6 @@ int main(const int argc, const char* const argv[]) {
         default: break;
         }
         break;
-
       }
     }
 

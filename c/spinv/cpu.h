@@ -42,6 +42,7 @@ typedef struct CPU {
   u8 shift_offset;
   u16 shift_register;
   bool is_call;
+  bool interrupts_enabled;
 } CPU;
 
 typedef enum {
@@ -62,7 +63,8 @@ typedef enum {
 void print_mnemonic(const char *name, const char *arg1, const char *arg2);
 #endif
 
-int cpu_step(CPU *const cpu);
-void cpu_interrupt(CPU *const cpu);
+void cpu_init(CPU *cpu);
+int cpu_step(CPU *cpu);
+void cpu_interrupt(CPU *cpu);
 
 #endif

@@ -154,6 +154,11 @@ u16 daa(CPU *cpu) {
   return a;
 }
 
+void cpu_init(CPU *cpu) {
+  memset(cpu, 0, sizeof(CPU));
+  cpu->interrupts_enabled = true;
+}
+
 // TODO: eliminate redundancy of Register / Immediate / Memory accesses
 
 int cpu_step(CPU *const cpu) {
@@ -303,14 +308,14 @@ int cpu_step(CPU *const cpu) {
     OP(0xf0, RP, _,_     , 5, _          , { if (!cpu->s) { cc += 6; goto ret; } });
     OP(0xf1, POP, PSW,_  ,10, _          , { cpu->flags = cpu->ram[cpu->sp++]; cpu->a = cpu->ram[cpu->sp++]; });
     OP(0xf2, JP, ADDR,_  ,10, _          , { if (!cpu->s) cpu->pc = addr; });
-    OP(0xf3, DI, _,_     , 4, _          , { /* special */ });
+    OP(0xf3, DI, _,_     , 4, _          , { cpu->interrupts_enabled = false; });
     OP(0xf4, CP, ADDR,_  ,11, _          , { if (!cpu->s) { cc += 6; goto call; } });
     OP(0xf5, PUSH, PSW,_ ,11, _          , { cpu->ram[--cpu->sp] = cpu->a; cpu->ram[--cpu->sp] = cpu->flags; });
     OP(0xf6, ORI, D8,_   , 7, Z|S|P|CY|AC, { R(cpu->a, cpu->a | d8); });
     OP(0xf8, RM, _,_     , 5, _          , { if (cpu->s) { cc += 6; goto ret; } });
     OP(0xf9, SPHL, _,_   , 5, _          , { cpu->sp = cpu->hl; });
     OP(0xfa, JM, ADDR,_  ,10, _          , { if (cpu->s) cpu->pc = addr; });
-    OP(0xfb, EI, _,_     , 4, _          , { /* special */ });
+    OP(0xfb, EI, _,_     , 4, _          , { cpu->interrupts_enabled = true; });
     OP(0xfc, CM, ADDR,_  ,11, _          , { if (cpu->s) { cc += 6; goto call; } });
     OP(0xfe, CPI, D8,_   , 7, Z|S|P|CY|AC, { r = cpu->a - d8; });
 
@@ -328,7 +333,9 @@ int cpu_step(CPU *const cpu) {
 }
 
 void cpu_interrupt(CPU *const cpu) {
-  cpu->ram[--cpu->sp] = cpu->pc >> 8;
-  cpu->ram[--cpu->sp] = cpu->pc;
-  cpu->pc = 0x10;
+  if (cpu->interrupts_enabled) {
+    cpu->ram[--cpu->sp] = cpu->pc >> 8;
+    cpu->ram[--cpu->sp] = cpu->pc;
+    cpu->pc = 0x10;
+  }
 }
