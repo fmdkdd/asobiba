@@ -1,5 +1,3 @@
-// TODO: Game launches, can move but nothing appears when shooting and only one
-// enemy that doesn't move.
 // TODO: XRA A,A does not set zero flag?
 // TODO: does CPI set CY correctly?
 
@@ -86,7 +84,7 @@ int main(const int argc, const char* const argv[]) {
   jit_init();
 
   cpu.ports[1] = 1 << 3;
-  cpu.ports[2] = 0x81;
+  cpu.ports[2] = 0x03; // 6 lives, I'm a wuss
 
   while (true) {
     SDL_Event e;
@@ -132,14 +130,25 @@ int main(const int argc, const char* const argv[]) {
       }
     }
 
-    // Emulate for 1/60 second
+    // Emulate for 1/60 second at 2MHz: 33333 cycles per frame
+    // 1 frame = 256 scanlines
+    // mid-vblank interrupt happens at  96 lines: cycle 12500
+    // vblank     interrupt happens at 224 lines: cycle 29167
+    // remaining cycles: 4166
+
     BEGIN_TIME(emulate);
-    cpu_interrupt(&cpu);
     // TODO: should run for the actual elapsed time since the last frame
-    cycles += 33333;
-    while (cycles > 0) {
-      cycles -= jit_run(&cpu);
-    }
+    cycles += 12500;
+    while (cycles > 0)
+      cycles -= cpu_step(&cpu);
+    cpu_interrupt(&cpu, 1); // mid-vblank
+    cycles += 16667;
+    while (cycles > 0)
+      cycles -= cpu_step(&cpu);
+    cpu_interrupt(&cpu, 2); // vblank
+    cycles += 4166;
+    while (cycles > 0)
+      cycles -= cpu_step(&cpu);
     END_TIME(emulate);
 
     // Draw content of video RAM
@@ -147,12 +156,23 @@ int main(const int argc, const char* const argv[]) {
     SDL_RenderClear(renderer);
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
 
-    for (u32 y=0; y < 256; ++y)
-      for (u32 x=0; x < 32; ++x)
-        for (u8 b=0; b < 8; ++b)
+    for (u32 y=0; y < 256; ++y) {
+      for (u32 x=0; x < 32; ++x) {
+        // Fake color
+        if (x < 8)
+          SDL_SetRenderDrawColor(renderer, 0, 255, 0, SDL_ALPHA_OPAQUE);
+        else if (x > 25)
+          SDL_SetRenderDrawColor(renderer, 255, 128, 0, SDL_ALPHA_OPAQUE);
+        else
+          SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
+
+        for (u8 b=0; b < 8; ++b) {
           if ((cpu.ram[0x2400 + y*32 + x] >> b) & 1)
             // Display is rotated 90 degree counter-clockwise
             SDL_RenderDrawPoint(renderer, y, 256-(8*x + b));
+        }
+      }
+    }
 
     SDL_RenderPresent(renderer);
   }

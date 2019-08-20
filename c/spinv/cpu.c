@@ -286,7 +286,7 @@ int cpu_step(CPU *const cpu) {
     OP(0xd4, CNC, ADDR,_ ,11, _          , { if (!cpu->cy) { cc += 6; goto call; } });
     OP(0xd5, PUSH, DE,_  ,11, _          , { cpu->ram[--cpu->sp] = cpu->d; cpu->ram[--cpu->sp] = cpu->e; });
     OP(0xd6, SUI, D8,_   , 7, Z|S|P|CY|AC, { R(cpu->a, cpu->a - d8); });
-    OP(0xd7, RST, 2,_    ,11, _          , { addr = 0x10; goto call; });
+    OP(0xd7, RST, 2,_    ,11, _          , { cpu_interrupt(cpu, 2); });
     OP(0xd8, RC, _,_     , 5, _          , { if (cpu->cy) { cc += 6; goto ret; } });
     OP(0xda, JC, ADDR,_  ,10, _          , { if (cpu->cy) cpu->pc = addr; });
     OP(0xdb, IN, D8,_    ,10, _          , { in(cpu, d8); });
@@ -332,10 +332,10 @@ int cpu_step(CPU *const cpu) {
   return cc;
 }
 
-void cpu_interrupt(CPU *const cpu) {
+void cpu_interrupt(CPU *const cpu, u8 rst) {
   if (cpu->interrupts_enabled) {
     cpu->ram[--cpu->sp] = cpu->pc >> 8;
     cpu->ram[--cpu->sp] = cpu->pc;
-    cpu->pc = 0x10;
+    cpu->pc = 8 * rst;
   }
 }

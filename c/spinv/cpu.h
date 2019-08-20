@@ -65,6 +65,6 @@ void print_mnemonic(const char *name, const char *arg1, const char *arg2);
 
 void cpu_init(CPU *cpu);
 int cpu_step(CPU *cpu);
-void cpu_interrupt(CPU *cpu);
+void cpu_interrupt(CPU *cpu, u8 rst);
 
 #endif
