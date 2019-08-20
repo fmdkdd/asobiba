@@ -5,3 +5,4 @@ scala/target
 scala/project
 rust/*/target
 .flowconfig
+a.out
