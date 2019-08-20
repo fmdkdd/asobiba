@@ -124,6 +124,8 @@ int main(const int argc, const char* const argv[]) {
         case SDL_SCANCODE_J:      cpu.ports[2] &= ~(1 << 5); break; // 2P left
         case SDL_SCANCODE_L:      cpu.ports[2] &= ~(1 << 6); break; // 2P right
 
+        case SDL_SCANCODE_ESCAPE: goto done;
+
         default: break;
         }
         break;
@@ -161,6 +163,8 @@ int main(const int argc, const char* const argv[]) {
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
+
+  jit_dump_hot_routines(&cpu);
 
   return EXIT_SUCCESS;
 }

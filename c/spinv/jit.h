@@ -12,6 +12,7 @@ typedef struct {
 } jit_function_cache;
 
 void jit_init();
+void jit_dump_hot_routines(CPU *cpu);
 int jit_run(CPU *const cpu);
 
 #endif

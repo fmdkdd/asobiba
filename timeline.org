@@ -16430,3 +16430,76 @@ The basic block analysis just bails on the first jump, which is maybe too
 conservative?
 
 So it may make sense to compile everything to machine code in a straight pass.
+
+* [2019-08-20 mar.]
+** Finding out hot routines                                       :spinv:jit:
+Stopping at any Rcc instruction might not give you the full routine.  It might
+be better to stop at an unconditional RET.  For 14d8 above we get:
+
+#+BEGIN_EXAMPLE
+14d8 3a 25 20 LDA ADDR
+14db fe 05    CPI D8
+14dd c8       RZ
+14de fe 02    CPI D8
+14e0 c0       RNZ
+14e1 3a 29 20 LDA ADDR
+14e4 fe d8    CPI D8
+14e6 47       MOV B,A
+14e7 d2 30 15 JNC ADDR
+14ea 3a 02 20 LDA ADDR
+14ed a7       ANA A,A
+14ee c8       RZ
+14ef 78       MOV A,B
+14f0 fe ce    CPI D8
+14f2 d2 79 15 JNC ADDR
+14f5 c6 06    ADI D8
+14f7 47       MOV B,A
+14f8 3a 09 20 LDA ADDR
+14fb fe 90    CPI D8
+14fd d2 04 15 JNC ADDR
+1500 b8       CMP B
+1501 d2 30 15 JNC ADDR
+1504 68       MOV L,B
+1505 cd 62 15 CALL ADDR
+1508 3a 2a 20 LDA ADDR
+150b 67       MOV H,A
+150c cd 6f 15 CALL ADDR
+150f 22 64 20 SHLD ADDR
+1512 3e 05    MVI A,D8
+1514 32 25 20 STA ADDR
+1517 cd 81 15 CALL ADDR
+151a 7e       MOV A,(HL)
+151b a7       ANA A,A
+151c ca 30 15 JZ ADDR
+151f 36 00    MVI (HL),D8
+1521 cd 5f 0a CALL ADDR
+1524 cd 3b 1a CALL ADDR
+1527 cd d3 15 CALL ADDR
+152a 3e 10    MVI A,D8
+152c 32 03 20 STA ADDR
+152f c9       RET
+#+END_EXAMPLE
+
+But it might be the case that the conceptual procedure ends without any RET:
+
+#+BEGIN_EXAMPLE
+LDA $8080
+CPI #$42
+RZ
+RNZ
+#+END_EXAMPLE
+
+Or the code might disregard the stack and just jump out to some other code (and
+possibly reset the stack, as in the EXIT spell in Final Fantasy).
+
+If the game was directly written in assembly, we have no guarantees that it
+doesn't do these things.  But, for a JIT I think what matters is finding jumps
+that go out of the basic block.  So internal jump for loops are fine, but
+outside jumps to other routines are not.
+
+But finding out whether the jump is external requires guessing some boundaries
+for the routine.
+
+What could be interesting rather than checking hot calls would be to get a
+heatmap at the instruction level.  That way we can see what is effectively
+called, what is effectively dead code.

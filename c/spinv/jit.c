@@ -8,6 +8,9 @@
 
 jit_function_cache jit_cache[100];
 u32 exec_hits[0x10000];
+bool known[0x10000];
+u16 jit_hot_routines[100];
+int jit_hot_routines_size;
 
 #define PAGE_SIZE 4096
 
@@ -80,6 +83,8 @@ static jit_function jit_fetch(const CPU *cpu) {
 void jit_init() {
   memset(exec_hits, 0, sizeof(exec_hits));
   memset(jit_cache, 0, sizeof(jit_cache));
+  memset(jit_hot_routines, 0, sizeof(jit_hot_routines));
+  jit_hot_routines_size = 0;
 }
 
 #ifdef BENCH
@@ -146,6 +151,8 @@ void jit_analyze(int addr, const CPU *cpu) {
   while (!done) {
     const u8 *op = &cpu->ram[pc];
 
+    // TODO: this is just a copy/paste from cpu.c, could be better
+
     switch (op[0]) {
     case 0x08: case 0x10: case 0x20:
       OP(0x00, NOP, _,_    , 4, _          , {});
@@ -181,7 +188,7 @@ void jit_analyze(int addr, const CPU *cpu) {
       OP(0x24, INR, H,_    , 5, _          , {});
       OP(0x25, DCR, H,_    , 5, _          , {});
       OP(0x26, MVI, H,D8   , 7, _          , {});
-      OP(0x27, DAA, _,_    , 4, _          , { /* special */ });
+      OP(0x27, DAA, _,_    , 4, _          , {});
       OP(0x29, DAD, HL,_   ,10, CY         , {});
       OP(0x2a, LHLD,ADDR,_ ,16, _          , {});
       OP(0x2b, DCX, HL,_   , 5, _          , {});
@@ -229,55 +236,55 @@ void jit_analyze(int addr, const CPU *cpu) {
       OP(0xbd, CMP, L,_    , 4, C|S|P|CY|AC, {});
       OP(0xbe, CMP, (HL),_ , 7, C|S|P|CY|AC, {});
       OP(0xbf, CMP, A,_    , 4, C|S|P|CY|AC, {});
-      OP(0xc0, RNZ, _,_    , 5, _          , { done = true; });
+      OP(0xc0, RNZ, _,_    , 5, _          , {});
       OP(0xc1, POP, BC,_   ,10, _          , {});
-      OP(0xc2, JNZ, ADDR,_ ,10, _          , { done = true; });
-      OP(0xc3, JMP, ADDR,_ ,10, _          , { done = true; });
-      OP(0xc4, CNZ, ADDR,_ ,11, _          , { done = true; });
+      OP(0xc2, JNZ, ADDR,_ ,10, _          , {});
+      OP(0xc3, JMP, ADDR,_ ,10, _          , {});
+      OP(0xc4, CNZ, ADDR,_ ,11, _          , {});
       OP(0xc5, PUSH, BC,_  ,11, _          , {});
       OP(0xc6, ADI, D8,_   , 7, Z|S|P|CY|AC, {});
-      OP(0xc8, RZ, _,_     , 5, _          , { done = true; });
+      OP(0xc8, RZ, _,_     , 5, _          , {});
       OP(0xc9, RET, _,_    ,10, _          , { done = true; });
-      OP(0xca, JZ, ADDR,_  ,10, _          , { done = true; });
-      OP(0xcc, CZ, ADDR,_  ,11, _          , { done = true; });
-      OP(0xcd, CALL, ADDR,_,17, _          , { done = true; });
+      OP(0xca, JZ, ADDR,_  ,10, _          , {});
+      OP(0xcc, CZ, ADDR,_  ,11, _          , {});
+      OP(0xcd, CALL, ADDR,_,17, _          , {});
       OP(0xce, ACI, D8,_   , 7, Z|S|P|CY|AC, {});
-      OP(0xd0, RNC, _,_    , 5, _          , { done = true; });
+      OP(0xd0, RNC, _,_    , 5, _          , {});
       OP(0xd1, POP, DE,_   ,10, _          , {});
-      OP(0xd2, JNC, ADDR,_ ,10, _          , { done = true; });
-      OP(0xd3, OUT, D8,_   ,10, _          , { /* special */ });
-      OP(0xd4, CNC, ADDR,_ ,11, _          , { done = true; });
+      OP(0xd2, JNC, ADDR,_ ,10, _          , {});
+      OP(0xd3, OUT, D8,_   ,10, _          , {});
+      OP(0xd4, CNC, ADDR,_ ,11, _          , {});
       OP(0xd5, PUSH, DE,_  ,11, _          , {});
       OP(0xd6, SUI, D8,_   , 7, Z|S|P|CY|AC, {});
-      OP(0xd7, RST, 2,_    ,11, _          , { done = true; });
-      OP(0xd8, RC, _,_     , 5, _          , { done = true; });
-      OP(0xda, JC, ADDR,_  ,10, _          , { done = true; });
-      OP(0xdb, IN, D8,_    ,10, _          , { /* special */ });
-      OP(0xdc, CC, ADDR,_  ,11, _          , { done = true; });
+      OP(0xd7, RST, 2,_    ,11, _          , {});
+      OP(0xd8, RC, _,_     , 5, _          , {});
+      OP(0xda, JC, ADDR,_  ,10, _          , {});
+      OP(0xdb, IN, D8,_    ,10, _          , {});
+      OP(0xdc, CC, ADDR,_  ,11, _          , {});
       OP(0xde, SBI, D8,_   , 7, Z|S|P|CY|AC, {});
-      OP(0xe0, RPO, _,_    , 5, _          , { done = true; });
+      OP(0xe0, RPO, _,_    , 5, _          , {});
       OP(0xe1, POP, HL,_   ,10, _          , {});
-      OP(0xe2, JPO, ADDR,_ ,10, _          , { done = true; });
+      OP(0xe2, JPO, ADDR,_ ,10, _          , {});
       OP(0xe3, XTHL, _,_   ,18, _          , {});
-      OP(0xe4, CPO, ADDR,_ ,11, _          , { done = true; });
+      OP(0xe4, CPO, ADDR,_ ,11, _          , {});
       OP(0xe5, PUSH, HL,_  ,11, _          , {});
       OP(0xe6, ANI, D8,_   , 7, Z|S|P|CY|AC, {});
-      OP(0xe8, RPE, _,_    , 5, _          , { done = true; });
-      OP(0xea, JPE, ADDR,_ ,10, _          , { done = true; });
+      OP(0xe8, RPE, _,_    , 5, _          , {});
+      OP(0xea, JPE, ADDR,_ ,10, _          , {});
       OP(0xeb, XCHG, _,_   , 4, _          , {});
-      OP(0xec, CPE, ADDR,_ ,11, _          , { done = true; });
+      OP(0xec, CPE, ADDR,_ ,11, _          , {});
       OP(0xee, XRI, D8,_   , 7, Z|S|P|CY|AC, {});
-      OP(0xf0, RP, _,_     , 5, _          , { done = true; });
+      OP(0xf0, RP, _,_     , 5, _          , {});
       OP(0xf1, POP, PSW,_  ,10, _          , {});
-      OP(0xf2, JP, ADDR,_  ,10, _          , { done = true; });
-      OP(0xf3, DI, _,_     , 4, _          , { /* special */ });
-      OP(0xf4, CP, ADDR,_  ,11, _          , { done = true; });
+      OP(0xf2, JP, ADDR,_  ,10, _          , {});
+      OP(0xf3, DI, _,_     , 4, _          , {});
+      OP(0xf4, CP, ADDR,_  ,11, _          , {});
       OP(0xf5, PUSH, PSW,_ ,11, _          , {});
       OP(0xf6, ORI, D8,_   , 7, Z|S|P|CY|AC, {});
-      OP(0xf8, RM, _,_     , 5, _          , { done = true; });
-      OP(0xfa, JM, ADDR,_  ,10, _          , { done = true; });
-      OP(0xfb, EI, _,_     , 4, _          , { /* special */ });
-      OP(0xfc, CM, ADDR,_  ,11, _          , { done = true; });
+      OP(0xf8, RM, _,_     , 5, _          , {});
+      OP(0xfa, JM, ADDR,_  ,10, _          , {});
+      OP(0xfb, EI, _,_     , 4, _          , {});
+      OP(0xfc, CM, ADDR,_  ,11, _          , {});
       OP(0xfe, CPI, D8,_   , 7, Z|S|P|CY|AC, {});
 
     default:
@@ -289,12 +296,22 @@ void jit_analyze(int addr, const CPU *cpu) {
   printf("disassembly total cycles: %u\n", cc);
 }
 
+// Gather addresses of hot routines, dump the disassembled code at program exit
+
+void jit_dump_hot_routines(CPU *cpu) {
+  for (int i=0; i < jit_hot_routines_size; ++i) {
+    u16 addr = jit_hot_routines[i];
+    printf("hot routine at 0x%0x: %u\n", addr, exec_hits[addr]);
+    jit_analyze(addr, cpu);
+  }
+}
+
 // Look up in the JIT cache, and execute the result.
 int jit_run(CPU *const cpu) {
-  if (cpu->is_call && ++exec_hits[cpu->pc] > 1000) {
-    printf("hot routine at 0x%0x: %u\n", cpu->pc, exec_hits[cpu->pc]);
-    jit_analyze(cpu->pc, cpu);
-    //return jit_fetch(cpu)(cpu);
+  if (cpu->is_call && ++exec_hits[cpu->pc] > 1000 && !known[cpu->pc] && jit_hot_routines_size < 100) {
+    jit_hot_routines[jit_hot_routines_size++] = cpu->pc;
+    known[cpu->pc] = true;
+    // @Temp: return jit_fetch(cpu)(cpu);
     return cpu_step(cpu);
   } else {
     return cpu_step(cpu);
