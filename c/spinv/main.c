@@ -1,3 +1,8 @@
+// TODO: Game launches, can move but nothing appears when shooting and only one
+// enemy that doesn't move.
+// TODO: XRA A,A does not set zero flag?
+// TODO: does CPI set CY correctly?
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -51,8 +56,10 @@ int main(const int argc, const char* const argv[]) {
   fclose(rom);
 
 #ifdef CPUDIAG
-  // Tweak the code so we directly fail when jumping to CPUER
+  // Tweak the code so that instead of printing messages,
+  // we exit with failure or success
   cpu.ram[0x0689] = 0xfd; // CPUER;
+  cpu.ram[0x069b] = 0xed; // CPUOK;
 #endif
 
   cpu.pc = orig;

@@ -34,7 +34,7 @@ typedef struct CPU {
       u8 p  : 1;  // 1 = even
       u8 cy : 1;  // 1 = carry
       u8 ac : 1;  // used for BCD
-      u8 _padd: 3;
+      u8 _pad: 3;
     };
   };
   u8 ram[RAM_SIZE];
@@ -49,8 +49,9 @@ typedef enum {
   S   = 0x02,
   P   = 0x04,
   CY  = 0x08,
-  AC  = 0x10,
-  CYR = 0x20,
+  CYC = 0x10,
+  AC  = 0x20,
+  ACC = 0x40,
 } FLAGS;
 
 typedef enum {
