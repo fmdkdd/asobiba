@@ -1,6 +1,5 @@
 #pragma once
 
-#include <algorithm>
 #include <cassert>
 #include <vector>
 
@@ -29,13 +28,15 @@ struct Grid {
 };
 
 enum class GameState {
-  Main, GameOver, RotateLeft, RotateRight
+  Main, GameOver, RotateLeft, RotateRight,
+  PreHighlightMatchCells, HighlightMatchCells,
+  RemoveMatchCells, FillHoles, CheckForCombos
 };
 
 struct Game {
   SDL_Scancode upkey;
 
-  GameState state;
+  GameState state = GameState::Main;
 
   int selected_column = 0;
   Point selected_point = {1,3};
@@ -44,6 +45,9 @@ struct Game {
   int width = 7;
   int height = 10;
   Grid grid;
+
+  float delay;
+  float delay_init;
 
   static constexpr int cell_width  = 50;
   static constexpr int cell_height = 50;
@@ -55,7 +59,7 @@ struct Game {
 
   void set_state(GameState s);
   void sdl_event(SDL_Event& e);
-  void update();
+  void update(double dt);
   void render(SDLRenderer& r);
 
   void move_up();

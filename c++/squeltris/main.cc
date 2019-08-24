@@ -1,3 +1,5 @@
+#include <chrono>
+
 #include "game.h"
 #include "sdl.h"
 
@@ -7,6 +9,7 @@ int main() {
   SDLRenderer renderer(window, SDL_RENDERER_PRESENTVSYNC);
 
   Game game;
+  auto last_frame = std::chrono::high_resolution_clock::now();
 
   while (true) {
     SDL_Event e;
@@ -22,7 +25,12 @@ int main() {
       game.sdl_event(e);
     }
 
-    game.update();
+
+    auto now = std::chrono::high_resolution_clock::now();
+    auto dt = now - last_frame;
+    last_frame = now;
+    double dt_s = (double) std::chrono::nanoseconds(dt).count() / 1'000'000'000;
+    game.update(dt_s);
     game.render(renderer);
 
     renderer.present();

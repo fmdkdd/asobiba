@@ -1,15 +1,26 @@
+#include <algorithm>
+
 #include "game.h"
 
 void Game::set_state(GameState s) {
+  // Leave transitions
   switch (state) {
-    // do leave() stuff
+  case GameState::RotateLeft:
+    rotate_cells_left();
+    break;
+
   default:;
   }
 
   state = s;
 
+  // Enter transitions
   switch (s) {
-    // do enter() stuff for that state
+  case GameState::RotateLeft:
+    delay = 0.1;
+    delay_init = delay;
+    break;
+
   default:;
   }
 }
@@ -22,17 +33,29 @@ void Game::sdl_event(SDL_Event& e) {
   }
 }
 
-void Game::update() {
-  switch (upkey) {
-  case SDL_SCANCODE_UP   : move_up(); break;
-  case SDL_SCANCODE_DOWN : move_down(); break;
-  case SDL_SCANCODE_LEFT : move_left(); break;
-  case SDL_SCANCODE_RIGHT: move_right(); break;
-  case SDL_SCANCODE_Z    : rotate_left(); break;
-  case SDL_SCANCODE_X    : rotate_right(); break;
+void Game::update(double dt) {
+  switch (state) {
+  case GameState::Main:
+    switch (upkey) {
+    case SDL_SCANCODE_UP   : move_up(); break;
+    case SDL_SCANCODE_DOWN : move_down(); break;
+    case SDL_SCANCODE_LEFT : move_left(); break;
+    case SDL_SCANCODE_RIGHT: move_right(); break;
+    case SDL_SCANCODE_Z    : rotate_left(); break;
+    case SDL_SCANCODE_X    : rotate_right(); break;
+    default:;
+    }
+    upkey = SDL_SCANCODE_UNKNOWN;
+    break;
+
+  case GameState::RotateLeft:
+    delay -= dt;
+    if (delay < 0)
+      set_state(GameState::Main);
+    break;
+
   default:;
   }
-  upkey = SDL_SCANCODE_UNKNOWN;
 }
 
 void Game::render(SDLRenderer& r) {
@@ -47,6 +70,16 @@ void Game::render(SDLRenderer& r) {
   r.draw_line(center.x   , center.y-10, center.x   , center.y+10);
 
   // Draw grid
+  std::vector<int> offset = {};
+  float offset_value = 0;
+  switch (state) {
+  case GameState::RotateLeft:
+    offset = cells_in_rotation;
+    offset_value = 1 - (delay / delay_init);
+    break;
+  default:;
+  }
+
   for (auto x=0; x < width; ++x) {
     auto hole_found = false;
     for (auto y=0; y < height; ++y) {
@@ -68,6 +101,17 @@ void Game::render(SDLRenderer& r) {
       auto xy = y * grid.width + x;
       auto off_x = 0;
       auto off_y = 0;
+
+      if (offset.size()) {
+        auto index = std::distance(offset.begin(),
+                                   std::find(offset.begin(), offset.end(), xy));
+        switch (index) {
+        case 0: off_y = -offset_value * cell_height; break;
+        case 1: off_x =  offset_value * cell_width; break;
+        case 2: off_y =  offset_value * cell_height; break;
+        case 3: off_x = -offset_value * cell_width; break;
+        }
+      }
 
       r.fill_rect(px + off_x, py + off_y, pw, ph);
     }
@@ -92,8 +136,8 @@ void Game::rotate_left() {
 
 void Game::rotate_cells_left() {
   if (cells_in_rotation.size()) {
-    auto g = grid.cells;
-    auto c = cells_in_rotation;
+    auto& g = grid.cells;
+    auto& c = cells_in_rotation;
     auto bak = g[c[0]];
     g[c[0]] = g[c[3]];
     g[c[3]] = g[c[2]];
@@ -116,8 +160,8 @@ void Game::rotate_right() {
 
 void Game::rotate_cells_right() {
   if (cells_in_rotation.size()) {
-    auto g = grid.cells;
-    auto c = cells_in_rotation;
+    auto& g = grid.cells;
+    auto& c = cells_in_rotation;
     auto bak = g[c[0]];
     g[c[0]] = g[c[1]];
     g[c[1]] = g[c[2]];
