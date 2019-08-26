@@ -25,7 +25,7 @@ struct Grid {
                                width{width},
                                height{height},
                                gen(rd()),
-                               rand(1, static_cast<int>(CellType::SIZE))
+                               rand(1, static_cast<int>(CellType::SIZE)-1)
   {}
 
   CellType get(int x, int y) {
@@ -89,9 +89,7 @@ struct Game {
   void move_left();
   void move_right();
 
-  void rotate_left();
+  void start_rotate(GameState next_state);
   void rotate_cells_left();
-
-  void rotate_right();
   void rotate_cells_right();
 };

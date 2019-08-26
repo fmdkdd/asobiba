@@ -49,8 +49,8 @@ void Game::update(double dt) {
     case SDL_SCANCODE_DOWN : move_down(); break;
     case SDL_SCANCODE_LEFT : move_left(); break;
     case SDL_SCANCODE_RIGHT: move_right(); break;
-    case SDL_SCANCODE_Z    : rotate_left(); break;
-    case SDL_SCANCODE_X    : rotate_right(); break;
+    case SDL_SCANCODE_Z    : start_rotate(GameState::RotateLeft); break;
+    case SDL_SCANCODE_X    : start_rotate(GameState::RotateRight); break;
     default:;
     }
     upkey = SDL_SCANCODE_UNKNOWN;
@@ -144,18 +144,19 @@ void Game::move_down() { selected_point.y = std::min(height-1, selected_point.y+
 void Game::move_left() { selected_point.x = std::max(1, selected_point.x-1); }
 void Game::move_right() { selected_point.x = std::min(width-1, selected_point.x+1); }
 
-void Game::rotate_left() {
+void Game::start_rotate(GameState next_state) {
   auto [x,y] = selected_point;
+  // TODO: this can be precomputed
   cells_in_rotation = {
-    y    * width + x,
-    y    * width + x-1,
+     y    * width + x,
+     y    * width + x-1,
     (y-1) * width + x-1,
     (y-1) * width + x
   };
-  set_state(GameState::RotateLeft);
+  set_state(next_state);
 }
 
-void Game::rotate_cells_left() {
+void Game::rotate_cells_right() {
   if (cells_in_rotation.size()) {
     auto& g = grid.cells;
     auto& c = cells_in_rotation;
@@ -168,18 +169,7 @@ void Game::rotate_cells_left() {
   }
 }
 
-void Game::rotate_right() {
-  auto [x,y] = selected_point;
-  cells_in_rotation = {
-    y    * width + x,
-    y    * width + x-1,
-    (y-1) * width + x-1,
-    (y-1) * width + x
-  };
-  set_state(GameState::RotateRight);
-}
-
-void Game::rotate_cells_right() {
+void Game::rotate_cells_left() {
   if (cells_in_rotation.size()) {
     auto& g = grid.cells;
     auto& c = cells_in_rotation;
