@@ -8,6 +8,9 @@ void Game::set_state(GameState s) {
   case GameState::RotateLeft:
     rotate_cells_left();
     break;
+  case GameState::RotateRight:
+    rotate_cells_right();
+    break;
 
   default:;
   }
@@ -17,7 +20,8 @@ void Game::set_state(GameState s) {
   // Enter transitions
   switch (s) {
   case GameState::RotateLeft:
-    delay = 0.1;
+  case GameState::RotateRight:
+    delay = 0.07;
     delay_init = delay;
     break;
 
@@ -49,6 +53,7 @@ void Game::update(double dt) {
     break;
 
   case GameState::RotateLeft:
+  case GameState::RotateRight:
     delay -= dt;
     if (delay < 0)
       set_state(GameState::Main);
@@ -74,11 +79,13 @@ void Game::render(SDLRenderer& r) {
   float offset_value = 0;
   switch (state) {
   case GameState::RotateLeft:
+  case GameState::RotateRight:
     offset = cells_in_rotation;
     offset_value = 1 - (delay / delay_init);
     break;
   default:;
   }
+  bool rotateLeft = state == GameState::RotateLeft;
 
   for (auto x=0; x < width; ++x) {
     auto hole_found = false;
@@ -105,11 +112,21 @@ void Game::render(SDLRenderer& r) {
       if (offset.size()) {
         auto index = std::distance(offset.begin(),
                                    std::find(offset.begin(), offset.end(), xy));
-        switch (index) {
-        case 0: off_y = -offset_value * cell_height; break;
-        case 1: off_x =  offset_value * cell_width; break;
-        case 2: off_y =  offset_value * cell_height; break;
-        case 3: off_x = -offset_value * cell_width; break;
+        if (rotateLeft) {
+          switch (index) {
+          case 0: off_y = -offset_value * cell_height; break;
+          case 1: off_x =  offset_value * cell_width; break;
+          case 2: off_y =  offset_value * cell_height; break;
+          case 3: off_x = -offset_value * cell_width; break;
+          }
+        }
+        else {
+          switch (index) {
+          case 0: off_x = -offset_value * cell_width; break;
+          case 1: off_y = -offset_value * cell_height; break;
+          case 2: off_x =  offset_value * cell_width; break;
+          case 3: off_y =  offset_value * cell_height; break;
+          }
         }
       }
 
