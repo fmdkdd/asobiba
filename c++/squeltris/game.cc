@@ -30,10 +30,14 @@ void Game::set_state(GameState s) {
 }
 
 void Game::sdl_event(SDL_Event& e) {
-  switch (e.type) {
-  case SDL_KEYDOWN:
-    if (!e.key.repeat)
-      upkey = e.key.keysym.scancode;
+  switch (state) {
+  case GameState::Main:
+    switch (e.type) {
+    case SDL_KEYDOWN:
+      if (!e.key.repeat)
+        upkey = e.key.keysym.scancode;
+    }
+  default:;
   }
 }
 
