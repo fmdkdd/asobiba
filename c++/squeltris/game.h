@@ -34,6 +34,12 @@ struct Grid {
     return cells[y * width + x];
   }
 
+  void put(CellType c, int x, int y) {
+    assert(x >= 0 && x < width);
+    assert(y >= 0 && y < height);
+    cells[y * width + x] = c;
+  }
+
   void randomize() {
     int size = width * height;
     cells.clear();
@@ -45,6 +51,8 @@ struct Grid {
   CellType next_random_cell() {
     return static_cast<CellType>(rand(gen));
   }
+
+  CellType push_down(int column, int row, CellType new_cell);
 };
 
 enum class GameState {
@@ -89,6 +97,7 @@ struct Game {
   std::vector<Pattern> patterns;
   std::vector<Match> current_matches;
   std::vector<int> cells_in_match;
+  std::vector<int> columns_with_holes;
 
   Game() : grid(width, height) {
     patterns = {
@@ -126,4 +135,6 @@ struct Game {
   void check_for_matches();
   std::vector<Match> check_all_matches();
   std::vector<int> match_pattern_at(Pattern& pattern, int x, int y);
+  void remove_match_cells();
+  void fill_holes();
 };
