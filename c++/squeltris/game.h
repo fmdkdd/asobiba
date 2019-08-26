@@ -1,12 +1,13 @@
 #pragma once
 
 #include <cassert>
+#include <random>
 #include <vector>
 
 #include "sdl.h"
 
 enum class CellType {
-  EMPTY, RED, GREEN, BLUE, YELLOW
+  EMPTY, RED, GREEN, BLUE, YELLOW, SIZE
 };
 
 struct Point { int x; int y; };
@@ -16,14 +17,33 @@ struct Grid {
   int width;
   int height;
 
+  std::random_device rd;
+  std::minstd_rand gen;
+  std::uniform_int_distribution<> rand;
+
   Grid(int width, int height): cells(width*height, CellType::RED),
                                width{width},
-                               height{height} {}
+                               height{height},
+                               gen(rd()),
+                               rand(1, static_cast<int>(CellType::SIZE))
+  {}
 
   CellType get(int x, int y) {
     assert(x >= 0 && x < width);
     assert(y >= 0 && y < height);
     return cells[y * width + x];
+  }
+
+  void randomize() {
+    int size = width * height;
+    cells.clear();
+    while (size-- > 0) {
+      cells.push_back(next_random_cell());
+    }
+  }
+
+  CellType next_random_cell() {
+    return static_cast<CellType>(rand(gen));
   }
 };
 
@@ -55,7 +75,9 @@ struct Game {
 
   std::vector<int> cells_in_rotation;
 
-  Game() : grid(width, height) {}
+  Game() : grid(width, height) {
+    grid.randomize();
+  }
 
   void set_state(GameState s);
   void sdl_event(SDL_Event& e);
