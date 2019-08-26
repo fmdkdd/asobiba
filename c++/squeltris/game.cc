@@ -25,6 +25,10 @@ void Game::set_state(GameState s) {
     delay_init = delay;
     break;
 
+  case GameState::CheckForCombos:
+    check_for_matches();
+    break;
+
   default:;
   }
 }
@@ -60,7 +64,11 @@ void Game::update(double dt) {
   case GameState::RotateRight:
     delay -= dt;
     if (delay < 0)
-      set_state(GameState::Main);
+      set_state(GameState::CheckForCombos);
+    break;
+
+  case GameState::CheckForCombos:
+    set_state(GameState::Main);
     break;
 
   default:;
@@ -113,7 +121,7 @@ void Game::render(SDLRenderer& r) {
       auto off_x = 0;
       auto off_y = 0;
 
-      if (offset.size()) {
+      if (!offset.empty()) {
         auto index = std::distance(offset.begin(),
                                    std::find(offset.begin(), offset.end(), xy));
         if (rotateLeft) {
@@ -157,7 +165,7 @@ void Game::start_rotate(GameState next_state) {
 }
 
 void Game::rotate_cells_right() {
-  if (cells_in_rotation.size()) {
+  if (!cells_in_rotation.empty()) {
     auto& g = grid.cells;
     auto& c = cells_in_rotation;
     auto bak = g[c[0]];
@@ -170,7 +178,7 @@ void Game::rotate_cells_right() {
 }
 
 void Game::rotate_cells_left() {
-  if (cells_in_rotation.size()) {
+  if (!cells_in_rotation.empty()) {
     auto& g = grid.cells;
     auto& c = cells_in_rotation;
     auto bak = g[c[0]];
@@ -180,4 +188,75 @@ void Game::rotate_cells_left() {
     g[c[3]] = bak;
     c.clear();
   }
+}
+
+void Game::check_for_matches() {
+  current_matches = check_all_matches();
+  if (!current_matches.empty()) {
+    for (auto& m: current_matches) {
+      cells_in_match.insert(cells_in_match.end(),
+                            m.cells.begin(), m.cells.end());
+    }
+    set_state(GameState::PreHighlightMatchCells);
+  }
+}
+
+std::vector<Match> Game::check_all_matches() {
+  std::vector<Match> matches;
+
+  for (auto y=0; y < height; ++y) {
+    for (auto x=0; x < width; ++x) {
+      for (auto& p : patterns) {
+        auto cells = match_pattern_at(p, x, y);
+        if (!cells.empty()) {
+          Match m = {p, cells};
+          matches.push_back(m);
+        }
+      }
+    }
+  }
+
+  return matches;
+}
+
+PatternMatchType match_pattern_char(char c, CellType t) {
+  auto N = PatternMatchType::NO_MATCH;
+  auto Y = PatternMatchType::MATCH;
+
+  switch (c) {
+  case '0': return t == CellType::RED    ? Y : N;
+  case '1': return t == CellType::BLUE   ? Y : N;
+  case '2': return t == CellType::YELLOW ? Y : N;
+  case '3': return t == CellType::GREEN  ? Y : N;
+  case '.': return PatternMatchType::PASS;
+  default: return N;
+  }
+}
+
+std::vector<int> Game::match_pattern_at(Pattern& pattern, int x, int y) {
+  int h = pattern.size();
+  int w = pattern[0].size();
+  std::vector<int> match;
+
+  // Bail if the pattern is too large to fit
+  if (x + w > width || y + h > height) {
+    return match;
+  }
+
+  for (int yy=0; yy < h; ++yy) {
+    for (int xx=0; xx < w; ++xx) {
+      auto c = grid.get(x + xx, y + yy);
+      auto m = match_pattern_char(pattern[yy][xx], c);
+      switch (m) {
+      case PatternMatchType::NO_MATCH:
+        return {};
+      case PatternMatchType::MATCH:
+        match.push_back((y + yy) * width + x + xx);
+        break;
+      case PatternMatchType::PASS: break;
+      }
+    }
+  }
+
+  return match;
 }

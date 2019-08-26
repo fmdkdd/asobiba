@@ -53,6 +53,17 @@ enum class GameState {
   RemoveMatchCells, FillHoles, CheckForCombos
 };
 
+typedef std::vector<std::string> Pattern;
+
+struct Match {
+  Pattern& pattern;
+  std::vector<int> cells;
+};
+
+enum struct PatternMatchType {
+  NO_MATCH, MATCH, PASS,
+};
+
 struct Game {
   SDL_Scancode upkey;
 
@@ -75,7 +86,26 @@ struct Game {
 
   std::vector<int> cells_in_rotation;
 
+  std::vector<Pattern> patterns;
+  std::vector<Match> current_matches;
+  std::vector<int> cells_in_match;
+
   Game() : grid(width, height) {
+    patterns = {
+      {"000",
+       ".0."},
+
+      {"11",
+       "1.",
+       "1."},
+
+      {".22",
+       "22."},
+
+      {"33",
+       "33"},
+    };
+
     grid.randomize();
   }
 
@@ -92,4 +122,8 @@ struct Game {
   void start_rotate(GameState next_state);
   void rotate_cells_left();
   void rotate_cells_right();
+
+  void check_for_matches();
+  std::vector<Match> check_all_matches();
+  std::vector<int> match_pattern_at(Pattern& pattern, int x, int y);
 };
