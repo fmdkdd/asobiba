@@ -6,6 +6,9 @@
 
 #include "sdl.h"
 
+static constexpr int WINDOW_HEIGHT = 500;
+static constexpr int WINDOW_WIDTH = 350;
+
 enum class CellType {
   EMPTY, RED, GREEN, BLUE, YELLOW, SIZE
 };

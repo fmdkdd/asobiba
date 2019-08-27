@@ -5,7 +5,7 @@
 
 int main() {
   SDL sdl;
-  SDLWindow window("SUPER QUELTRIS", 350, 500);
+  SDLWindow window("SUPER QUELTRIS", WINDOW_WIDTH, WINDOW_HEIGHT);
   SDLRenderer renderer(window, SDL_RENDERER_PRESENTVSYNC);
 
   Game game;
@@ -24,7 +24,6 @@ int main() {
 
       game.sdl_event(e);
     }
-
 
     auto now = std::chrono::high_resolution_clock::now();
     auto dt = now - last_frame;

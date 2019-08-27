@@ -2,6 +2,10 @@
 
 #include "game.h"
 
+static void unreachable() {
+  assert(false);
+}
+
 void Game::set_state(GameState s) {
   // Leave transitions
   switch (state) {
@@ -138,7 +142,8 @@ void Game::render(SDLRenderer& r) {
   r.draw_line(center.x   , center.y-10, center.x   , center.y+10);
 
   // Draw grid
-  std::vector<int> offset = {};
+  std::vector<int> offset;
+  std::vector<int> downward;
   float offset_value = 0;
   switch (state) {
   case GameState::RotateLeft:
@@ -146,31 +151,37 @@ void Game::render(SDLRenderer& r) {
     offset = cells_in_rotation;
     offset_value = 1 - (delay / delay_init);
     break;
+
+  case GameState::FillHoles:
+    downward = columns_with_holes;
+    offset_value = 1 - (delay / delay_init);
+    break;
   default:;
   }
   bool rotateLeft = state == GameState::RotateLeft;
 
-  for (auto x=0; x < width; ++x) {
-    auto hole_found = false;
-    for (auto y=0; y < height; ++y) {
+  for (int x=0; x < width; ++x) {
+    bool hole_found = false;
+    for (int y=0; y < height; ++y) {
       switch (grid.get(x,y)) {
       case CellType::EMPTY  : hole_found = true; continue;
       case CellType::RED    : r.set_draw_color({248, 56, 0}); break;
       case CellType::BLUE   : r.set_draw_color({0, 120, 248}); break;
       case CellType::YELLOW : r.set_draw_color({248, 184, 0}); break;
       case CellType::GREEN  : r.set_draw_color({0, 168, 0}); break;
+      case CellType::SIZE   : unreachable();
       }
 
       // Pixel coordinates of lower-left corner
-      auto px = x * cell_width  + margin;
-      auto py = y * cell_height + margin;
+      int px = x * cell_width  + margin;
+      int py = y * cell_height + margin;
       // Pixel width and height of cell
-      auto pw = cell_width  - margin*2;
-      auto ph = cell_height - margin*2;
+      int pw = cell_width  - margin*2;
+      int ph = cell_height - margin*2;
 
-      auto xy = y * grid.width + x;
-      auto off_x = 0;
-      auto off_y = 0;
+      int xy = y * grid.width + x;
+      int off_x = 0;
+      int off_y = 0;
 
       if (!offset.empty()) {
         auto index = std::distance(offset.begin(),
@@ -192,6 +203,13 @@ void Game::render(SDLRenderer& r) {
           }
         }
       }
+
+      if (!downward.empty() && !hole_found &&
+          std::find(downward.begin(), downward.end(), x) != downward.end()) {
+        off_y = offset_value * cell_height;
+      }
+
+      // TODO: highlight match cells
 
       r.fill_rect(px + off_x, py + off_y, pw, ph);
     }
@@ -255,8 +273,8 @@ void Game::check_for_matches() {
 std::vector<Match> Game::check_all_matches() {
   std::vector<Match> matches;
 
-  for (auto y=0; y < height; ++y) {
-    for (auto x=0; x < width; ++x) {
+  for (int y=0; y < height; ++y) {
+    for (int x=0; x < width; ++x) {
       for (auto& p : patterns) {
         auto cells = match_pattern_at(p, x, y);
         if (!cells.empty()) {
@@ -342,15 +360,26 @@ void Game::fill_holes() {
     }
   }
 
-  // TODO: columns_with_holes =
+  // Now check for columns with holes still
+  std::vector<int> new_cols;
+  for (auto c: columns_with_holes) {
+    for (int y=0; y < height; ++y) {
+      if (grid.get(c, y) == CellType::EMPTY) {
+        new_cols.push_back(c);
+        break;
+      }
+    }
+  }
+
+  columns_with_holes = new_cols;
 }
 
 CellType Grid::push_down(int column, int row, CellType new_cell) {
   auto out = get(column, row);
 
   int y = row;
-  for (; y < height-1; ++y) {
-    put(get(column, y+1), column, y);
+  for (; y > 0; --y) {
+    put(get(column, y-1), column, y);
   }
   put(new_cell, column, y);
 
