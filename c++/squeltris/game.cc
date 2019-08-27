@@ -204,16 +204,21 @@ void Game::render(SDLRenderer& r) {
         }
       }
 
-      if (!downward.empty() && !hole_found &&
+      if (!hole_found &&
           std::find(downward.begin(), downward.end(), x) != downward.end()) {
         off_y = offset_value * cell_height;
       }
 
-      // TODO: highlight match cells
+      if (std::find(cells_in_match.begin(), cells_in_match.end(), xy) != cells_in_match.end()
+          && frame % 3 == 0) {
+        r.set_draw_color({255,255,255});
+      }
 
       r.fill_rect(px + off_x, py + off_y, pw, ph);
     }
   }
+
+  ++frame;
 }
 
 void Game::move_up() { selected_point.y = std::max(1, selected_point.y-1); }

@@ -52,6 +52,8 @@ struct Grid {
   }
 
   CellType next_random_cell() {
+    // TODO: use a LFSR?
+    // TODO: bagged random to ensure no run without some color?
     return static_cast<CellType>(rand(gen));
   }
 
@@ -90,6 +92,8 @@ struct Game {
 
   float delay;
   float delay_init;
+
+  int frame = 0;
 
   static constexpr int cell_width  = 50;
   static constexpr int cell_height = 50;
