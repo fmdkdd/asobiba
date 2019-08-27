@@ -71,9 +71,13 @@ void Game::update(double dt) {
   switch (state) {
   case GameState::Main:
     switch (upkey) {
+    case SDL_SCANCODE_I:
     case SDL_SCANCODE_UP   : move_up(); break;
+    case SDL_SCANCODE_K:
     case SDL_SCANCODE_DOWN : move_down(); break;
+    case SDL_SCANCODE_J:
     case SDL_SCANCODE_LEFT : move_left(); break;
+    case SDL_SCANCODE_L:
     case SDL_SCANCODE_RIGHT: move_right(); break;
     case SDL_SCANCODE_Z    : start_rotate(GameState::RotateLeft); break;
     case SDL_SCANCODE_X    : start_rotate(GameState::RotateRight); break;
