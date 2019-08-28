@@ -13,9 +13,13 @@ void Game::sdl_event(SDL_Event& e) {
   case SDL_KEYDOWN:
     if (!e.key.repeat) {
       switch (e.key.keysym.scancode) {
+      case SDL_SCANCODE_I:
       case SDL_SCANCODE_UP    : keys[Key::UP]    = down; break;
+      case SDL_SCANCODE_K:
       case SDL_SCANCODE_DOWN  : keys[Key::DOWN]  = down; break;
+      case SDL_SCANCODE_J:
       case SDL_SCANCODE_LEFT  : keys[Key::LEFT]  = down; break;
+      case SDL_SCANCODE_L:
       case SDL_SCANCODE_RIGHT : keys[Key::RIGHT] = down; break;
       case SDL_SCANCODE_Z     : keys[Key::Z]     = down; break;
       case SDL_SCANCODE_X     : keys[Key::X]     = down; break;
@@ -28,6 +32,33 @@ void Game::sdl_event(SDL_Event& e) {
     break;
   }
 }
+
+bool intersects(Point pos1, int size1, Point pos2, int size2) {
+  Point corners2[] = {{pos2.x, pos2.y},
+                      {pos2.x + size2, pos2.y},
+                      {pos2.x, pos2.y + size2},
+                      {pos2.x + size2, pos2.y + size2}};
+
+  for (auto c : corners2) {
+    if (c.x >= pos1.x && c.x <= pos1.x + size1
+        && c.y >= pos1.y && c.y <= pos1.y + size1)
+      return true;
+  }
+
+  Point corners1[] = {{pos1.x, pos1.y},
+                      {pos1.x + size1, pos1.y},
+                      {pos1.x, pos1.y + size1},
+                      {pos1.x + size1, pos1.y + size1}};
+
+  for (auto c : corners1) {
+    if (c.x >= pos2.x && c.x <= pos2.x + size2
+        && c.y >= pos2.y && c.y <= pos2.y + size2)
+      return true;
+  }
+
+  return false;
+}
+
 
 void Game::update(double dt) {
   float v = 200 * dt;
@@ -59,6 +90,8 @@ void Game::update(double dt) {
     a += da;
   }
 
+  player.hit = false;
+
   // Update balls
   {
     for (auto& b : balls) {
@@ -69,11 +102,20 @@ void Game::update(double dt) {
         b.alive = false;
       }
 
-      // TODO:
-      // If the ball intersects with the player,
-      // bounce off of it.
-      // else if (intersect(player.shape, b)) {
-      // }
+      b.hit = false;
+
+      // TODO: detect intersections with lines instead of bounding boxes, and
+      // bounce off the line based on the incidence angle
+
+      if (intersects({player.pos.x-player.size,
+                      player.pos.y-player.size},
+          2*player.size,
+                     b.pos, b.size)) {
+        player.hit = b.hit = true;
+        //int bak = b.vel.y;
+        b.vel.y = -b.vel.y;
+        //b.vel.x = bak;
+      }
     }
   }
 
@@ -88,8 +130,6 @@ void Game::render(SDLRenderer& r) {
   r.set_draw_color({0,0,0});
   r.clear();
 
-  r.set_draw_color({255,255,255});
-
   // Draw player
   auto [x,y] = player.pos;
   float a = player.rot;
@@ -100,6 +140,11 @@ void Game::render(SDLRenderer& r) {
     a += da;
   }
 
+  if (player.hit)
+    r.set_draw_color({255,255,0});
+  else
+    r.set_draw_color({255,255,255});
+
   auto i = 0ul;
   for (; i < p.size()-1; ++i) {
     auto p0 = p[i];
@@ -107,12 +152,16 @@ void Game::render(SDLRenderer& r) {
     r.draw_line(x + p0.x, y + p0.y, x + p1.x, y + p1.y);
   }
   r.draw_line(x + p[i].x, y + p[i].y, x + p[0].x, y + p[0].y);
+  r.draw_rect(x-player.size, y-player.size, 2*player.size, 2*player.size);
 
   // Draw balls
   r.set_draw_color({255,0,0});
   for (auto& b : balls) {
     if (b.alive) {
-      r.draw_rect(b.pos.x, b.pos.y, 10, 10);
+      if (b.hit)
+        r.fill_rect(b.pos.x, b.pos.y, b.size, b.size);
+      else
+        r.draw_rect(b.pos.x, b.pos.y, b.size, b.size);
     }
   }
 }

@@ -19,6 +19,9 @@ struct Ball {
   Point vel;
   bool alive;
 
+  bool hit;
+  static constexpr int size = 10;
+
   void reset() {
     // TODO: random velocity
     pos = {150,10};
@@ -33,6 +36,7 @@ struct Player {
   int size = 30;
   int faces = 4;
   std::vector<Point> shape;
+  bool hit;
 };
 
 struct Game {
