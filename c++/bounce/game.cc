@@ -59,6 +59,22 @@ bool intersects(Point pos1, int size1, Point pos2, int size2) {
   return false;
 }
 
+bool intersects_line(Point a, Point b, Point box, int size) {
+  // Walk AB in segments smaller than size to find intersections with box.
+  Point d = b - a;
+  int steps = (d.mag() / ((float)size/2.0))+1;
+  d /= steps;
+  while (steps-- > 0) {
+    if (a.x >= box.x && a.x <= box.x + size
+        && a.y >= box.y && a.y <= box.y + size) {
+      return true;
+    }
+    a += d;
+  }
+
+  return false;
+}
+
 
 void Game::update(double dt) {
   float v = 200 * dt;
@@ -104,17 +120,31 @@ void Game::update(double dt) {
 
       b.hit = false;
 
-      // TODO: detect intersections with lines instead of bounding boxes, and
-      // bounce off the line based on the incidence angle
+      // Detect intersection of the ball with each line of the player shape, and
+      // bounce off the incident angle.
+      auto i = 0ul;
+      for (; i < player.shape.size(); ++i) {
+        Point pa = {player.pos.x + player.shape[i].x,
+                    player.pos.y + player.shape[i].y};
 
-      if (intersects({player.pos.x-player.size,
-                      player.pos.y-player.size},
-          2*player.size,
-                     b.pos, b.size)) {
-        player.hit = b.hit = true;
-        //int bak = b.vel.y;
-        b.vel.y = -b.vel.y;
-        //b.vel.x = bak;
+        Point pb;
+        if (i < player.shape.size()-1) {
+          pb = {player.pos.x + player.shape[i+1].x,
+                player.pos.y + player.shape[i+1].y};
+        } else {
+          pb = {player.pos.x + player.shape[0].x,
+                player.pos.y + player.shape[0].y};
+        }
+
+        if (intersects_line(pa, pb, b.pos, b.size)) {
+          player.hit = b.hit = true;
+
+          // Bounce
+          Point n = pb - pa;
+          n = {-n.y, n.x};
+          n /= n.mag();
+          b.vel = n * (-2) * b.vel.dot(n) + b.vel;
+        }
       }
     }
   }
@@ -152,7 +182,6 @@ void Game::render(SDLRenderer& r) {
     r.draw_line(x + p0.x, y + p0.y, x + p1.x, y + p1.y);
   }
   r.draw_line(x + p[i].x, y + p[i].y, x + p[0].x, y + p[0].y);
-  r.draw_rect(x-player.size, y-player.size, 2*player.size, 2*player.size);
 
   // Draw balls
   r.set_draw_color({255,0,0});

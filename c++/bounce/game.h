@@ -12,7 +12,19 @@ enum Key {
   SIZE
 };
 
-struct Point { float x; float y; };
+struct Point {
+  float x;
+  float y;
+
+  Point operator+(Point b) { return {x+b.x, y+b.y}; }
+  void operator+=(Point b) { x+=b.x; y+=b.y; }
+  Point operator-(Point b) { return {x-b.x, y-b.y}; }
+  Point operator*(float s) { return {x*s, y*s}; }
+  Point operator/(float s) { return {x/s, y/s}; }
+  void operator/=(float s) { x/=s; y/=s; }
+  float dot(Point b) { return x*b.x + y*b.y; }
+  float mag() { return std::sqrt(x*x + y*y); }
+};
 
 struct Ball {
   Point pos;
@@ -23,9 +35,8 @@ struct Ball {
   static constexpr int size = 10;
 
   void reset() {
-    // TODO: random velocity
     pos = {150,10};
-    vel = {50,250};
+    vel = {50.0f*((float)std::rand()/RAND_MAX),250};
     alive = true;
   }
 };
@@ -51,9 +62,11 @@ struct Game {
   std::vector<Ball> balls;
 
   Game() {
-    Ball b;
-    b.reset();
-    balls.push_back(b);
+    for (int i=0; i < 20; ++i) {
+      Ball b;
+      b.reset();
+      balls.push_back(b);
+    }
   }
 
   void sdl_event(SDL_Event& e);
