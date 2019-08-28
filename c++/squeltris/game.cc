@@ -2,6 +2,10 @@
 
 #include "game.h"
 
+// TODO: should have a hidden top line so when dropping we see squares from that
+// line fall instead of them popping after the fill holes animation and leaving
+// a black square in place
+
 static void unreachable() {
   assert(false);
 }
@@ -31,10 +35,6 @@ void Game::set_state(GameState s) {
 
   case GameState::CheckForCombos:
     check_for_matches();
-    break;
-
-  case GameState::PreHighlightMatchCells:
-    delay = 0.2;
     break;
 
   case GameState::HighlightMatchCells:
@@ -95,12 +95,6 @@ void Game::update(double dt) {
 
   case GameState::CheckForCombos:
     set_state(GameState::Main);
-    break;
-
-  case GameState::PreHighlightMatchCells:
-    delay -= dt;
-    if (delay < 0)
-      set_state(GameState::HighlightMatchCells);
     break;
 
   case GameState::HighlightMatchCells:
@@ -275,7 +269,7 @@ void Game::check_for_matches() {
       cells_in_match.insert(cells_in_match.end(),
                             m.cells.begin(), m.cells.end());
     }
-    set_state(GameState::PreHighlightMatchCells);
+    set_state(GameState::HighlightMatchCells);
   }
 }
 

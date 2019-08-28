@@ -62,8 +62,8 @@ struct Grid {
 
 enum class GameState {
   Main, GameOver, RotateLeft, RotateRight,
-  PreHighlightMatchCells, HighlightMatchCells,
-  RemoveMatchCells, FillHoles, CheckForCombos
+  HighlightMatchCells, RemoveMatchCells, FillHoles,
+  CheckForCombos
 };
 
 typedef std::vector<std::string> Pattern;
