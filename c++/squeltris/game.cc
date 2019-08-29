@@ -256,10 +256,10 @@ void Game::start_rotate(GameState next_state) {
 
 void Game::rotate_cells_right() {
   if (!cells_in_rotation.empty()) {
-    for (auto c : cells_in_rotation) {
-      if (grid.cells[c].type != CellType::STONE)
-        grid.cells[c].counter++;
-    }
+    // for (auto c : cells_in_rotation) {
+    //   if (grid.cells[c].type != CellType::STONE)
+    //     grid.cells[c].counter++;
+    // }
 
     auto& g = grid.cells;
     auto& c = cells_in_rotation;
@@ -274,10 +274,10 @@ void Game::rotate_cells_right() {
 
 void Game::rotate_cells_left() {
   if (!cells_in_rotation.empty()) {
-    for (auto c : cells_in_rotation) {
-      if (grid.cells[c].type != CellType::STONE)
-      grid.cells[c].counter++;
-    }
+    // for (auto c : cells_in_rotation) {
+    //   if (grid.cells[c].type != CellType::STONE)
+    //   grid.cells[c].counter++;
+    // }
 
     auto& g = grid.cells;
     auto& c = cells_in_rotation;
