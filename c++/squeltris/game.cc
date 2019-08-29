@@ -6,6 +6,19 @@
 // line fall instead of them popping after the fill holes animation and leaving
 // a black square in place
 
+// @Idea: to prevent the player from droning the game and forcing them to be
+// careful with their moves, we can: add a timer, either continuous (as in
+// QUELTRIS; more stressful) or a discrete number of moves (more
+// puzzle-oriented).
+//
+// We could also restrict the number of times each piece can be rotated (3 or
+// 4 seems a good spot).  After that, they become stones that do not match with
+// anything.  If you have too many stones, then you lose!  This adds a failure
+// condition that is created by not being careful enough, as in Tetris where you
+// can fail by leaving too many holes, rather than just not being fast enough,
+// which feels arbitrary (as if you ran out of time in a demo).
+
+
 static void unreachable() {
   assert(false);
 }
