@@ -56,34 +56,36 @@ void Game::set_state(GameState s) {
 }
 
 void Game::sdl_event(SDL_Event& e) {
-  switch (state) {
-  case GameState::Main:
-    switch (e.type) {
-    case SDL_KEYDOWN:
-      if (!e.key.repeat)
-        upkey = e.key.keysym.scancode;
-    }
-  default:;
+  switch (e.type) {
+  case SDL_KEYDOWN:
+    if (!e.key.repeat)
+      upkey = e.key.keysym.scancode;
+    break;
   }
 }
 
 void Game::update(double dt) {
+  // Can always move, but not rotate
+  switch (upkey) {
+  case SDL_SCANCODE_I:
+  case SDL_SCANCODE_UP   : move_up(); break;
+  case SDL_SCANCODE_K:
+  case SDL_SCANCODE_DOWN : move_down(); break;
+  case SDL_SCANCODE_J:
+  case SDL_SCANCODE_LEFT : move_left(); break;
+  case SDL_SCANCODE_L:
+  case SDL_SCANCODE_RIGHT: move_right(); break;
+  default:;
+  }
+
   switch (state) {
+    // Rotate only in main
   case GameState::Main:
     switch (upkey) {
-    case SDL_SCANCODE_I:
-    case SDL_SCANCODE_UP   : move_up(); break;
-    case SDL_SCANCODE_K:
-    case SDL_SCANCODE_DOWN : move_down(); break;
-    case SDL_SCANCODE_J:
-    case SDL_SCANCODE_LEFT : move_left(); break;
-    case SDL_SCANCODE_L:
-    case SDL_SCANCODE_RIGHT: move_right(); break;
-    case SDL_SCANCODE_Z    : start_rotate(GameState::RotateLeft); break;
-    case SDL_SCANCODE_X    : start_rotate(GameState::RotateRight); break;
+    case SDL_SCANCODE_Z: start_rotate(GameState::RotateLeft); break;
+    case SDL_SCANCODE_X: start_rotate(GameState::RotateRight); break;
     default:;
     }
-    upkey = SDL_SCANCODE_UNKNOWN;
     break;
 
   case GameState::RotateLeft:
@@ -126,6 +128,8 @@ void Game::update(double dt) {
 
   default:;
   }
+
+  upkey = SDL_SCANCODE_UNKNOWN;
 }
 
 void Game::render(SDLRenderer& r) {
