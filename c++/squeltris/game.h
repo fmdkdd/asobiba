@@ -10,13 +10,18 @@ static constexpr int WINDOW_HEIGHT = 500;
 static constexpr int WINDOW_WIDTH = 350;
 
 enum class CellType {
-  EMPTY, RED, GREEN, BLUE, YELLOW, SIZE
+  EMPTY, RED, GREEN, BLUE, YELLOW, STONE, SIZE
 };
 
 struct Point { int x; int y; };
 
+struct Cell {
+  CellType type;
+  int counter;
+};
+
 struct Grid {
-  std::vector<CellType> cells;
+  std::vector<Cell> cells;
   int width;
   int height;
 
@@ -24,20 +29,20 @@ struct Grid {
   std::minstd_rand gen;
   std::uniform_int_distribution<> rand;
 
-  Grid(int width, int height): cells(width*height, CellType::RED),
+  Grid(int width, int height): cells(width*height, {CellType::RED, 0}),
                                width{width},
                                height{height},
                                gen(rd()),
-                               rand(1, static_cast<int>(CellType::SIZE)-1)
+                               rand(1, static_cast<int>(CellType::SIZE)-2)
   {}
 
-  CellType get(int x, int y) {
+  Cell get(int x, int y) {
     assert(x >= 0 && x < width);
     assert(y >= 0 && y < height);
     return cells[y * width + x];
   }
 
-  void put(CellType c, int x, int y) {
+  void put(Cell c, int x, int y) {
     assert(x >= 0 && x < width);
     assert(y >= 0 && y < height);
     cells[y * width + x] = c;
@@ -51,13 +56,13 @@ struct Grid {
     }
   }
 
-  CellType next_random_cell() {
+  Cell next_random_cell() {
     // TODO: use a LFSR?
     // TODO: bagged random to ensure no run without some color?
-    return static_cast<CellType>(rand(gen));
+    return {static_cast<CellType>(rand(gen)), 0};
   }
 
-  CellType push_down(int column, int row, CellType new_cell);
+  Cell push_down(int column, int row, Cell new_cell);
 };
 
 enum class GameState {
@@ -144,4 +149,5 @@ struct Game {
   std::vector<int> match_pattern_at(Pattern& pattern, int x, int y);
   void remove_match_cells();
   void fill_holes();
+  void transform_stones();
 };

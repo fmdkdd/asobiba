@@ -16503,3 +16503,21 @@ for the routine.
 What could be interesting rather than checking hot calls would be to get a
 heatmap at the instruction level.  That way we can see what is effectively
 called, what is effectively dead code.
+
+* [2019-08-29 jeu.]
+** Stones in Super QUELTRIS                                        :queltris:
+To to prevent the player from droning the game and forcing them to be careful
+with their moves, we can: add a timer, either continuous (as in QUELTRIS; more
+stressful) or a discrete number of moves (more puzzle-oriented).
+
+We could also restrict the number of times each piece can be rotated (3 or 4
+seems a good spot).  After that, they become stones that do not match with
+anything.  If you have too many stones, then you lose!  This adds a failure
+condition that is created by not being careful enough, as in Tetris where you
+can fail by leaving too many holes, rather than just not being fast enough,
+which feels arbitrary (as if you ran out of time in a demo).
+
+Trying that one out and... I don't like it.  It forces you to be super careful
+with your moves so gameplay becomes really slow.  It can work for a puzzle mode,
+for sure, but it breaks the rhythm of a regular mode.  It needs a mechanism to
+undo the counters or undo the stones.

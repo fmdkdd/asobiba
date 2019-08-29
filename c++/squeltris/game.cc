@@ -6,18 +6,10 @@
 // line fall instead of them popping after the fill holes animation and leaving
 // a black square in place
 
-// @Idea: to prevent the player from droning the game and forcing them to be
+// TODO: to prevent the player from droning the game and forcing them to be
 // careful with their moves, we can: add a timer, either continuous (as in
 // QUELTRIS; more stressful) or a discrete number of moves (more
 // puzzle-oriented).
-//
-// We could also restrict the number of times each piece can be rotated (3 or
-// 4 seems a good spot).  After that, they become stones that do not match with
-// anything.  If you have too many stones, then you lose!  This adds a failure
-// condition that is created by not being careful enough, as in Tetris where you
-// can fail by leaving too many holes, rather than just not being fast enough,
-// which feels arbitrary (as if you ran out of time in a demo).
-
 
 static void unreachable() {
   assert(false);
@@ -109,6 +101,7 @@ void Game::update(double dt) {
     break;
 
   case GameState::CheckForCombos:
+    transform_stones();
     set_state(GameState::Main);
     break;
 
@@ -177,12 +170,13 @@ void Game::render(SDLRenderer& r) {
   for (int x=0; x < width; ++x) {
     bool hole_found = false;
     for (int y=0; y < height; ++y) {
-      switch (grid.get(x,y)) {
+      switch (grid.get(x,y).type) {
       case CellType::EMPTY  : hole_found = true; continue;
       case CellType::RED    : r.set_draw_color({248, 56, 0}); break;
       case CellType::BLUE   : r.set_draw_color({0, 120, 248}); break;
       case CellType::YELLOW : r.set_draw_color({248, 184, 0}); break;
       case CellType::GREEN  : r.set_draw_color({0, 168, 0}); break;
+      case CellType::STONE  : r.set_draw_color({78, 78, 78}); break;
       case CellType::SIZE   : unreachable();
       }
 
@@ -229,6 +223,14 @@ void Game::render(SDLRenderer& r) {
       }
 
       r.fill_rect(px + off_x, py + off_y, pw, ph);
+
+      // Draw stone markers
+      r.set_draw_color({255,255,255});
+      off_x = 2;
+      for (int c = grid.cells[xy].counter; c > 0; --c) {
+        r.fill_rect(px + off_x, py, 5, 5);
+        off_x += 7;
+      }
     }
   }
 
@@ -254,6 +256,11 @@ void Game::start_rotate(GameState next_state) {
 
 void Game::rotate_cells_right() {
   if (!cells_in_rotation.empty()) {
+    for (auto c : cells_in_rotation) {
+      if (grid.cells[c].type != CellType::STONE)
+        grid.cells[c].counter++;
+    }
+
     auto& g = grid.cells;
     auto& c = cells_in_rotation;
     auto bak = g[c[0]];
@@ -267,6 +274,11 @@ void Game::rotate_cells_right() {
 
 void Game::rotate_cells_left() {
   if (!cells_in_rotation.empty()) {
+    for (auto c : cells_in_rotation) {
+      if (grid.cells[c].type != CellType::STONE)
+      grid.cells[c].counter++;
+    }
+
     auto& g = grid.cells;
     auto& c = cells_in_rotation;
     auto bak = g[c[0]];
@@ -334,7 +346,7 @@ std::vector<int> Game::match_pattern_at(Pattern& pattern, int x, int y) {
   for (int yy=0; yy < h; ++yy) {
     for (int xx=0; xx < w; ++xx) {
       auto c = grid.get(x + xx, y + yy);
-      auto m = match_pattern_char(pattern[yy][xx], c);
+      auto m = match_pattern_char(pattern[yy][xx], c.type);
       switch (m) {
       case PatternMatchType::NO_MATCH:
         return {};
@@ -355,7 +367,7 @@ void Game::remove_match_cells() {
   columns_with_holes.clear();
 
   for (auto c: cells_in_match) {
-    grid.cells[c] = CellType::EMPTY;
+    grid.cells[c] = {CellType::EMPTY,0};
     int col = c % width;
     if (std::find(columns_with_holes.begin(), columns_with_holes.end(), col) == columns_with_holes.end()) {
       columns_with_holes.push_back(col);
@@ -372,7 +384,7 @@ void Game::remove_match_cells() {
 void Game::fill_holes() {
   for (auto c: columns_with_holes) {
     for (int y=0; y < height; ++y) {
-      if (grid.get(c, y) == CellType::EMPTY) {
+      if (grid.get(c, y).type == CellType::EMPTY) {
         grid.push_down(c, y, grid.next_random_cell());
         break;
       }
@@ -383,7 +395,7 @@ void Game::fill_holes() {
   std::vector<int> new_cols;
   for (auto c: columns_with_holes) {
     for (int y=0; y < height; ++y) {
-      if (grid.get(c, y) == CellType::EMPTY) {
+      if (grid.get(c, y).type == CellType::EMPTY) {
         new_cols.push_back(c);
         break;
       }
@@ -393,7 +405,15 @@ void Game::fill_holes() {
   columns_with_holes = new_cols;
 }
 
-CellType Grid::push_down(int column, int row, CellType new_cell) {
+void Game::transform_stones() {
+  for (int c=0; c < grid.cells.size(); ++c) {
+    if (grid.cells[c].counter > 6) {
+      grid.cells[c] = {CellType::STONE,0};
+    }
+  }
+}
+
+Cell Grid::push_down(int column, int row, Cell new_cell) {
   auto out = get(column, row);
 
   int y = row;
