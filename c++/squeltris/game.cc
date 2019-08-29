@@ -140,8 +140,7 @@ void Game::render(SDLRenderer& r) {
   r.set_draw_color({255, 255, 255});
   Point center = {selected_point.x * cell_width,
                   selected_point.y * cell_height};
-  r.draw_line(center.x-10, center.y   , center.x+10, center.y   );
-  r.draw_line(center.x   , center.y-10, center.x   , center.y+10);
+  r.fill_rect(center.x-10, center.y-10, 20, 20);
 
   // Draw grid
   std::vector<int> offset;
