@@ -1,0 +1,59 @@
+* MVP tasks
+** Actual game loop
+To prevent the player from droning the game and forcing them to be careful with
+their moves, we can: add a timer, either continuous (as in QUELTRIS; more
+stressful) or a discrete number of moves (more puzzle-oriented).
+
+** Pause screen
+Blackout playfield to prevent cheating.
+
+* Polish
+** Add top line
+Should have a hidden top line so when dropping we see squares from that line
+fall instead of them popping after the fill holes animation and leaving a black
+square in place
+
+** Multiple modes
+Tutorials: learn how to match shapes in few moves, how to turn one shape
+into another without disturbing other pieces, without matching other things
+around it, learn how to zap a piece from far away with quick rotate+direction,
+how to setup combos...
+
+Puzzle mode: rotation restriction instead of time, try to build the longest
+chain, setup combos
+
+Time attack: best score in 3min?
+
+Marathon: best score until dead?
+
+** Color-blindness friendly
+Shapes are easier to distinguish at a glance than colors anyway.
+
+** Two-player modes
+Competitive: send stones to other player.  Need a mechanism to get rid of stones
+
+Cooperative: two crosshairs for the same (or slightly larger?) playfield.
+
+** Palette swap
+Cheap and easy to do.  Tetris does it on level change, could also be unlocks.
+
+* Ideas
+** Lock delay
+Allow rotation for a small delay before checking for combos, ala Tetris.
+Could allow to get out of tricky situation.  But that wouldn't let us set up
+large combos I think.
+
+** Patterns change over time
+Breaks up the routine.  More things to juggle, makes the brain work.
+
+Change should be signaled in advance (maybe after a set amount of matches for
+this pattern?)
+
+** Powerups
+Filling a pattern unlocks a powerup.  Not many buttons on a NES pad
+though... could use Select+A and Select+B but a bit clunky.
+
+Potential powerups:
+- clear stones
+- freeze timer
+- restore row

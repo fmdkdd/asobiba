@@ -2,15 +2,6 @@
 
 #include "game.h"
 
-// TODO: should have a hidden top line so when dropping we see squares from that
-// line fall instead of them popping after the fill holes animation and leaving
-// a black square in place
-
-// TODO: to prevent the player from droning the game and forcing them to be
-// careful with their moves, we can: add a timer, either continuous (as in
-// QUELTRIS; more stressful) or a discrete number of moves (more
-// puzzle-oriented).
-
 static void unreachable() {
   assert(false);
 }
