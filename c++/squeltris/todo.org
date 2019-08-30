@@ -7,6 +7,11 @@ stressful) or a discrete number of moves (more puzzle-oriented).
 ** Pause screen
 Blackout playfield to prevent cheating.
 
+** Scoring
+Multi-matches/combos can take time to setup.  Would be unfortunate to reward
+fast single matches over elaborate setups.  The scoring should reward high-level
+play accordingly.
+
 * Polish
 ** Add top line
 Should have a hidden top line so when dropping we see squares from that line
