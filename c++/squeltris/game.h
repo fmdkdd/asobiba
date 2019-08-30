@@ -29,7 +29,7 @@ struct Grid {
   std::minstd_rand gen;
   std::uniform_int_distribution<> rand;
 
-  Grid(int width, int height): cells(width*height, {CellType::RED, 0}),
+  Grid(int width, int height): cells(width*height, {CellType::EMPTY, 0}),
                                width{width},
                                height{height},
                                gen(rd()),
@@ -88,7 +88,7 @@ struct Game {
   GameState state = GameState::Main;
 
   int selected_column = 0;
-  Point selected_point = {1,3};
+  Point selected_point = {3,5};
   int current_combo = 0;
 
   int width = 7;
@@ -127,7 +127,9 @@ struct Game {
        "33"},
     };
 
-    grid.randomize();
+    for (int c=0; c < width; ++c)
+      columns_with_holes.push_back(c);
+    set_state(GameState::FillHoles);
   }
 
   void set_state(GameState s);

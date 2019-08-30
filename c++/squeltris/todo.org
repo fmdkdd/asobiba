@@ -22,6 +22,8 @@ how to setup combos...
 Puzzle mode: rotation restriction instead of time, try to build the longest
 chain, setup combos
 
+Eliminate one color mode?  Maybe too random, but could trigger an unlock.
+
 Time attack: best score in 3min?
 
 Marathon: best score until dead?
@@ -36,6 +38,10 @@ Cooperative: two crosshairs for the same (or slightly larger?) playfield.
 
 ** Palette swap
 Cheap and easy to do.  Tetris does it on level change, could also be unlocks.
+
+** Auto repeat inputs after delay?
+Can't use the repeat of OS because that varies... but could do something
+frame-based ala NES Tetris.
 
 * Ideas
 ** Lock delay
