@@ -63,3 +63,10 @@ Potential powerups:
 - clear stones
 - freeze timer
 - restore row
+
+* Dev mode
+** Draw mode
+Where I can change the color of tiles using the mouse?  Though the NES doesn't
+have a mouse...  So maybe just a switch?
+
+Useful for testing setups.
