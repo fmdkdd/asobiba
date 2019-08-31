@@ -93,6 +93,7 @@ void Game::update(double dt) {
 
   case GameState::CheckForCombos:
     transform_stones();
+    change_patterns();
     set_state(GameState::Main);
     break;
 
@@ -129,6 +130,18 @@ void Game::update(double dt) {
   upkey = SDL_SCANCODE_UNKNOWN;
 }
 
+Color cell_color(CellType c) {
+  switch (c) {
+  case CellType::RED    : return {248, 56, 0}; break;
+  case CellType::BLUE   : return {0, 120, 248}; break;
+  case CellType::YELLOW : return {248, 184, 0}; break;
+  case CellType::GREEN  : return {0, 168, 0}; break;
+  case CellType::STONE  : return {78, 78, 78}; break;
+  default: unreachable();
+  }
+  return {};
+}
+
 void Game::render(SDLRenderer& r) {
   r.set_draw_color({30,30,30});
   r.clear();
@@ -162,14 +175,9 @@ void Game::render(SDLRenderer& r) {
   for (int x=0; x < width; ++x) {
     bool hole_found = false;
     for (int y=0; y < height; ++y) {
-      switch (grid.get(x,y).type) {
-      case CellType::EMPTY  : hole_found = true; continue;
-      case CellType::RED    : r.set_draw_color({248, 56, 0}); break;
-      case CellType::BLUE   : r.set_draw_color({0, 120, 248}); break;
-      case CellType::YELLOW : r.set_draw_color({248, 184, 0}); break;
-      case CellType::GREEN  : r.set_draw_color({0, 168, 0}); break;
-      case CellType::STONE  : r.set_draw_color({78, 78, 78}); break;
-      case CellType::SIZE   : unreachable();
+      switch (auto t = grid.get(x,y).type) {
+      case CellType::EMPTY: hole_found = true; continue;
+      default: r.set_draw_color(cell_color(t));
       }
 
       // Pixel coordinates of top-left corner
@@ -222,6 +230,28 @@ void Game::render(SDLRenderer& r) {
       for (int c = grid.cells[xy].counter; c > 0; --c) {
         r.fill_rect(px + off_x, py, 5, 5);
         off_x += 7;
+      }
+
+      // Draw patterns
+      off_x = cell_width * width + 16;
+      off_y = 16;
+      pw = pattern_cell_width  - margin*2;
+      ph = pattern_cell_height - margin*2;
+
+      for (auto& p: patterns) {
+        r.set_draw_color(cell_color(p.color));
+        int h = p.lines->size();
+        int w = (*p.lines)[0].size();
+
+        for (int yy=0; yy < h; ++yy) {
+          py = yy * pattern_cell_height + margin;
+          for (int xx=0; xx < w; ++xx) {
+            px = xx * pattern_cell_width + margin;
+            if ((*p.lines)[yy][xx] == 'X')
+              r.fill_rect(px + off_x, py + off_y, pw, ph);
+          }
+        }
+        off_y += 4 * pattern_cell_height;
       }
     }
   }
@@ -311,23 +341,20 @@ std::vector<Match> Game::check_all_matches() {
   return matches;
 }
 
-PatternMatchType match_pattern_char(char c, CellType t) {
+PatternMatchType match_pattern_char(char c, CellType pattern_color, CellType t) {
   auto N = PatternMatchType::NO_MATCH;
   auto Y = PatternMatchType::MATCH;
 
   switch (c) {
-  case '0': return t == CellType::RED    ? Y : N;
-  case '1': return t == CellType::BLUE   ? Y : N;
-  case '2': return t == CellType::YELLOW ? Y : N;
-  case '3': return t == CellType::GREEN  ? Y : N;
+  case 'X': return t == pattern_color ? Y : N;
   case '.': return PatternMatchType::PASS;
   default: return N;
   }
 }
 
 std::vector<int> Game::match_pattern_at(Pattern& pattern, int x, int y) {
-  int h = pattern.size();
-  int w = pattern[0].size();
+  int h = pattern.lines->size();
+  int w = (*pattern.lines)[0].size();
   std::vector<int> match;
 
   // Bail if the pattern is too large to fit
@@ -338,7 +365,7 @@ std::vector<int> Game::match_pattern_at(Pattern& pattern, int x, int y) {
   for (int yy=0; yy < h; ++yy) {
     for (int xx=0; xx < w; ++xx) {
       auto c = grid.get(x + xx, y + yy);
-      auto m = match_pattern_char(pattern[yy][xx], c.type);
+      auto m = match_pattern_char((*pattern.lines)[yy][xx], pattern.color, c.type);
       switch (m) {
       case PatternMatchType::NO_MATCH:
         return {};
@@ -349,6 +376,9 @@ std::vector<int> Game::match_pattern_at(Pattern& pattern, int x, int y) {
       }
     }
   }
+
+  // There is a match, so increase count for this pattern
+  pattern.counter++;
 
   return match;
 }
@@ -398,9 +428,23 @@ void Game::fill_holes() {
 }
 
 void Game::transform_stones() {
-  for (int c=0; c < grid.cells.size(); ++c) {
+  for (auto c=0ul; c < grid.cells.size(); ++c) {
     if (grid.cells[c].counter > 6) {
       grid.cells[c] = {CellType::STONE,0};
+    }
+  }
+}
+
+void Game::change_patterns() {
+  for (auto& p: patterns) {
+    if (p.counter > 0) {
+      // TODO: err.. use a LFSR/bagged random to ensure we don't fall on the
+      // same pattern twice in a row.
+      auto old = p.lines;
+      do {
+        p.lines = &all_patterns[std::rand() % all_patterns.size()];
+      } while (p.lines == old);
+      p.counter = 0;
     }
   }
 }

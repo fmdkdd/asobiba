@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cassert>
 #include <random>
 #include <vector>
@@ -71,7 +72,36 @@ enum class GameState {
   CheckForCombos
 };
 
-typedef std::vector<std::string> Pattern;
+struct Pattern {
+  std::vector<std::string> *lines;
+  CellType color;
+  int counter = 0;
+};
+
+static std::array<std::vector<std::string>,6> all_patterns = {{
+  {"XXX",
+   ".X."},
+
+  {"XX",
+   "X.",
+   "X."},
+
+  {"XX",
+   ".X",
+   ".X"},
+
+  {".XX",
+   "XX."},
+
+  {"XX.",
+   ".XX"},
+
+  {"XX",
+   "XX"},
+}};
+
+constexpr int pattern_cell_height = 8;
+constexpr int pattern_cell_width = 8;
 
 struct Match {
   Pattern& pattern;
@@ -113,20 +143,10 @@ struct Game {
   std::vector<int> columns_with_holes;
 
   Game() : grid(width, height) {
-    patterns = {
-      {"000",
-       ".0."},
-
-      {"11",
-       "1.",
-       "1."},
-
-      {".22",
-       "22."},
-
-      {"33",
-       "33"},
-    };
+    patterns.push_back({&all_patterns[0], CellType::RED});
+    patterns.push_back({&all_patterns[1], CellType::GREEN});
+    patterns.push_back({&all_patterns[2], CellType::BLUE});
+    patterns.push_back({&all_patterns[3], CellType::YELLOW});
 
     for (int c=0; c < width; ++c)
       columns_with_holes.push_back(c);
@@ -153,4 +173,5 @@ struct Game {
   void remove_match_cells();
   void fill_holes();
   void transform_stones();
+  void change_patterns();
 };
