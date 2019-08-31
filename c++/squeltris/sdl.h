@@ -56,6 +56,10 @@ struct SDLRenderer {
     SDL_RenderPresent(renderer);
   }
 
+  void set_scale(float x, float y) {
+    SDL_RenderSetScale(renderer, x, y);
+  }
+
   void set_draw_color(Color c) {
     SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
   }

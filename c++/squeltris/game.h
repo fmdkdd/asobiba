@@ -6,8 +6,8 @@
 
 #include "sdl.h"
 
-static constexpr int WINDOW_HEIGHT = 500;
-static constexpr int WINDOW_WIDTH = 350;
+constexpr int WINDOW_HEIGHT = 224;
+constexpr int WINDOW_WIDTH = 256;
 
 enum class CellType {
   EMPTY, RED, GREEN, BLUE, YELLOW, STONE, SIZE
@@ -100,9 +100,10 @@ struct Game {
 
   int frame = 0;
 
-  static constexpr int cell_width  = 50;
-  static constexpr int cell_height = 50;
-  static constexpr int margin = 2;
+  static constexpr int player_size  = 4;
+  static constexpr int cell_width  = 18;
+  static constexpr int cell_height = 18;
+  static constexpr int margin = 1;
 
   std::vector<int> cells_in_rotation;
 

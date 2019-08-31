@@ -130,14 +130,15 @@ void Game::update(double dt) {
 }
 
 void Game::render(SDLRenderer& r) {
-  r.set_draw_color({0,0,0});
+  r.set_draw_color({30,30,30});
   r.clear();
 
   // Draw priest
   r.set_draw_color({255, 255, 255});
   Point center = {selected_point.x * cell_width,
                   selected_point.y * cell_height};
-  r.fill_rect(center.x-10, center.y-10, 20, 20);
+  r.fill_rect(center.x-player_size, center.y-player_size,
+              player_size*2, player_size*2);
 
   // Draw grid
   std::vector<int> offset;
@@ -171,7 +172,7 @@ void Game::render(SDLRenderer& r) {
       case CellType::SIZE   : unreachable();
       }
 
-      // Pixel coordinates of lower-left corner
+      // Pixel coordinates of top-left corner
       int px = x * cell_width  + margin;
       int py = y * cell_height + margin;
       // Pixel width and height of cell

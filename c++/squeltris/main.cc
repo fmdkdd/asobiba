@@ -4,9 +4,12 @@
 #include "sdl.h"
 
 int main() {
+  int scale = 3;
+
   SDL sdl;
-  SDLWindow window("SUPER QUELTRIS", WINDOW_WIDTH, WINDOW_HEIGHT);
+  SDLWindow window("SUPER QUELTRIS", WINDOW_WIDTH*scale, WINDOW_HEIGHT*scale);
   SDLRenderer renderer(window, SDL_RENDERER_PRESENTVSYNC);
+  renderer.set_scale(scale, scale);
 
   Game game;
   auto last_frame = std::chrono::high_resolution_clock::now();
