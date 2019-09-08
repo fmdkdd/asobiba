@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include <SDL2/SDL.h>
 
 #include "types.h"
@@ -41,11 +43,48 @@ struct Color {
   u8 a = 255;
 };
 
+struct SDLSurface {
+  SDL_Surface *surface;
+
+  explicit SDLSurface(SDL_Surface *s) : surface {s} {}
+
+  SDLSurface(const SDLSurface &s) = delete;
+  SDLSurface(SDLSurface &&s) = default;
+
+  ~SDLSurface() { SDL_FreeSurface(surface); }
+};
+
+struct SDLTexture {
+  SDL_Texture *texture;
+
+  SDLTexture(SDL_Texture *t) : texture {t} {}
+
+  ~SDLTexture() { SDL_DestroyTexture(texture); }
+};
+
+struct SDLRenderer;
+
+struct SDLFont {
+  SDLTexture texture;
+  int width;
+  int height;
+  int mapping[256];
+
+  SDLFont(const SDLRenderer &r, const std::string &file,
+          const int width, const int height,
+          const std::string &mapping);
+  void draw(SDLRenderer &r, unsigned char c, int x, int y);
+};
+
+static constexpr const char *FONT_CHARS = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`-=[]\\;',./~!@#$%^&*()_+{}|:\"<>?";
+
 struct SDLRenderer {
   SDL_Renderer *renderer;
+  SDLFont font;
 
-  SDLRenderer(SDLWindow& window, SDL_RendererFlags flags)
-    : renderer {SDL_CreateRenderer(window.window, -1, flags)} {
+  SDLRenderer(const SDLWindow& window, SDL_RendererFlags flags)
+    : renderer {SDL_CreateRenderer(window.window, -1, flags)},
+      font(*this, "font.bmp", 9, 16, FONT_CHARS) {
     if (!renderer)
       sdl_die("Could not create renderer");
   }
@@ -74,4 +113,26 @@ struct SDLRenderer {
     SDL_Rect r {x,y,w,h};
     SDL_RenderFillRect(renderer, &r);
   }
+
+  SDLTexture create_texture(SDLSurface &&s) const {
+    return SDL_CreateTextureFromSurface(renderer, s.surface);
+  }
+
+  void copy(const SDLTexture &t, const SDL_Rect *src, const SDL_Rect *dst) {
+    SDL_RenderCopy(renderer, t.texture, src, dst);
+  }
+
+  void text(const std::string &s, int x, int y) {
+    for (auto c: s) {
+      font.draw(*this, c, x, y);
+      x += font.width-1;
+    }
+  }
 };
+
+// Load BMP file into SDL_Surface,
+
+// convert surface into texture
+
+// to draw
+// renderCopy rect of char to renderer

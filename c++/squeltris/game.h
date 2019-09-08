@@ -130,6 +130,8 @@ struct Game {
 
   int frame = 0;
 
+  int timer = 0;
+
   static constexpr int player_size  = 4;
   static constexpr int cell_width  = 18;
   static constexpr int cell_height = 18;
@@ -151,6 +153,8 @@ struct Game {
     for (int c=0; c < width; ++c)
       columns_with_holes.push_back(c);
     set_state(GameState::FillHoles);
+
+    timer = 1000;
   }
 
   void set_state(GameState s);

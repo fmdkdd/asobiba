@@ -82,6 +82,8 @@ void Game::update(double dt) {
     case SDL_SCANCODE_X: start_rotate(GameState::RotateRight); break;
     default:;
     }
+
+    timer -= 1;
     break;
 
   case GameState::RotateLeft:
@@ -255,6 +257,11 @@ void Game::render(SDLRenderer& r) {
       }
     }
   }
+
+  // Draw timer
+  char buf[1024];
+  snprintf(buf, 1024, "%d", timer);
+  r.text(buf, 200, 200);
 
   ++frame;
 }
