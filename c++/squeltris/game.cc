@@ -2,6 +2,8 @@
 
 #include "game.h"
 
+// TODO: refactor checkForCombos as function, not state?
+
 static void unreachable() {
   assert(false);
 }
@@ -259,9 +261,9 @@ void Game::render(SDLRenderer& r) {
   }
 
   // Draw timer
-  char buf[1024];
-  snprintf(buf, 1024, "%d", timer);
-  r.text(buf, 200, 200);
+  char buf[32];
+  snprintf(buf, sizeof(buf), "%d", timer);
+  r.text(buf, 135, 150);
 
   ++frame;
 }
@@ -404,6 +406,13 @@ void Game::remove_match_cells() {
   }
 
   cells_in_match.clear();
+
+  timer += current_matches.size() * 100;
+
+  // TODO: measure time taken to make combos to decide what values to award on
+  // match.
+
+  // TODO: gameover
 
   // TODO: score matches depending on type
 

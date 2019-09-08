@@ -4,6 +4,13 @@ To prevent the player from droning the game and forcing them to be careful with
 their moves, we can: add a timer, either continuous (as in QUELTRIS; more
 stressful) or a discrete number of moves (more puzzle-oriented).
 
+*** Timer
+At min level, the timer should let you build without pressure.
+Discrete level increase: timer drops more quickly, but timer reward stay the
+same (maybe non-linear?  Could be a lookup table).
+
+At high levels, you have no time to make non-optimal moves.
+
 ** Pause screen
 Blackout playfield to prevent cheating.
 
@@ -11,6 +18,8 @@ Blackout playfield to prevent cheating.
 Multi-matches/combos can take time to setup.  Would be unfortunate to reward
 fast single matches over elaborate setups.  The scoring should reward high-level
 play accordingly.
+
+Score increase at higher speed levels.
 
 * Polish
 ** Add top line
