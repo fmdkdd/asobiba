@@ -57,31 +57,50 @@ void Game::sdl_event(SDL_Event& e) {
   switch (e.type) {
   case SDL_KEYDOWN:
     if (!e.key.repeat)
-      upkey = e.key.keysym.scancode;
+      switch(e.key.keysym.scancode) {
+      case SDL_SCANCODE_I:
+      case SDL_SCANCODE_UP   : playerInput = UP; break;
+      case SDL_SCANCODE_K:
+      case SDL_SCANCODE_DOWN : playerInput = DOWN; break;
+      case SDL_SCANCODE_J:
+      case SDL_SCANCODE_LEFT : playerInput = LEFT; break;
+      case SDL_SCANCODE_L:
+      case SDL_SCANCODE_RIGHT: playerInput = RIGHT; break;
+      case SDL_SCANCODE_Z:     playerInput = ROTATE_LEFT; break;
+      case SDL_SCANCODE_X:     playerInput = ROTATE_RIGHT; break;
+      default:;
+      }
+    break;
+
+  case SDL_CONTROLLERBUTTONDOWN:
+    switch (e.cbutton.button) {
+    case SDL_CONTROLLER_BUTTON_DPAD_UP   : playerInput = UP; break;
+    case SDL_CONTROLLER_BUTTON_DPAD_DOWN : playerInput = DOWN; break;
+    case SDL_CONTROLLER_BUTTON_DPAD_LEFT : playerInput = LEFT; break;
+    case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: playerInput = RIGHT; break;
+    case SDL_CONTROLLER_BUTTON_A         : playerInput = ROTATE_LEFT; break;
+    case SDL_CONTROLLER_BUTTON_B         : playerInput = ROTATE_RIGHT; break;
+    }
     break;
   }
 }
 
 void Game::update(double dt) {
   // Can always move, but not rotate
-  switch (upkey) {
-  case SDL_SCANCODE_I:
-  case SDL_SCANCODE_UP   : move_up(); break;
-  case SDL_SCANCODE_K:
-  case SDL_SCANCODE_DOWN : move_down(); break;
-  case SDL_SCANCODE_J:
-  case SDL_SCANCODE_LEFT : move_left(); break;
-  case SDL_SCANCODE_L:
-  case SDL_SCANCODE_RIGHT: move_right(); break;
+  switch (playerInput) {
+  case UP   : move_up(); break;
+  case DOWN : move_down(); break;
+  case LEFT : move_left(); break;
+  case RIGHT: move_right(); break;
   default:;
   }
 
   switch (state) {
     // Rotate only in main
   case GameState::Main:
-    switch (upkey) {
-    case SDL_SCANCODE_Z: start_rotate(GameState::RotateLeft); break;
-    case SDL_SCANCODE_X: start_rotate(GameState::RotateRight); break;
+    switch (playerInput) {
+    case ROTATE_LEFT : start_rotate(GameState::RotateLeft); break;
+    case ROTATE_RIGHT: start_rotate(GameState::RotateRight); break;
     default:;
     }
 
@@ -131,7 +150,7 @@ void Game::update(double dt) {
   default:;
   }
 
-  upkey = SDL_SCANCODE_UNKNOWN;
+  playerInput = CLEAR;
 }
 
 Color cell_color(CellType c) {

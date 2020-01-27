@@ -112,8 +112,15 @@ enum struct PatternMatchType {
   NO_MATCH, MATCH, PASS,
 };
 
+enum PlayerInput
+{
+ CLEAR,
+ UP, RIGHT, DOWN, LEFT,
+ ROTATE_LEFT, ROTATE_RIGHT
+};
+
 struct Game {
-  SDL_Scancode upkey;
+  PlayerInput playerInput;
 
   GameState state = GameState::Main;
 

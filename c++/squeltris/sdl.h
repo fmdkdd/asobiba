@@ -12,12 +12,29 @@ static void sdl_die(const char *msg) {
 }
 
 struct SDL {
+  SDL_GameController* gameController;
+
   SDL() {
-    if (SDL_Init(SDL_INIT_VIDEO) != 0)
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0)
       sdl_die("Unable to initialize SDL");
+
+    gameController = NULL;
+    for (int i = 0; i < SDL_NumJoysticks(); ++i) {
+      if (SDL_IsGameController(i)) {
+        gameController = SDL_GameControllerOpen(i);
+        if (gameController) {
+          break;
+        } else {
+          fprintf(stderr, "Could not open gamecontroller %i: %s\n", i, SDL_GetError());
+        }
+      }
+    }
   }
 
-  ~SDL() { SDL_Quit(); }
+  ~SDL() {
+    SDL_GameControllerClose(gameController);
+    SDL_Quit();
+  }
 };
 
 struct SDLWindow {
