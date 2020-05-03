@@ -18,6 +18,19 @@ typedef uint16_t u16;
 typedef uint32_t u32;
 typedef int32_t i32;
 
+enum input
+  {
+   INPUT_COIN     = 1 << 0,
+   INPUT_2P_START = 1 << 1,
+   INPUT_1P_START = 1 << 2,
+   INPUT_1P_SHOOT = 1 << 4,
+   INPUT_1P_LEFT  = 1 << 5,
+   INPUT_1P_RIGHT = 1 << 6,
+   INPUT_2P_SHOOT = 1 << 4,
+   INPUT_2P_LEFT  = 1 << 5,
+   INPUT_2P_RIGHT = 1 << 6,
+  };
+
 void die(const char *const msg) {
   perror(msg);
   exit(1);
@@ -61,7 +74,6 @@ int main(const int argc, const char* const argv[]) {
 #endif
 
   cpu.pc = orig;
-  i32 cycles = 0;
 
   // Init SDL
   if (SDL_Init(SDL_INIT_VIDEO) != 0)
@@ -80,11 +92,19 @@ int main(const int argc, const char* const argv[]) {
     SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
   if (!renderer)
     sdl_die("Could not create renderer");
+  SDL_RendererInfo info;
+  SDL_GetRendererInfo(renderer, &info);
+  printf("SDL Renderer: %s (accelerated: %s, vsync: %s)\n",
+         info.name,
+         info.flags & SDL_RENDERER_ACCELERATED ? "yes" : "no",
+         info.flags & SDL_RENDERER_PRESENTVSYNC ? "yes" : "no");
 
   jit_init();
 
   cpu.ports[1] = 1 << 3;
   cpu.ports[2] = 0x03; // 6 lives, I'm a wuss
+
+  u64 last_render_time = cpu_time_as_nanoseconds();
 
   while (true) {
     SDL_Event e;
@@ -94,16 +114,16 @@ int main(const int argc, const char* const argv[]) {
 
       case SDL_KEYDOWN:
         switch (e.key.keysym.scancode) {
-        case SDL_SCANCODE_C:      cpu.ports[1] |= 1 << 0; break; // COIN
-        case SDL_SCANCODE_RSHIFT: cpu.ports[1] |= 1 << 1; break; // 2P start
-        case SDL_SCANCODE_LSHIFT: cpu.ports[1] |= 1 << 2; break; // 1P start
-        case SDL_SCANCODE_S:      cpu.ports[1] |= 1 << 4; break; // 1P shoot
-        case SDL_SCANCODE_A:      cpu.ports[1] |= 1 << 5; break; // 1P left
-        case SDL_SCANCODE_D:      cpu.ports[1] |= 1 << 6; break; // 1P right
+        case SDL_SCANCODE_C:      cpu.ports[1] |= INPUT_COIN;     break;
+        case SDL_SCANCODE_RSHIFT: cpu.ports[1] |= INPUT_2P_START; break;
+        case SDL_SCANCODE_LSHIFT: cpu.ports[1] |= INPUT_1P_START; break;
+        case SDL_SCANCODE_S:      cpu.ports[1] |= INPUT_1P_SHOOT; break;
+        case SDL_SCANCODE_A:      cpu.ports[1] |= INPUT_1P_LEFT;  break;
+        case SDL_SCANCODE_D:      cpu.ports[1] |= INPUT_1P_RIGHT; break;
 
-        case SDL_SCANCODE_K:      cpu.ports[2] |= 1 << 4; break; // 2P shoot
-        case SDL_SCANCODE_J:      cpu.ports[2] |= 1 << 5; break; // 2P left
-        case SDL_SCANCODE_L:      cpu.ports[2] |= 1 << 6; break; // 2P right
+        case SDL_SCANCODE_K:      cpu.ports[2] |= INPUT_2P_SHOOT; break;
+        case SDL_SCANCODE_J:      cpu.ports[2] |= INPUT_2P_LEFT;  break;
+        case SDL_SCANCODE_L:      cpu.ports[2] |= INPUT_2P_RIGHT; break;
 
         default: break;
         }
@@ -111,16 +131,16 @@ int main(const int argc, const char* const argv[]) {
 
       case SDL_KEYUP:
         switch (e.key.keysym.scancode) {
-        case SDL_SCANCODE_C:      cpu.ports[1] &= ~(1 << 0); break; // COIN
-        case SDL_SCANCODE_RSHIFT: cpu.ports[1] &= ~(1 << 1); break; // 2P start
-        case SDL_SCANCODE_RETURN: cpu.ports[1] &= ~(1 << 2); break; // 1P start
-        case SDL_SCANCODE_S:      cpu.ports[1] &= ~(1 << 4); break; // 1P shoot
-        case SDL_SCANCODE_A:      cpu.ports[1] &= ~(1 << 5); break; // 1P left
-        case SDL_SCANCODE_D:      cpu.ports[1] &= ~(1 << 6); break; // 1P right
+        case SDL_SCANCODE_C:      cpu.ports[1] &= INPUT_COIN;     break;
+        case SDL_SCANCODE_RSHIFT: cpu.ports[1] &= INPUT_2P_START; break;
+        case SDL_SCANCODE_RETURN: cpu.ports[1] &= INPUT_1P_START; break;
+        case SDL_SCANCODE_S:      cpu.ports[1] &= INPUT_1P_SHOOT; break;
+        case SDL_SCANCODE_A:      cpu.ports[1] &= INPUT_1P_LEFT;  break;
+        case SDL_SCANCODE_D:      cpu.ports[1] &= INPUT_1P_RIGHT; break;
 
-        case SDL_SCANCODE_K:      cpu.ports[2] &= ~(1 << 4); break; // 2P shoot
-        case SDL_SCANCODE_J:      cpu.ports[2] &= ~(1 << 5); break; // 2P left
-        case SDL_SCANCODE_L:      cpu.ports[2] &= ~(1 << 6); break; // 2P right
+        case SDL_SCANCODE_K:      cpu.ports[2] &= INPUT_2P_SHOOT; break;
+        case SDL_SCANCODE_J:      cpu.ports[2] &= INPUT_2P_LEFT;  break;
+        case SDL_SCANCODE_L:      cpu.ports[2] &= INPUT_2P_RIGHT; break;
 
         case SDL_SCANCODE_ESCAPE: goto done;
 
@@ -138,20 +158,15 @@ int main(const int argc, const char* const argv[]) {
 
     BEGIN_TIME(emulate);
     // TODO: should run for the actual elapsed time since the last frame
-    cycles += 12500;
-    while (cycles > 0)
-      cycles -= cpu_step(&cpu);
+    cpu_run_for(&cpu, 12500);
     cpu_interrupt(&cpu, 1); // mid-vblank
-    cycles += 16667;
-    while (cycles > 0)
-      cycles -= cpu_step(&cpu);
+    cpu_run_for(&cpu, 16667);
     cpu_interrupt(&cpu, 2); // vblank
-    cycles += 4166;
-    while (cycles > 0)
-      cycles -= cpu_step(&cpu);
+    cpu_run_for(&cpu, 4166);
     END_TIME(emulate);
 
     // Draw content of video RAM
+    BEGIN_TIME(draw);
     SDL_SetRenderDrawColor(renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
     SDL_RenderClear(renderer);
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, SDL_ALPHA_OPAQUE);
@@ -173,8 +188,16 @@ int main(const int argc, const char* const argv[]) {
         }
       }
     }
+    END_TIME(draw);
 
     SDL_RenderPresent(renderer);
+
+    {
+      u64 now = cpu_time_as_nanoseconds();
+      u64 delta = now - last_render_time;
+      printf("%22s: %10luns\n", "frame time", delta);
+      last_render_time = now;
+    }
   }
 
  done:

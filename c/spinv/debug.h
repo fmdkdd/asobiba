@@ -3,25 +3,30 @@
 
 #include <time.h>
 
-#include "x86intrin.h"
-
 typedef unsigned long long u128;
 typedef unsigned long u64;
 typedef double f64;
 
+#ifdef BENCH
+#define DBG(expr)
+#else
+#define DBG(expr) expr
+#endif
+
 typedef struct {
-  struct timespec start;
+  u64 start;
   const char *name;
 } debug_time;
 
+u64 cpu_time_as_nanoseconds();
 void init_debug_time(debug_time *dt, const char *name);
 void end_debug_time(const debug_time *dt, const char *file, const char *function);
 
 #define BEGIN_TIME(name)                        \
-  debug_time dt##name;                          \
-  init_debug_time(&dt##name, #name);
+  debug_time dt_##name;                         \
+  init_debug_time(&dt_##name, #name);
 
-#define END_TIME(name)                                          \
-  end_debug_time(&dt##name, __FILE__, __func__);
+#define END_TIME(name)                                  \
+  end_debug_time(&dt_##name, __FILE__, __func__);
 
 #endif

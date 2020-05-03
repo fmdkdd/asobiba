@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "cpu.h"
+#include "debug.h"
 
 #ifndef BENCH
 #define DIFF(reg) {                                             \
@@ -42,12 +43,6 @@ static bool parity(u8 x) {
   x ^= x >> 1;
   return x&1;
 }
-
-#ifdef BENCH
-#define DBG(expr)
-#else
-#define DBG(expr) expr
-#endif
 
 #define OP(code, name, arg1, arg2, cycles, flags, expr)                 \
   case (code): {                                                        \
@@ -338,4 +333,10 @@ void cpu_interrupt(CPU *const cpu, u8 rst) {
     cpu->ram[--cpu->sp] = cpu->pc;
     cpu->pc = 8 * rst;
   }
+}
+
+void cpu_run_for(CPU *const cpu, size_t cycles)
+{
+  while (cycles-- > 0)
+    cpu_step(cpu);
 }
