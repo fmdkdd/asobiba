@@ -10,6 +10,9 @@ CFLAGS := -std=c17 -Wall -Wextra -O3
 BIN := spinv
 BUILD_DIR := build
 
+BENCH := 1
+CPUDIAG := 0
+
 # pass additional flags
 ifeq ($(CPUDIAG), 1)
 CFLAGS += -DCPUDIAG
