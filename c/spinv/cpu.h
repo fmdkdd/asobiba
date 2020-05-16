@@ -7,9 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
+#include "common.h"
 
 #define RAM_SIZE 0x10000         // 8080 is 16bit addressing
 
@@ -59,9 +57,7 @@ typedef enum {
  _, A, B, C, D, E, H, L, BC, DE, HL, SP, PSW, D8, D16, ADDR,
 } ARGS;
 
-#ifndef BENCH
 void print_mnemonic(const char *name, const char *arg1, const char *arg2);
-#endif
 
 void cpu_init(CPU *cpu);
 int cpu_step(CPU *cpu);

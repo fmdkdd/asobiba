@@ -18,6 +18,7 @@ static void diff_state(const CPU *const old, const CPU *const new) {
   DIFF(a); DIFF(b); DIFF(c); DIFF(d); DIFF(e); DIFF(h); DIFF(l);
   DIFF(z); DIFF(s); DIFF(p); DIFF(cy); DIFF(ac); DIFF(sp);
 }
+#endif
 
 #define MAX_MNEMO_LENGTH 13
 
@@ -34,7 +35,6 @@ void print_mnemonic(const char *name, const char *arg1, const char *arg2) {
   }
   printf("%s", buf);
 }
-#endif
 
 // Return 1 if parity of X is odd, 0 if even
 static bool parity(u8 x) {

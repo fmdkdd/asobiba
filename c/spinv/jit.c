@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <sys/mman.h>
 
+#include "common.h"
 #include "cpu.h"
 #include "jit.h"
 
@@ -87,25 +88,19 @@ void jit_init() {
   jit_hot_routines_size = 0;
 }
 
-#ifdef BENCH
-#define DBG(expr)
-#else
-#define DBG(expr) expr
-#endif
-
 #define OP(code, name, arg1, arg2, cycles, flags, expr)                 \
   case (code): {                                                        \
   cc += (cycles);                                                       \
-  DBG(u16 old_pc = pc);                                                 \
-  DBG(printf("%04x %02x ", pc, op[0]));                                 \
+  u16 old_pc = pc;                                                      \
+  printf("%04x %02x ", pc, op[0]);                                      \
   pc++;                                                                 \
   OP_ARG(arg1);                                                         \
   OP_ARG(arg2);                                                         \
-  DBG(if (pc - old_pc > 1) printf("%02x ", op[1]); else printf("   ")); \
-  DBG(if (pc - old_pc > 2) printf("%02x ", op[2]); else printf("   ")); \
-  DBG(print_mnemonic(#name, #arg1, #arg2));                             \
+  if (pc - old_pc > 1) printf("%02x ", op[1]); else printf("   ");      \
+  if (pc - old_pc > 2) printf("%02x ", op[2]); else printf("   ");      \
+  print_mnemonic(#name, #arg1, #arg2);                                  \
   expr;                                                                 \
-  DBG(printf("\n"));                                                    \
+  printf("\n");                                                         \
   }                                                                     \
   break
 
@@ -239,7 +234,7 @@ void jit_analyze(int addr, const CPU *cpu) {
       OP(0xc0, RNZ, _,_    , 5, _          , {});
       OP(0xc1, POP, BC,_   ,10, _          , {});
       OP(0xc2, JNZ, ADDR,_ ,10, _          , {});
-      OP(0xc3, JMP, ADDR,_ ,10, _          , {});
+      OP(0xc3, JMP, ADDR,_ ,10, _          , { done = true; });
       OP(0xc4, CNZ, ADDR,_ ,11, _          , {});
       OP(0xc5, PUSH, BC,_  ,11, _          , {});
       OP(0xc6, ADI, D8,_   , 7, Z|S|P|CY|AC, {});

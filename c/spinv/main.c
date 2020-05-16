@@ -3,20 +3,15 @@
 
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <SDL2/SDL.h>
 
+#include "common.h"
 #include "cpu.h"
 #include "debug.h"
 #include "jit.h"
-
-typedef uint8_t u8;
-typedef uint16_t u16;
-typedef uint32_t u32;
-typedef int32_t i32;
 
 enum input
   {
@@ -30,11 +25,6 @@ enum input
    INPUT_2P_LEFT  = 1 << 5,
    INPUT_2P_RIGHT = 1 << 6,
   };
-
-void die(const char *const msg) {
-  perror(msg);
-  exit(1);
-}
 
 void sdl_die(const char *const msg) {
   SDL_Log("%s: %s\n", msg, SDL_GetError());
@@ -89,7 +79,7 @@ int main(const int argc, const char* const argv[]) {
     sdl_die("Could not create window");
 
   SDL_Renderer *const renderer =
-    SDL_CreateRenderer(window, -1, SDL_RENDERER_PRESENTVSYNC);
+    SDL_CreateRenderer(window, -1, 0);
   if (!renderer)
     sdl_die("Could not create renderer");
   SDL_RendererInfo info;
@@ -104,7 +94,9 @@ int main(const int argc, const char* const argv[]) {
   cpu.ports[1] = 1 << 3;
   cpu.ports[2] = 0x03; // 6 lives, I'm a wuss
 
+#ifndef BENCH
   u64 last_render_time = cpu_time_as_nanoseconds();
+#endif
 
   while (true) {
     SDL_Event e;
@@ -192,12 +184,14 @@ int main(const int argc, const char* const argv[]) {
 
     SDL_RenderPresent(renderer);
 
+#ifndef BENCH
     {
       u64 now = cpu_time_as_nanoseconds();
       u64 delta = now - last_render_time;
       printf("%22s: %10luns\n", "frame time", delta);
       last_render_time = now;
     }
+#endif
   }
 
  done:
@@ -206,7 +200,9 @@ int main(const int argc, const char* const argv[]) {
   SDL_DestroyWindow(window);
   SDL_Quit();
 
+#ifndef BENCH
   jit_dump_hot_routines(&cpu);
+#endif
 
   return EXIT_SUCCESS;
 }
