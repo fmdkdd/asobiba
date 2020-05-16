@@ -123,16 +123,16 @@ int main(const int argc, const char* const argv[]) {
 
       case SDL_KEYUP:
         switch (e.key.keysym.scancode) {
-        case SDL_SCANCODE_C:      cpu.ports[1] &= INPUT_COIN;     break;
-        case SDL_SCANCODE_RSHIFT: cpu.ports[1] &= INPUT_2P_START; break;
-        case SDL_SCANCODE_RETURN: cpu.ports[1] &= INPUT_1P_START; break;
-        case SDL_SCANCODE_S:      cpu.ports[1] &= INPUT_1P_SHOOT; break;
-        case SDL_SCANCODE_A:      cpu.ports[1] &= INPUT_1P_LEFT;  break;
-        case SDL_SCANCODE_D:      cpu.ports[1] &= INPUT_1P_RIGHT; break;
+        case SDL_SCANCODE_C:      cpu.ports[1] &= ~INPUT_COIN;     break;
+        case SDL_SCANCODE_RSHIFT: cpu.ports[1] &= ~INPUT_2P_START; break;
+        case SDL_SCANCODE_RETURN: cpu.ports[1] &= ~INPUT_1P_START; break;
+        case SDL_SCANCODE_S:      cpu.ports[1] &= ~INPUT_1P_SHOOT; break;
+        case SDL_SCANCODE_A:      cpu.ports[1] &= ~INPUT_1P_LEFT;  break;
+        case SDL_SCANCODE_D:      cpu.ports[1] &= ~INPUT_1P_RIGHT; break;
 
-        case SDL_SCANCODE_K:      cpu.ports[2] &= INPUT_2P_SHOOT; break;
-        case SDL_SCANCODE_J:      cpu.ports[2] &= INPUT_2P_LEFT;  break;
-        case SDL_SCANCODE_L:      cpu.ports[2] &= INPUT_2P_RIGHT; break;
+        case SDL_SCANCODE_K:      cpu.ports[2] &= ~INPUT_2P_SHOOT; break;
+        case SDL_SCANCODE_J:      cpu.ports[2] &= ~INPUT_2P_LEFT;  break;
+        case SDL_SCANCODE_L:      cpu.ports[2] &= ~INPUT_2P_RIGHT; break;
 
         case SDL_SCANCODE_ESCAPE: goto done;
 
