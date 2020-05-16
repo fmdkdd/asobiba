@@ -13,6 +13,7 @@
 #include "common.h"
 #include "cpu.h"
 #include "debug.h"
+#include "input_replay.h"
 #include "jit.h"
 
 extern char *optarg;
@@ -26,9 +27,9 @@ enum input
    INPUT_1P_SHOOT = 1 << 4,
    INPUT_1P_LEFT  = 1 << 5,
    INPUT_1P_RIGHT = 1 << 6,
-   INPUT_2P_SHOOT = 1 << 4,
-   INPUT_2P_LEFT  = 1 << 5,
-   INPUT_2P_RIGHT = 1 << 6,
+   INPUT_2P_SHOOT = 1 << 12,
+   INPUT_2P_LEFT  = 1 << 13,
+   INPUT_2P_RIGHT = 1 << 14,
   };
 
 void sdl_die(const char *const msg) {
@@ -45,13 +46,13 @@ void print_usage_and_die() {
   exit(1);
 }
 
-int main(const int argc, const char* argv[]) {
+int main(const int argc, char* argv[]) {
 
   int opt;
   bool vsync = false;
   bool replay = false;
   bool record = false;
-  const char* replay_path;
+  const char* replay_path = NULL;
 
   while ((opt = getopt(argc, argv, "vr:c:")) != -1) {
     switch (opt) {
@@ -89,7 +90,8 @@ int main(const int argc, const char* argv[]) {
 
   // Map ROM
   FILE *const rom = fopen(rom_path, "rb");
-  if (!rom) die("Cannot open file ");
+  if (!rom)
+    die("Cannot open file");
   fread(cpu.ram + orig, sizeof(u8), 0x2000, rom);
   fclose(rom);
 
@@ -139,6 +141,18 @@ int main(const int argc, const char* argv[]) {
   u64 last_render_time = cpu_time_as_nanoseconds();
 #endif
 
+  u16 input_state;
+
+  InputReplay input_replay;
+  InputReplayState input_replay_state;
+  if (replay)
+    input_replay_state = INPUT_REPLAY_STATE_REPLAY;
+  else if (record)
+    input_replay_state = INPUT_REPLAY_STATE_RECORD;
+  else
+    input_replay_state = INPUT_REPLAY_STATE_IDLE;
+  InputReplay_init(&input_replay, replay_path, input_replay_state);
+
   while (true) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -147,16 +161,16 @@ int main(const int argc, const char* argv[]) {
 
       case SDL_KEYDOWN:
         switch (e.key.keysym.scancode) {
-        case SDL_SCANCODE_C:      cpu.ports[1] |= INPUT_COIN;     break;
-        case SDL_SCANCODE_RSHIFT: cpu.ports[1] |= INPUT_2P_START; break;
-        case SDL_SCANCODE_LSHIFT: cpu.ports[1] |= INPUT_1P_START; break;
-        case SDL_SCANCODE_S:      cpu.ports[1] |= INPUT_1P_SHOOT; break;
-        case SDL_SCANCODE_A:      cpu.ports[1] |= INPUT_1P_LEFT;  break;
-        case SDL_SCANCODE_D:      cpu.ports[1] |= INPUT_1P_RIGHT; break;
+        case SDL_SCANCODE_C:      input_state |= INPUT_COIN;     break;
+        case SDL_SCANCODE_RSHIFT: input_state |= INPUT_2P_START; break;
+        case SDL_SCANCODE_LSHIFT: input_state |= INPUT_1P_START; break;
+        case SDL_SCANCODE_S:      input_state |= INPUT_1P_SHOOT; break;
+        case SDL_SCANCODE_A:      input_state |= INPUT_1P_LEFT;  break;
+        case SDL_SCANCODE_D:      input_state |= INPUT_1P_RIGHT; break;
 
-        case SDL_SCANCODE_K:      cpu.ports[2] |= INPUT_2P_SHOOT; break;
-        case SDL_SCANCODE_J:      cpu.ports[2] |= INPUT_2P_LEFT;  break;
-        case SDL_SCANCODE_L:      cpu.ports[2] |= INPUT_2P_RIGHT; break;
+        case SDL_SCANCODE_K:      input_state |= INPUT_2P_SHOOT; break;
+        case SDL_SCANCODE_J:      input_state |= INPUT_2P_LEFT;  break;
+        case SDL_SCANCODE_L:      input_state |= INPUT_2P_RIGHT; break;
 
         default: break;
         }
@@ -164,16 +178,16 @@ int main(const int argc, const char* argv[]) {
 
       case SDL_KEYUP:
         switch (e.key.keysym.scancode) {
-        case SDL_SCANCODE_C:      cpu.ports[1] &= ~INPUT_COIN;     break;
-        case SDL_SCANCODE_RSHIFT: cpu.ports[1] &= ~INPUT_2P_START; break;
-        case SDL_SCANCODE_RETURN: cpu.ports[1] &= ~INPUT_1P_START; break;
-        case SDL_SCANCODE_S:      cpu.ports[1] &= ~INPUT_1P_SHOOT; break;
-        case SDL_SCANCODE_A:      cpu.ports[1] &= ~INPUT_1P_LEFT;  break;
-        case SDL_SCANCODE_D:      cpu.ports[1] &= ~INPUT_1P_RIGHT; break;
+        case SDL_SCANCODE_C:      input_state &= ~INPUT_COIN;     break;
+        case SDL_SCANCODE_RSHIFT: input_state &= ~INPUT_2P_START; break;
+        case SDL_SCANCODE_RETURN: input_state &= ~INPUT_1P_START; break;
+        case SDL_SCANCODE_S:      input_state &= ~INPUT_1P_SHOOT; break;
+        case SDL_SCANCODE_A:      input_state &= ~INPUT_1P_LEFT;  break;
+        case SDL_SCANCODE_D:      input_state &= ~INPUT_1P_RIGHT; break;
 
-        case SDL_SCANCODE_K:      cpu.ports[2] &= ~INPUT_2P_SHOOT; break;
-        case SDL_SCANCODE_J:      cpu.ports[2] &= ~INPUT_2P_LEFT;  break;
-        case SDL_SCANCODE_L:      cpu.ports[2] &= ~INPUT_2P_RIGHT; break;
+        case SDL_SCANCODE_K:      input_state &= ~INPUT_2P_SHOOT; break;
+        case SDL_SCANCODE_J:      input_state &= ~INPUT_2P_LEFT;  break;
+        case SDL_SCANCODE_L:      input_state &= ~INPUT_2P_RIGHT; break;
 
         case SDL_SCANCODE_ESCAPE: goto done;
 
@@ -182,6 +196,15 @@ int main(const int argc, const char* argv[]) {
         break;
       }
     }
+
+    InputReplay_update(&input_replay, &input_state);
+
+    if (InputReplay_is_over(&input_replay))
+      goto done;
+
+    cpu.ports[1] = input_state & 0xFF;
+    cpu.ports[2] = input_state >> 8;
+
 
     // Emulate for 1/60 second at 2MHz: 33333 cycles per frame
     // 1 frame = 256 scanlines
@@ -236,6 +259,7 @@ int main(const int argc, const char* argv[]) {
   }
 
  done:
+  InputReplay_quit(&input_replay);
 
   SDL_DestroyRenderer(renderer);
   SDL_DestroyWindow(window);

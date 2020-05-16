@@ -1,6 +1,7 @@
 #ifndef COMMON_H
 #define COMMON_H
 
+#include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +13,16 @@ typedef int32_t i32;
 typedef uint64_t u64;
 
 void die(const char *const msg);
+
+#ifdef ENABLE_ASSERT
+#define ASSERT(x)
+#else
+#define ASSERT(x) assert(x)
+#endif
+
+#define CHECK(x) do { if (!(x)) assert(false); } while(0)
+
+#define TO16(h,l) ((h) << 8 | (l))
 
 #ifdef BENCH
 #define DBG(expr)

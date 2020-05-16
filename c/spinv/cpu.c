@@ -78,7 +78,6 @@ static bool parity(u8 x) {
   case ADDR: addr = TO16(op[2], op[1]); cpu->pc+=2; break;              \
   }
 
-#define TO16(h,l) ((h) << 8 | (l))
 #define SWAP(a,b) { u8 t = (a); (a) = (b); (b) = t; }
 #define R(reg,v) { prev = reg; r = (v); reg = r; }
 
