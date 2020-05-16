@@ -6,12 +6,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
+
 #include <SDL2/SDL.h>
 
 #include "common.h"
 #include "cpu.h"
 #include "debug.h"
 #include "jit.h"
+
+extern char *optarg;
+extern int optind;
 
 enum input
   {
@@ -31,14 +36,46 @@ void sdl_die(const char *const msg) {
   exit(1);
 }
 
-int main(const int argc, const char* const argv[]) {
+void print_usage_and_die() {
+  fprintf(stderr, "Usage: spinv OPTIONS ROM\n\n"
+          "Options:\n"
+          "-v       sync to vblank\n"
+          "-c file  record inputs\n"
+          "-r file  replay inputs\n");
+  exit(1);
+}
 
-  if (argc != 2) {
-    fprintf(stderr, "Usage: spinv ROM");
-    exit(1);
+int main(const int argc, const char* argv[]) {
+
+  int opt;
+  bool vsync = false;
+  bool replay = false;
+  bool record = false;
+  const char* replay_path;
+
+  while ((opt = getopt(argc, argv, "vr:c:")) != -1) {
+    switch (opt) {
+    case 'v':
+      vsync = true;
+      break;
+    case 'r':
+      replay_path = optarg;
+      replay = true;
+      break;
+    case 'c':
+      replay_path = optarg;
+      record = true;
+      break;
+    default:
+      print_usage_and_die();
+    }
   }
 
-  const char *path = argv[1];
+  if (optind >= argc) {
+    print_usage_and_die();
+  }
+
+  const char *rom_path = argv[optind];
 
 #ifdef CPUDIAG
   int orig = 0x100;
@@ -51,7 +88,7 @@ int main(const int argc, const char* const argv[]) {
   cpu_init(&cpu);
 
   // Map ROM
-  FILE *const rom = fopen(path, "rb");
+  FILE *const rom = fopen(rom_path, "rb");
   if (!rom) die("Cannot open file ");
   fread(cpu.ram + orig, sizeof(u8), 0x2000, rom);
   fclose(rom);
@@ -78,8 +115,12 @@ int main(const int argc, const char* const argv[]) {
   if (!window)
     sdl_die("Could not create window");
 
+  SDL_RendererFlags renderer_flags = SDL_RENDERER_ACCELERATED;
+  if (vsync)
+    renderer_flags |= SDL_RENDERER_PRESENTVSYNC;
+
   SDL_Renderer *const renderer =
-    SDL_CreateRenderer(window, -1, 0);
+    SDL_CreateRenderer(window, -1, renderer_flags);
   if (!renderer)
     sdl_die("Could not create renderer");
   SDL_RendererInfo info;
