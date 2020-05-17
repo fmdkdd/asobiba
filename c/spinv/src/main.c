@@ -1,6 +1,8 @@
 // TODO: XRA A,A does not set zero flag?
 // TODO: does CPI set CY correctly?
 
+// 16sec to time ./build/spinv -r bench.inputs rom/invaders
+
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -42,7 +44,8 @@ void print_usage_and_die() {
           "Options:\n"
           "-v       sync to vblank\n"
           "-c file  record inputs\n"
-          "-r file  replay inputs\n");
+          "-r file  replay inputs\n"
+          "-j       use JIT\n");
   exit(1);
 }
 
@@ -50,14 +53,18 @@ int main(const int argc, char* argv[]) {
 
   int opt;
   bool vsync = false;
+  bool use_jit = false;
   bool replay = false;
   bool record = false;
   const char* replay_path = NULL;
 
-  while ((opt = getopt(argc, argv, "vr:c:")) != -1) {
+  while ((opt = getopt(argc, argv, "vjr:c:")) != -1) {
     switch (opt) {
     case 'v':
       vsync = true;
+      break;
+    case 'j':
+      use_jit = true;
       break;
     case 'r':
       replay_path = optarg;
@@ -132,7 +139,8 @@ int main(const int argc, char* argv[]) {
          info.flags & SDL_RENDERER_ACCELERATED ? "yes" : "no",
          info.flags & SDL_RENDERER_PRESENTVSYNC ? "yes" : "no");
 
-  jit_init();
+  Jit jit;
+  jit_init(&jit, &cpu);
 
 #ifndef BENCH
   u64 last_render_time = cpu_time_as_nanoseconds();
@@ -205,8 +213,7 @@ int main(const int argc, char* argv[]) {
     BEGIN_TIME(emulate);
     // TODO: should run for the actual elapsed time since the last frame
     if (use_jit)
-      //Jit_emulate_one_frame(&jit);
-      ;
+      jit_emulate_one_frame(&jit);
     else
       cpu_emulate_one_frame(&cpu);
     END_TIME(emulate);
@@ -255,8 +262,9 @@ int main(const int argc, char* argv[]) {
   SDL_DestroyWindow(window);
   SDL_Quit();
 
-#ifndef BENCH
-  jit_dump_hot_routines(&cpu);
+#if 0
+  if (use_jit)
+    jit_dump_hot_routines(&jit);
 #endif
 
   return EXIT_SUCCESS;

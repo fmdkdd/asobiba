@@ -12,6 +12,7 @@ BUILD_DIR := build
 
 BENCH := 1
 CPUDIAG := 0
+ENABLE_ASSERT := 0
 
 # pass additional flags
 ifeq ($(CPUDIAG), 1)

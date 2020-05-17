@@ -16521,3 +16521,113 @@ Trying that one out and... I don't like it.  It forces you to be super careful
 with your moves so gameplay becomes really slow.  It can work for a puzzle mode,
 for sure, but it breaks the rhythm of a regular mode.  It needs a mechanism to
 undo the counters or undo the stones.
+
+* [2020-05-17 dim.]
+** Tracing hot routines in Space Invaders                         :spinv:jit:
+Found a series of great articles on the topic [[https://eli.thegreenplace.net/2017/adventures-in-jit-compilation-part-2-an-x64-jit/][1]] [[https://bheisler.github.io/post/experiments-in-nes-jit-compilation/][2]] which revived my interest in
+this experiment.
+
+Cleaned up a little.  Added replay functionality as I needed a realistic
+repeatable benchmark, not just looping over the title screen.
+
+There are 29 addresses that are called more than 1000 times in the benchmark.
+The one that has the smaller number of calls was hit 1429 times, then we have a
+winner at 304792 times: 0x14cb:
+
+#+BEGIN_SRC asm
+14cb af       XRA A,A
+14cc c5       PUSH BC
+14cd 77       MOV (HL),A
+14ce 01 20 00 LXI BC,D16
+14d1 09       DAD BC
+14d2 c1       POP BC
+14d3 05       DCR B
+14d4 c2 cc 14 JNZ ADDR
+14d7 c9       RET
+#+END_SRC
+
+This could be a good candidate for jitting without having to compile all the
+instructions.
+
+So, the first XRA in x64 assembly would be:
+
+: xor %al, %al
+
+but we need to /emulate/ the XRA and affect the VM state, increment the pc,
+increment the cycle counter, check the flags...  Here is what interpreting XRA
+entails (after is has been decoded):
+
+#+BEGIN_SRC c
+  cpu->pc++;
+  prev = cpu->a;
+  r = cpu->a ^ cpu->a;
+  cpu->a = r;
+  cpu->z = (r&0xff) == 0;
+  cpu->s = (r >> 7) & 1;
+  cpu->p = !parity(r&0xff);
+  cpu->cy = 0;
+  cpu->ac = 0;
+  cycles = 4;
+#+END_SRC
+
+Well in this case we could save some time, because we know that r will be 0, and
+prev is not used:
+
+#+BEGIN_SRC c
+  cpu->pc++;
+  cpu->a = 0;
+  cpu->z = 1;
+  cpu->s = 0;
+  cpu->p = 1;
+  cpu->cy = 0;
+  cpu->ac = 0;
+  cycles = 4;
+#+END_SRC
+
+So we are left with one inc, a sequence of mov, and return the number of cycles
+(4).
+
+If we ask gcc to compile that, we get... super crappy code:
+
+#+BEGIN_SRC asm
+	pushq	%rbp
+	movq	%rsp, %rbp
+	movq	%rdi, -8(%rbp)
+	movq	-8(%rbp), %rax
+	movzwl	(%rax), %eax
+	leal	1(%rax), %edx
+	movq	-8(%rbp), %rax
+	movw	%dx, (%rax)
+	movq	-8(%rbp), %rax
+	movb	$0, 4(%rax)
+	movq	-8(%rbp), %rax
+	movzbl	12(%rax), %edx
+	orl	$1, %edx
+	movb	%dl, 12(%rax)
+	movq	-8(%rbp), %rax
+	movzbl	12(%rax), %edx
+	andl	$-3, %edx
+	movb	%dl, 12(%rax)
+	movq	-8(%rbp), %rax
+	movzbl	12(%rax), %edx
+	orl	$4, %edx
+	movb	%dl, 12(%rax)
+	movq	-8(%rbp), %rax
+	movzbl	12(%rax), %edx
+	andl	$-9, %edx
+	movb	%dl, 12(%rax)
+	movq	-8(%rbp), %rax
+	movzbl	12(%rax), %edx
+	andl	$-17, %edx
+	movb	%dl, 12(%rax)
+	movl	$4, %eax
+	popq	%rbp
+	ret
+#+END_SRC
+
+But it should work out of the box if we place it in a function and call that
+whenever we encounter the XRA A,A instruction.
+
+So yes, that works.  So supporting all the instructions of the hot routine
+when jitting the functon should work.  It would be great if I could write each
+opcode in ASM, but I can somewhat manage by hand.

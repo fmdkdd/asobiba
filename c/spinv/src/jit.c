@@ -7,12 +7,6 @@
 #include "cpu.h"
 #include "jit.h"
 
-jit_function_cache jit_cache[100];
-u32 exec_hits[0x10000];
-bool known[0x10000];
-u16 jit_hot_routines[100];
-int jit_hot_routines_size;
-
 #define PAGE_SIZE 4096
 
 // Compile block at ADDR and return a function to it.
@@ -53,20 +47,21 @@ static jit_function jit_compile(int addr, const CPU *cpu) {
     op++;
   }
 
- // malloc an aligned code page
- void *page;
- posix_memalign(&page, PAGE_SIZE, PAGE_SIZE);
- // fill with RET
- memset(page, 0xc3, PAGE_SIZE);
- // copy the code
- memcpy(page, code, sizeof(code));
- // turn the exec bit
- mprotect(page, PAGE_SIZE, PROT_READ | PROT_EXEC);
- // return a function pointer to it
- return (jit_function) page;
+  // malloc an aligned code page
+  void *page;
+  posix_memalign(&page, PAGE_SIZE, PAGE_SIZE);
+  // fill with RET
+  memset(page, 0xc3, PAGE_SIZE);
+  // copy the code
+  memcpy(page, code, sizeof(code));
+  // turn the exec bit
+  mprotect(page, PAGE_SIZE, PROT_READ | PROT_EXEC);
+  // return a function pointer to it
+  return (jit_function) page;
 }
 
 // Return the JITted block for ADDR, and compile it if necessary.
+#if 0
 static jit_function jit_fetch(const CPU *cpu) {
   int pc = cpu->pc;
   jit_function_cache *f = &jit_cache[pc % 100];
@@ -80,12 +75,17 @@ static jit_function jit_fetch(const CPU *cpu) {
 
   return f->function;
 }
+#endif
 
-void jit_init() {
-  memset(exec_hits, 0, sizeof(exec_hits));
-  memset(jit_cache, 0, sizeof(jit_cache));
-  memset(jit_hot_routines, 0, sizeof(jit_hot_routines));
-  jit_hot_routines_size = 0;
+void jit_init(Jit *jit, CPU *cpu) {
+  jit->cpu = cpu;
+  jit->remaining_cycles = 0;
+  memset(jit->exec_hits, 0, sizeof(jit->exec_hits));
+  memset(jit->hot_routines_marked, 0, sizeof(jit->hot_routines_marked));
+  memset(jit->hot_routines, 0, sizeof(jit->hot_routines));
+  jit->hot_routines_size = 0;
+
+  //memset(jit->jit_cache, 0, sizeof(jit->function_cache));
 }
 
 #define OP(code, name, arg1, arg2, cycles, flags, expr)                 \
@@ -134,8 +134,8 @@ void jit_init() {
   OP(code + 7, name,A,A   , 4, Z|S|P|CY|AC, {});
 
 
-// Gather the basic block starting at ADDR
-void jit_analyze(int addr, const CPU *cpu) {
+// Disassemble the basic block starting at ADDR
+static void jit_disassemble(int addr, const CPU *cpu) {
   // Decode instructions until a jump
 
   printf("disassembling 0x%04x\n", addr);
@@ -293,22 +293,113 @@ void jit_analyze(int addr, const CPU *cpu) {
 
 // Gather addresses of hot routines, dump the disassembled code at program exit
 
-void jit_dump_hot_routines(CPU *cpu) {
-  for (int i=0; i < jit_hot_routines_size; ++i) {
-    u16 addr = jit_hot_routines[i];
-    printf("hot routine at 0x%0x: %u\n", addr, exec_hits[addr]);
-    jit_analyze(addr, cpu);
+void jit_dump_hot_routines(Jit *jit) {
+  for (size_t i=0; i < jit->hot_routines_size; ++i) {
+    u16 addr = jit->hot_routines[i];
+    printf("hot routine at 0x%0x: %u\n", addr, jit->exec_hits[addr]);
+    jit_disassemble(addr, jit->cpu);
+  }
+}
+
+#define HOT_ROUTINE_HIT_THRESHOLD 1000
+
+static int unfolded_xra_aa(CPU *cpu) {
+  cpu->pc++;
+  cpu->a = 0;
+  cpu->z = 1;
+  cpu->s = 0;
+  cpu->p = 1;
+  cpu->cy = 0;
+  cpu->ac = 0;
+  return 4;
+}
+
+static jit_function jitted_xra_aa = NULL;
+
+static void compile_xra_aa() {
+  u8 xra_aa_bytes[] = { 0x55,
+                        0x48, 0x89, 0xe5,
+                        0x48, 0x89, 0x7d, 0xf8,
+                        0x48, 0x8b, 0x45, 0xf8,
+                        0x0f, 0xb7, 0x00,
+                        0x8d, 0x50, 0x01,
+                        0x48, 0x8b, 0x45, 0xf8,
+                        0x66, 0x89, 0x10,
+                        0x48, 0x8b, 0x45, 0xf8,
+                        0xc6, 0x40, 0x04, 0x00,
+                        0x48, 0x8b, 0x45, 0xf8,
+                        0x0f, 0xb6, 0x50, 0x0c,
+                        0x83, 0xca, 0x01,
+                        0x88, 0x50, 0x0c,
+                        0x48, 0x8b, 0x45, 0xf8,
+                        0x0f, 0xb6, 0x50, 0x0c,
+                        0x83, 0xe2, 0xfd,
+                        0x88, 0x50, 0x0c,
+                        0x48, 0x8b, 0x45, 0xf8,
+                        0x0f, 0xb6, 0x50, 0x0c,
+                        0x83, 0xca, 0x04,
+                        0x88, 0x50, 0x0c,
+                        0x48, 0x8b, 0x45, 0xf8,
+                        0x0f, 0xb6, 0x50, 0x0c,
+                        0x83, 0xe2, 0xf7,
+                        0x88, 0x50, 0x0c,
+                        0x48, 0x8b, 0x45, 0xf8,
+                        0x0f, 0xb6, 0x50, 0x0c,
+                        0x83, 0xe2, 0xef,
+                        0x88, 0x50, 0x0c,
+                        0xb8, 0x04, 0x00, 0x00, 0x00,
+                        0x5d,
+                        0xc3
+  };
+
+  {
+    // malloc an aligned code page
+    void *page;
+    posix_memalign(&page, PAGE_SIZE, PAGE_SIZE);
+    // fill with RET
+    memset(page, 0xc3, PAGE_SIZE);
+    // copy the code
+    memcpy(page, xra_aa_bytes, sizeof(xra_aa_bytes));
+    // turn the exec bit
+    mprotect(page, PAGE_SIZE, PROT_READ | PROT_EXEC);
+    jitted_xra_aa = page;
   }
 }
 
 // Look up in the JIT cache, and execute the result.
-int jit_run(CPU *const cpu) {
-  if (cpu->is_call && ++exec_hits[cpu->pc] > 1000 && !known[cpu->pc] && jit_hot_routines_size < 100) {
-    jit_hot_routines[jit_hot_routines_size++] = cpu->pc;
-    known[cpu->pc] = true;
-    // @Temp: return jit_fetch(cpu)(cpu);
-    return cpu_step(cpu);
-  } else {
-    return cpu_step(cpu);
+static int jit_step(Jit *jit) {
+  u16 pc = jit->cpu->pc;
+  if (jit->cpu->is_call) {
+    if (++jit->exec_hits[pc] > HOT_ROUTINE_HIT_THRESHOLD
+        && !jit->hot_routines_marked[pc]
+        && jit->hot_routines_size < 100) {
+      jit->hot_routines[jit->hot_routines_size++] = pc;
+      jit->hot_routines_marked[pc] = true;
+    }
   }
+#if 0
+  if (jit->cpu->ram[pc] == 0xaf) { // XRA A,A
+    if (jitted_xra_aa == NULL) {
+      compile_xra_aa();
+    }
+    return jitted_xra_aa(jit->cpu);
+  }
+  else
+#endif
+    return cpu_step(jit->cpu);
+}
+
+static void jit_run_for(Jit *jit, size_t cycles) {
+  jit->remaining_cycles += cycles;
+  while (jit->remaining_cycles > 0)
+    jit->remaining_cycles -= jit_step(jit);
+}
+
+void jit_emulate_one_frame(Jit *jit)
+{
+  jit_run_for(jit, 12500);
+  cpu_interrupt(jit->cpu, 1); // mid-vblank
+  jit_run_for(jit, 16667);
+  cpu_interrupt(jit->cpu, 2); // vblank
+  jit_run_for(jit, 4166);
 }
