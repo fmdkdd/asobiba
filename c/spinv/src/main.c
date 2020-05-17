@@ -202,20 +202,13 @@ int main(const int argc, char* argv[]) {
     cpu.ports[1] = input_state & 0xFF;
     cpu.ports[2] = input_state >> 8;
 
-
-    // Emulate for 1/60 second at 2MHz: 33333 cycles per frame
-    // 1 frame = 256 scanlines
-    // mid-vblank interrupt happens at  96 lines: cycle 12500
-    // vblank     interrupt happens at 224 lines: cycle 29167
-    // remaining cycles: 4166
-
     BEGIN_TIME(emulate);
     // TODO: should run for the actual elapsed time since the last frame
-    cpu_run_for(&cpu, 12500);
-    cpu_interrupt(&cpu, 1); // mid-vblank
-    cpu_run_for(&cpu, 16667);
-    cpu_interrupt(&cpu, 2); // vblank
-    cpu_run_for(&cpu, 4166);
+    if (use_jit)
+      //Jit_emulate_one_frame(&jit);
+      ;
+    else
+      cpu_emulate_one_frame(&cpu);
     END_TIME(emulate);
 
     // Draw content of video RAM

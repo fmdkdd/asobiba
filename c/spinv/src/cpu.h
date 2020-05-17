@@ -39,6 +39,7 @@ typedef struct CPU {
   u8 ports[3];
   u8 shift_offset;
   u16 shift_register;
+  int remaining_cycles;
   bool is_call;
   bool interrupts_enabled;
 } CPU;
@@ -60,8 +61,9 @@ typedef enum {
 void print_mnemonic(const char *name, const char *arg1, const char *arg2);
 
 void cpu_init(CPU *cpu);
-int cpu_step(CPU *cpu);
+int  cpu_step(CPU *cpu);
 void cpu_interrupt(CPU *cpu, u8 rst);
 void cpu_run_for(CPU *cpu, size_t cycles);
+void cpu_emulate_one_frame(CPU *cpu);
 
 #endif

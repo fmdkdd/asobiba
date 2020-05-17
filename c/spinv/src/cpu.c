@@ -336,6 +336,21 @@ void cpu_interrupt(CPU *const cpu, u8 rst) {
 
 void cpu_run_for(CPU *const cpu, size_t cycles)
 {
-  while (cycles-- > 0)
-    cpu_step(cpu);
+  cpu->remaining_cycles += cycles;
+  while (cpu->remaining_cycles > 0)
+    cpu->remaining_cycles -= cpu_step(cpu);
+}
+
+void cpu_emulate_one_frame(CPU *cpu) {
+  // Emulate for 1/60 second at 2MHz: 33333 cycles per frame
+  // 1 frame = 256 scanlines
+  // mid-vblank interrupt happens at  96 lines: cycle 12500
+  // vblank     interrupt happens at 224 lines: cycle 29167
+  // remaining cycles: 4166
+
+  cpu_run_for(cpu, 12500);
+  cpu_interrupt(cpu, 1); // mid-vblank
+  cpu_run_for(cpu, 16667);
+  cpu_interrupt(cpu, 2); // vblank
+  cpu_run_for(cpu, 4166);
 }
