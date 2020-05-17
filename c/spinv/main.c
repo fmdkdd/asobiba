@@ -134,9 +134,6 @@ int main(const int argc, char* argv[]) {
 
   jit_init();
 
-  cpu.ports[1] = 1 << 3;
-  cpu.ports[2] = 0x03; // 6 lives, I'm a wuss
-
 #ifndef BENCH
   u64 last_render_time = cpu_time_as_nanoseconds();
 #endif
