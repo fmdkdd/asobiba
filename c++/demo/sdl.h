@@ -93,13 +93,13 @@ struct SDLFont {
   void draw(SDLRenderer &r, unsigned char c, int x, int y);
 };
 
-static constexpr const char *FONT_CHARS = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`-=[]\\;',./~!@#$%^&*()_+{}|:\"<>?";
+static const char *FONT_CHARS = " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`-=[]\\;',./~!@#$%^&*()_+{}|:\"<>?";
 
 struct SDLRenderer {
   SDL_Renderer *renderer;
   SDLFont font;
 
-  SDLRenderer(const SDLWindow& window, SDL_RendererFlags flags)
+  SDLRenderer(const SDLWindow& window, u32 flags)
     : renderer {SDL_CreateRenderer(window.window, -1, flags)},
       font(*this, "font.bmp", 9, 16, FONT_CHARS) {
     if (!renderer)
@@ -131,6 +131,11 @@ struct SDLRenderer {
     SDL_RenderFillRect(renderer, &r);
   }
 
+  void rect(int x, int y, int w, int h) {
+    SDL_Rect r {x,y,w,h};
+    SDL_RenderDrawRect(renderer, &r);
+  }
+
   SDLTexture create_texture(SDLSurface &&s) const {
     return SDL_CreateTextureFromSurface(renderer, s.surface);
   }
@@ -139,7 +144,9 @@ struct SDLRenderer {
     SDL_RenderCopy(renderer, t.texture, src, dst);
   }
 
-  void text(const std::string &s, int x, int y);
+  u32 text(const std::string &s, int x, int y);
+  SDL_Rect boxed_text(const std::string &s, u32 x, u32 y);
+  bool button(const std::string &s, u32 x, u32 y);
 };
 
 // Load BMP file into SDL_Surface,

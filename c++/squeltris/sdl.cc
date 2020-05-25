@@ -18,3 +18,10 @@ void SDLFont::draw(SDLRenderer &r, unsigned char c, int x, int y) {
   SDL_Rect dst {x, y, width, height};
   r.copy(texture, &src, &dst);
 }
+
+void SDLRenderer::text(const std::string &s, int x, int y) {
+  for (auto c: s) {
+    font.draw(*this, c, x, y);
+    x += font.width-1;
+  }
+}
