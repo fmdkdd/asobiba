@@ -99,6 +99,10 @@ struct SDLRenderer {
   SDL_Renderer *renderer;
   SDLFont font;
 
+  SDL_Point lastMousePosition;
+  bool mouseButtonPreviousHeld[5];
+  bool mouseButtonHeld[5];
+
   SDLRenderer(const SDLWindow& window, u32 flags)
     : renderer {SDL_CreateRenderer(window.window, -1, flags)},
       font(*this, "font.bmp", 9, 16, FONT_CHARS) {
@@ -110,6 +114,29 @@ struct SDLRenderer {
 
   void present() {
     SDL_RenderPresent(renderer);
+  }
+
+  void updateMousePosition(int x, int y) {
+    lastMousePosition.x = x;
+    lastMousePosition.y = y;
+  }
+
+  void commitInputState() {
+    // TODO: ARRAY_SIZE
+    for (size_t i = 0; i < 5; ++i) {
+      mouseButtonPreviousHeld[i] = mouseButtonHeld[i];
+    }
+  }
+
+  bool isMouseButtonPressed(u8 button) {
+    return mouseButtonHeld[button] && !mouseButtonPreviousHeld[button];
+  }
+
+  void updateMouseButton(u8 button, u8 state) {
+    if (state == SDL_RELEASED)
+      mouseButtonHeld[button] = false;
+    else
+      mouseButtonHeld[button] = true;
   }
 
   void set_scale(float x, float y) {
@@ -131,7 +158,7 @@ struct SDLRenderer {
     SDL_RenderFillRect(renderer, &r);
   }
 
-  void rect(int x, int y, int w, int h) {
+  void draw_rect(int x, int y, int w, int h) {
     SDL_Rect r {x,y,w,h};
     SDL_RenderDrawRect(renderer, &r);
   }

@@ -3,8 +3,8 @@
 #include "sdl.h"
 
 int main() {
-  const u32 logical_width  = 320;
-  const u32 logical_height = 180;
+  const u32 logical_width  = 800;
+  const u32 logical_height = 450;
   const u32 scale = 1;
 
   const u32 window_width = logical_width * scale;
@@ -17,13 +17,11 @@ int main() {
   SDL_RenderSetIntegerScale(renderer.renderer, SDL_TRUE);
   SDL_RenderSetLogicalSize(renderer.renderer, logical_width, logical_height);
 
-
   auto last_frame = std::chrono::high_resolution_clock::now();
 
-  s32 mouse_last_x = 0;
-  s32 mouse_last_y = 0;
-
   while (true) {
+    renderer.commitInputState();
+
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
       switch (e.type) {
@@ -34,8 +32,12 @@ int main() {
         break;
 
       case SDL_MOUSEMOTION:
-        mouse_last_x = e.motion.x;
-        mouse_last_y = e.motion.y;
+        renderer.updateMousePosition(e.motion.x, e.motion.y);
+        break;
+
+      case SDL_MOUSEBUTTONDOWN:
+      case SDL_MOUSEBUTTONUP:
+        renderer.updateMouseButton(e.button.button, e.button.state);
         break;
       }
     }
@@ -49,7 +51,7 @@ int main() {
     renderer.clear();
 
     renderer.set_draw_color({255,255,255});
-    renderer.rect(0,0, logical_width, logical_height);
+    renderer.draw_rect(0,0, logical_width, logical_height);
 
     renderer.text("Hello!", 16, 16);
 
@@ -65,19 +67,38 @@ int main() {
     snprintf(buf, sizeof(buf), "mouse: x: %d y: %d", mouse_x, mouse_y);
     renderer.text(buf, 160, 40);
 
-    snprintf(buf, sizeof(buf), "logical mouse: x: %d y: %d", mouse_last_x, mouse_last_y);
+    snprintf(buf, sizeof(buf), "logical mouse: x: %d y: %d", renderer.lastMousePosition.x, renderer.lastMousePosition.y);
     renderer.text(buf, 120, 80);
 
-    renderer.rect(mouse_last_x, mouse_last_y, 10, 10);
+    renderer.draw_rect(renderer.lastMousePosition.x, renderer.lastMousePosition.y, 10, 10);
 
     if (renderer.button("And I'm a button", 16, 128)) {
       renderer.text("Stop clicking!", 16, 144);
+    }
+
+    const bool isFullscreen = SDL_GetWindowFlags(window.window) & SDL_WINDOW_FULLSCREEN_DESKTOP;
+
+    if (isFullscreen) {
+      if (renderer.button("Windowed", 16, 300)) {
+        SDL_SetWindowFullscreen(window.window, 0);
+      }
+    }
+    else {
+      if (renderer.button("Fullscreen", 16, 300)) {
+        SDL_SetWindowFullscreen(window.window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+      }
     }
 
     // TODO:
     // - Use textures (since drawing with SDL is limited, blitting PNGs
     //   should be the default besides text)
     // - Live reloading with game compiled as dynamically loaded lib
+    // - Drag&drop
+    // - Dialog boxes
+    // - Menu with 50% alpha overlay
+    // - Do not structure too much in order to leave
+    //   maximum flexiblity for prototyping (no framework)
+    // - UI animations?
     // - Screen shake
     // - ImGui integration
 

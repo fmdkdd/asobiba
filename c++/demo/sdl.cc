@@ -41,30 +41,19 @@ SDL_Rect SDLRenderer::boxed_text(const std::string &s, u32 x, u32 y) {
   const u32 topMargin = 2;
   const u32 rightMargin = 2;
   const u32 bottomMargin = 2;
-  // TODO: use SDL_Rect
   const int box_x = x - leftMargin;
   const int box_y = y - topMargin;
   const int box_w = leftMargin + textWidth + rightMargin;
   const int box_h = topMargin + textHeight + bottomMargin;
-  rect(box_x, box_y, box_w, box_h);
+  draw_rect(box_x, box_y, box_w, box_h);
 
   return SDL_Rect {box_x, box_y, box_w, box_h};
 }
 
 bool SDLRenderer::button(const std::string &s, u32 x, u32 y) {
-  // TODO: handle scale in renderer
-
   SDL_Rect box = boxed_text(s, x, y);
 
-  // TODO: mouse state should be global to avoid
-  // retrieving it in all buttons
-
-  SDL_Point mouse;
-  u32 buttons = SDL_GetMouseState(&mouse.x, &mouse.y);
-  mouse.x /= 2;
-  mouse.y /= 2;
-
-  bool clicked = (SDL_BUTTON(SDL_BUTTON_LEFT) & buttons) && SDL_PointInRect(&mouse, &box);
+  bool clicked = isMouseButtonPressed(SDL_BUTTON_LEFT) && SDL_PointInRect(&lastMousePosition, &box);
 
   return clicked;
 }
