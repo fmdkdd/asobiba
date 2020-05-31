@@ -1,6 +1,46 @@
 #include <chrono>
+#include <vector>
 
+#include "assert.h"
 #include "sdl.h"
+#include <SDL2/SDL_image.h>
+
+struct AnimatedSprite {
+  SDL_Texture *spritesheet;
+  std::vector<SDL_Rect> rects;
+  size_t animationStep;
+
+  AnimatedSprite()
+    : AnimatedSprite(NULL)
+  {}
+
+  explicit AnimatedSprite(SDL_Texture* spritesheet)
+    : spritesheet(spritesheet)
+    , animationStep(0)
+  {}
+
+  void AddAnimationStep(SDL_Rect rect) {
+    rects.push_back(rect);
+  }
+
+  void DrawAt(SDLRenderer& renderer, u32 x, u32 y) {
+    SDL_Rect dst;
+    dst.x = x;
+    dst.y = y;
+    dst.w = 40;
+    dst.h = 40;
+    ASSERT(animationStep < rects.size());
+    SDL_RenderCopy(renderer.renderer, spritesheet, &rects[animationStep], &dst);
+  }
+
+  void Step() {
+    animationStep++;
+    if (animationStep >= rects.size())
+      animationStep = 0;
+  }
+};
+
+
 
 int main() {
   const u32 logical_width  = 800;
@@ -18,6 +58,33 @@ int main() {
   SDL_RenderSetLogicalSize(renderer.renderer, logical_width, logical_height);
 
   auto last_frame = std::chrono::high_resolution_clock::now();
+
+  IMG_Init(IMG_INIT_PNG);
+
+  SDL_Texture* lemmingsSpritesheet = SDL_CreateTextureFromSurface(renderer.renderer,
+                                                                  IMG_Load("lemmings-spritesheet.png"));
+
+  u32 frame = 0;
+
+  AnimatedSprite walkinLemmin(lemmingsSpritesheet);
+  {
+    SDL_Rect src;
+    src.y = 0;
+    src.w = 20;
+    src.h = 20;
+    for (size_t i=0; i < 7; ++i) {
+      walkinLemmin.AddAnimationStep(src);
+      src.x += 20;
+    }
+  }
+
+  AnimatedSprite lemmings[10];
+  size_t lemmingIndex = 0;
+
+  for (size_t i=0; i < 10; ++i) {
+    lemmings[i] = walkinLemmin;
+    lemmings[i].animationStep = rand() % 7;
+  }
 
   while (true) {
     renderer.commitInputState();
@@ -89,9 +156,15 @@ int main() {
       }
     }
 
+    frame++;
+    for (int i=0; i < 10; ++i) {
+      if (frame % 6 == 0) {
+        lemmings[i].Step();
+      }
+      lemmings[i].DrawAt(renderer, 10 + 20 * i, 200);
+    }
+
     // TODO:
-    // - Use textures (since drawing with SDL is limited, blitting PNGs
-    //   should be the default besides text)
     // - Live reloading with game compiled as dynamically loaded lib
     // - Drag&drop
     // - Dialog boxes
@@ -104,6 +177,10 @@ int main() {
 
     renderer.present();
   }
+
+  SDL_DestroyTexture(lemmingsSpritesheet);
+
+  IMG_Quit();
 
  done:
   return EXIT_SUCCESS;

@@ -7,7 +7,7 @@
 #if ENABLE_ASSERT
 #define ASSERT(x) VERIFY(x)
 #else
-#define ASSERT(x) do { (void) sizeof ((x)) } while (0)
+#define ASSERT(x) do { (void) sizeof ((x)); } while (0)
 #endif
 
 #endif

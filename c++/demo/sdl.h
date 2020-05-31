@@ -108,6 +108,11 @@ struct SDLRenderer {
       font(*this, "font.bmp", 9, 16, FONT_CHARS) {
     if (!renderer)
       sdl_die("Could not create renderer");
+
+    memset(mouseButtonHeld, false, sizeof(mouseButtonHeld));
+    memset(mouseButtonPreviousHeld, false, sizeof(mouseButtonPreviousHeld));
+    lastMousePosition.x = 0;
+    lastMousePosition.y = 0;
   }
 
   ~SDLRenderer() { SDL_DestroyRenderer(renderer); }

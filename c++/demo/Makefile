@@ -6,13 +6,19 @@
 
 # Configurables
 CXX := g++
-CFLAGS := -std=c++17 -Wall -Wextra -O3
+CFLAGS := -std=c++17 -Wall -Wextra -g -O3
 BIN := demo
 BUILD_DIR := build
 
+ENABLE_ASSERT := 1
+
+ifeq ($(ENABLE_ASSERT), 1)
+CFLAGS += -DENABLE_ASSERT
+endif
+
 # Submodule dependencies
 INCLUDES := -D_REENTRANT -I/usr/include/SDL2
-LIBS := -pthread -lSDL2
+LIBS := -pthread -lSDL2 -lSDL2_image
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
