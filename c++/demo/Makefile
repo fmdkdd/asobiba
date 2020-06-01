@@ -6,7 +6,7 @@
 
 # Configurables
 CXX := g++
-CFLAGS := -std=c++17 -Wall -Wextra -g -O3
+CFLAGS := -std=c++17 -Wall -Wextra -g -O2 -fPIC
 BIN := demo
 BUILD_DIR := build
 
@@ -18,7 +18,7 @@ endif
 
 # Submodule dependencies
 INCLUDES := -D_REENTRANT -I/usr/include/SDL2
-LIBS := -pthread -lSDL2 -lSDL2_image
+LIBS := -ldl -pthread -lSDL2 -lSDL2_image
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -30,7 +30,10 @@ OBJ := $(SRC:%.cc=$(BUILD_DIR)/%.o)
 DEP := $(OBJ:%.o=%.d)
 
 # Default target: the main binary
-all: $(BUILD_DIR)/$(BIN)
+all: $(BUILD_DIR)/$(BIN) libgame.so
+
+libgame.so : game.cc game.h
+	$(CXX) $(CFLAGS) -shared -pthread -lSDL2 -o $@ $<
 
 $(BUILD_DIR)/$(BIN): $(OBJ)
 # Create build directories on the way
