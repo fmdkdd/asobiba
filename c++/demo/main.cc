@@ -1,5 +1,9 @@
-#include <dlfcn.h>
-#include <signal.h>
+#ifdef HOT_RELOAD
+#  include <dlfcn.h>
+#  include <signal.h>
+#else
+
+#endif
 
 #include <SDL2/SDL_image.h>
 
@@ -14,7 +18,8 @@ struct GameLib {
 };
 
 void ReloadGame(GameLib& lib) {
-  static const char* GAME_LIBRARY = "./libgame.so";
+#ifdef HOT_RELOAD
+  static const char* GAME_LIBRARY = "./build/libgame.so";
 
   printf("Reloading game\n");
   if (lib.handle)
@@ -29,13 +34,18 @@ void ReloadGame(GameLib& lib) {
     ASSERT(api != NULL);
     lib.api = *api;
   }
+#else
+  lib.api = GAME_API;
+#endif
 }
 
+#ifdef HOT_RELOAD
 static GameLib* gGameLib;
 
 static void OnSignalUSR1(int) {
   ReloadGame(*gGameLib);
 }
+#endif
 
 int main() {
   const u32 logical_width  = 800;
@@ -58,8 +68,10 @@ int main() {
   ReloadGame(gameLib);
   gameLib.state = gameLib.api.Init(renderer);
 
+#ifdef HOT_RELOAD
   gGameLib = &gameLib;
   signal(SIGUSR1, OnSignalUSR1);
+#endif
 
   while (true) {
     renderer.commitInputState();
@@ -72,9 +84,11 @@ int main() {
         if (e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
           goto done;
 
-        else if (e.key.keysym.sym == SDLK_r) {
+#ifdef HOT_RELOAD
+        if (e.key.keysym.sym == SDLK_r && e.key.keysym.mod & KMOD_CTRL) {
           ReloadGame(gameLib);
         }
+#endif
         break;
 
       case SDL_MOUSEMOTION:
@@ -104,15 +118,16 @@ int main() {
     }
 
     // TODO:
-    // - Live reloading with game compiled as dynamically loaded lib
+    // - cmake / rtags
+    // - Game states: menu -> game -> pause -> exit
+    // - Menu with 50% alpha overlay
+    // - ImGui integration
+    // - Screen shake
     // - Drag&drop
     // - Dialog boxes
-    // - Menu with 50% alpha overlay
     // - Do not structure too much in order to leave
     //   maximum flexiblity for prototyping (no framework)
     // - UI animations?
-    // - Screen shake
-    // - ImGui integration
 
     renderer.present();
   }
