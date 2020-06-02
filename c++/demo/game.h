@@ -7,6 +7,8 @@
 #include <SDL2/SDL.h>
 #include "types.h"
 
+class SDLRenderer;
+
 struct AnimatedSprite {
   SDL_Texture *spritesheet;
   std::vector<SDL_Rect> rects;
@@ -36,10 +38,10 @@ struct Game {
 
   AnimatedSprite lemmings[10];
 
-  void Init(SDL_Renderer* renderer);
+  void Init(SDLRenderer& renderer);
   void Quit();
 
-  void Update(SDL_Renderer* renderer);
+  void Update(SDLRenderer& renderer);
 };
 
 #endif

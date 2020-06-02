@@ -5,6 +5,7 @@
 
 #include "assert.h"
 #include "game_api.h"
+#include "sdl.h"
 
 void AnimatedSprite::DrawAt(SDL_Renderer* renderer, u32 x, u32 y) {
   SDL_Rect dst;
@@ -22,8 +23,8 @@ void AnimatedSprite::Step() {
     animationStep = 0;
 }
 
-void Game::Init(SDL_Renderer* renderer) {
-  SDL_Texture* lemmingsSpritesheet = SDL_CreateTextureFromSurface(renderer,
+void Game::Init(SDLRenderer& renderer) {
+  SDL_Texture* lemmingsSpritesheet = SDL_CreateTextureFromSurface(renderer.renderer,
                                                                   IMG_Load("lemmings-spritesheet.png"));
 
   frame = 0;
@@ -52,59 +53,59 @@ void Game::Quit() {
   SDL_DestroyTexture(lemmingsSpritesheet);
 }
 
-void Game::Update(SDL_Renderer* renderer) {
+void Game::Update(SDLRenderer& renderer) {
   auto now = std::chrono::high_resolution_clock::now();
   auto dt = now - last_frame;
   last_frame = now;
   double dt_ms = (double) std::chrono::nanoseconds(dt).count() / 1'000'000;
 
-  SDL_SetRenderDrawColor(renderer, 30,30,30,255);
-  SDL_RenderClear(renderer);
+  SDL_SetRenderDrawColor(renderer.renderer, 30,30,30,255);
+  SDL_RenderClear(renderer.renderer);
 
-  SDL_SetRenderDrawColor(renderer, 255,255,255,255);
+  SDL_SetRenderDrawColor(renderer.renderer, 255,255,255,255);
 
   int logicalWidth;
   int logicalHeight;
-  SDL_RenderGetLogicalSize(renderer, &logicalWidth, &logicalHeight);
+  SDL_RenderGetLogicalSize(renderer.renderer, &logicalWidth, &logicalHeight);
   {
     SDL_Rect r {0,0, logicalWidth, logicalHeight};
-    SDL_RenderDrawRect(renderer, &r);
+    SDL_RenderDrawRect(renderer.renderer, &r);
   }
 
-  //renderer.text("Hello!", 16, 16);
+  renderer.text("Hello!", 16, 16);
 
-  //renderer.boxed_text("I'm a text box", 16, 48);
+  renderer.boxed_text("I'm a text box", 16, 48);
 
-  // char buf[256];
-  // snprintf(buf, sizeof(buf), "Frame time: %fs", dt_ms);
-  // renderer.text(buf, 160, 20);
+  char buf[256];
+  snprintf(buf, sizeof(buf), "Frame time: %fs", dt_ms);
+  renderer.text(buf, 160, 20);
 
-  // int mouse_x;
-  // int mouse_y;
-  // SDL_GetMouseState(&mouse_x, &mouse_y);
-  // snprintf(buf, sizeof(buf), "mouse: x: %d y: %d", mouse_x, mouse_y);
-  // renderer.text(buf, 160, 40);
+  int mouse_x;
+  int mouse_y;
+  SDL_GetMouseState(&mouse_x, &mouse_y);
+  snprintf(buf, sizeof(buf), "mouse: x: %d y: %d", mouse_x, mouse_y);
+  renderer.text(buf, 160, 40);
 
-  // snprintf(buf, sizeof(buf), "logical mouse: x: %d y: %d", renderer.lastMousePosition.x, renderer.lastMousePosition.y);
-  // renderer.text(buf, 120, 80);
+  snprintf(buf, sizeof(buf), "logical mouse: x: %d y: %d", renderer.lastMousePosition.x, renderer.lastMousePosition.y);
+  renderer.text(buf, 120, 80);
 
-  // renderer.draw_rect(renderer.lastMousePosition.x, renderer.lastMousePosition.y, 10, 10);
+  renderer.draw_rect(renderer.lastMousePosition.x, renderer.lastMousePosition.y, 10, 10);
 
-  // if (renderer.button("And I'm a button", 16, 128)) {
-  //   renderer.text("Stop clicking!", 16, 144);
-  // }
+  if (renderer.button("And I'm a button", 16, 128)) {
+    renderer.text("Stop clicking!", 16, 144);
+  }
 
   frame++;
   for (int i=0; i < 10; ++i) {
     if (frame % 6 == 0) {
       lemmings[i].Step();
     }
-    lemmings[i].DrawAt(renderer, 10 + 20 * i, 200);
+    lemmings[i].DrawAt(renderer.renderer, 10 + 20 * i, 200);
   }
 }
 
 
-Game* Game_Init(SDL_Renderer* renderer) {
+Game* Game_Init(SDLRenderer& renderer) {
   Game* game = new Game;
   game->Init(renderer);
   return game;
@@ -115,7 +116,7 @@ void Game_Quit(Game* game) {
   delete game;
 }
 
-void Game_Update(Game* game, SDL_Renderer* renderer) {
+void Game_Update(Game* game, SDLRenderer& renderer) {
   game->Update(renderer);
 }
 

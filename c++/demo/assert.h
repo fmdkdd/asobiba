@@ -6,8 +6,10 @@
 
 #if ENABLE_ASSERT
 #define ASSERT(x) VERIFY(x)
+#define ASSERT_UNREACHABLE() ASSERT(0)
 #else
 #define ASSERT(x) do { (void) sizeof ((x)); } while (0)
+#define ASSERT_UNREACHABLE()
 #endif
 
 #endif

@@ -1,4 +1,6 @@
 #include <dlfcn.h>
+#include <signal.h>
+
 #include <SDL2/SDL_image.h>
 
 #include "assert.h"
@@ -18,12 +20,21 @@ void ReloadGame(GameLib& lib) {
   if (lib.handle)
     ASSERT(dlclose(lib.handle) == 0);
   lib.handle = dlopen(GAME_LIBRARY, RTLD_NOW);
-  ASSERT(lib.handle != NULL);
+  if (lib.handle == NULL) {
+    fprintf(stderr, "dlopen failed: %s\n", dlerror());
+    ASSERT_UNREACHABLE();
+  }
   if (lib.handle) {
     GameAPI* api = (GameAPI*)dlsym(lib.handle, "GAME_API");
     ASSERT(api != NULL);
     lib.api = *api;
   }
+}
+
+static GameLib* gGameLib;
+
+static void OnSignalUSR1(int) {
+  ReloadGame(*gGameLib);
 }
 
 int main() {
@@ -45,7 +56,10 @@ int main() {
 
   GameLib gameLib = {};
   ReloadGame(gameLib);
-  gameLib.state = gameLib.api.Init(renderer.renderer);
+  gameLib.state = gameLib.api.Init(renderer);
+
+  gGameLib = &gameLib;
+  signal(SIGUSR1, OnSignalUSR1);
 
   while (true) {
     renderer.commitInputState();
@@ -74,7 +88,7 @@ int main() {
       }
     }
 
-    gameLib.api.Update(gameLib.state, renderer.renderer);
+    gameLib.api.Update(gameLib.state, renderer);
 
     const bool isFullscreen = SDL_GetWindowFlags(window.window) & SDL_WINDOW_FULLSCREEN_DESKTOP;
 

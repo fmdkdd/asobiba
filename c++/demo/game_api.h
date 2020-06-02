@@ -1,13 +1,13 @@
 #ifndef GAME_API_H
 #define GAME_API_H
 
-struct SDL_Renderer;
+class SDLRenderer;
 struct Game;
 
 struct GameAPI {
-  Game* (*Init)(SDL_Renderer* renderer);
+  Game* (*Init)(SDLRenderer& renderer);
   void  (*Quit)(Game* game);
-  void  (*Update)(Game* game, SDL_Renderer* renderer);
+  void  (*Update)(Game* game, SDLRenderer& renderer);
 };
 
 extern const GameAPI GAME_API;
