@@ -16631,3 +16631,20 @@ whenever we encounter the XRA A,A instruction.
 So yes, that works.  So supporting all the instructions of the hot routine
 when jitting the functon should work.  It would be great if I could write each
 opcode in ASM, but I can somewhat manage by hand.
+
+* [2020-09-27 dim.]
+** Compiling to emscripten + desktop
+Emscripten is simple enough to use.  The ImGui emscripten example is also a nice
+bootstrap.
+
+However, Emscripten ultimately targets WebGL, which is a subset of OpenGLES,
+which is not supported on desktops.  This makes targeting a single version
+trickier.
+
+Found [[https://github.com/floooh/sokol/][sokol]], which may fit the bill.  Looks a tad too kitchen-sink though.
+
+For LD purpose, either we target HTML directly, and then we can use traditional
+JS or we can use C++/GLES through Emscripten.
+
+Or we use plain SDL/GL and target desktop.  But targeting two platforms may be
+too ambitious for the timeframe.
