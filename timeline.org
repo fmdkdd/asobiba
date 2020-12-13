@@ -16648,3 +16648,33 @@ JS or we can use C++/GLES through Emscripten.
 
 Or we use plain SDL/GL and target desktop.  But targeting two platforms may be
 too ambitious for the timeframe.
+
+* [2020-12-13 dim.]
+** Moving to Github actions
+Travis CI is in shambles.  Not that trivial to switch to Github actions, but at
+least it has unlimited minutes for public repos.
+
+Problem: Emacs does not build with ASLR on Github actions.  It builds on Travis
+so... actually we don't need to rebuild 25.3/24.5/26.3 once we built them once.
+So I did that on Travis, after disabling the -march=native quirk which makes
+them less portable.
+
+Then I switched docker-tools to simply rebuild the emacs-cask:master and
+all-tools images using Github actions on push and every month.
+
+I also switched flycheck-rust from using emacs-travis.mk to the emacs-cask
+image + a Rust one.  Not as nice as Travis, but it works.
+
+Next I should do the same for Flycheck: rewrite the .travis.yml script using
+Github actions to run our tests.
+
+Ultimately, we may also want to host the docker images on Github packages or
+container, but... that is less urgent.
+
+Hey actually, other peeps jumped on Github actions bandwagon:
+https://github.com/purcell/setup-emacs
+
+This gives you an Emacs of whatever version.  Good stuff.  I don't think we can
+easily use it with our all-tools docker image though...  The alternative would
+be to setup a Github action that's the same as our all-tools image, but I prefer
+the reproducibility we have now.
