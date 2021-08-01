@@ -21,18 +21,17 @@
 extern char *optarg;
 extern int optind;
 
-enum input
-  {
-   INPUT_COIN     = 1 << 0,
-   INPUT_2P_START = 1 << 1,
-   INPUT_1P_START = 1 << 2,
-   INPUT_1P_SHOOT = 1 << 4,
-   INPUT_1P_LEFT  = 1 << 5,
-   INPUT_1P_RIGHT = 1 << 6,
-   INPUT_2P_SHOOT = 1 << 12,
-   INPUT_2P_LEFT  = 1 << 13,
-   INPUT_2P_RIGHT = 1 << 14,
-  };
+enum input {
+  INPUT_COIN     = 1 << 0,
+  INPUT_2P_START = 1 << 1,
+  INPUT_1P_START = 1 << 2,
+  INPUT_1P_SHOOT = 1 << 4,
+  INPUT_1P_LEFT  = 1 << 5,
+  INPUT_1P_RIGHT = 1 << 6,
+  INPUT_2P_SHOOT = 1 << 12,
+  INPUT_2P_LEFT  = 1 << 13,
+  INPUT_2P_RIGHT = 1 << 14,
+};
 
 void sdl_die(const char *const msg) {
   SDL_Log("%s: %s\n", msg, SDL_GetError());
@@ -158,6 +157,10 @@ int main(const int argc, char* argv[]) {
     input_replay_state = INPUT_REPLAY_STATE_IDLE;
   InputReplay_init(&input_replay, replay_path, input_replay_state);
 
+  bool togglePause = false;
+  bool isPaused = false;
+  bool stepForward = false;
+
   while (true) {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
@@ -176,6 +179,10 @@ int main(const int argc, char* argv[]) {
         case SDL_SCANCODE_K:      input_state |= INPUT_2P_SHOOT; break;
         case SDL_SCANCODE_J:      input_state |= INPUT_2P_LEFT;  break;
         case SDL_SCANCODE_L:      input_state |= INPUT_2P_RIGHT; break;
+
+        case SDL_SCANCODE_P:      togglePause = true; break;
+
+        case SDL_SCANCODE_RIGHTBRACKET: stepForward = true; break;
 
         default: break;
         }
@@ -202,21 +209,41 @@ int main(const int argc, char* argv[]) {
       }
     }
 
-    InputReplay_update(&input_replay, &input_state);
+    if (togglePause) {
+      isPaused = !isPaused;
+      togglePause = false;
 
-    if (InputReplay_is_over(&input_replay))
-      goto done;
+      if (isPaused)
+        SDL_SetWindowTitle(window, "Spinv -- PAUSED");
+      else
+        SDL_SetWindowTitle(window, "Spinv");
+    }
 
-    cpu.ports[1] = input_state & 0xFF;
-    cpu.ports[2] = input_state >> 8;
+    if (stepForward)
+      isPaused = false;
 
-    BEGIN_TIME(emulate);
-    // TODO: should run for the actual elapsed time since the last frame
-    if (use_jit)
-      jit_emulate_one_frame(&jit);
-    else
-      cpu_emulate_one_frame(&cpu);
-    END_TIME(emulate);
+    if (!isPaused) {
+      InputReplay_update(&input_replay, &input_state);
+
+      if (InputReplay_is_over(&input_replay))
+        goto done;
+
+      cpu.ports[1] = input_state & 0xFF;
+      cpu.ports[2] = input_state >> 8;
+
+      BEGIN_TIME(emulate);
+      // TODO: should run for the actual elapsed time since the last frame
+      if (use_jit)
+        jit_emulate_one_frame(&jit);
+      else
+        cpu_emulate_one_frame(&cpu);
+      END_TIME(emulate);
+
+      if (stepForward) {
+        stepForward = false;
+        togglePause = true;
+      }
+    }
 
     // Draw content of video RAM
     BEGIN_TIME(draw);

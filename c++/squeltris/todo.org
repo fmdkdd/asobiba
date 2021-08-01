@@ -11,6 +11,26 @@ same (maybe non-linear?  Could be a lookup table).
 
 At high levels, you have no time to make non-optimal moves.
 
+*** Pattern matching
+Found [[https://chrisklimowski.com/projects/ogopogo/game/][Ogopogo]], good idea.  That game is all about matching palindromes of
+colored squares.  No pressure, but the challenge comes from making enough long
+palindromes to gain enough point to proceed.
+
+Makes me think that in match-3 games, the skill you are developing is pattern
+recognition of aligned colors, but to be better you also start to recognize
+pattern that are almost-match-3, then almost+1, and patterns that can trigger
+combos, etc.  Adding a timer just pressures you to pattern match and execute
+quickly, mechanically even.
+
+So, in Queltris, it's interesting to match Tetrominoes because it's unusual to
+find these patterns.  But after a while, it becomes boring again because it's
+always the same patterns.
+
+Maybe a better game is one that gives you new patterns to learn to recognize,
+and throw old ones.  "Do 10x T shapes", then "do 10x snakish things".  Patterns
+should not be random.  They can also use more than one color.
+
+
 ** Pause screen
 Blackout playfield to prevent cheating.
 
