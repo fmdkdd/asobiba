@@ -1,0 +1,12 @@
+[submodule "c++/choo/imgui"]
+	path = c++/choo/imgui
+	url = https://github.com/ocornut/imgui.git
+[submodule "c++/choo/deps/glad"]
+	path = c++/choo/deps/glad
+	url = https://github.com/Dav1dde/glad.git
+[submodule "c++/choo/deps/glfw"]
+	path = c++/choo/deps/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "c++/choo/deps/imgui"]
+	path = c++/choo/deps/imgui
+	url = https://github.com/ocornut/imgui.git

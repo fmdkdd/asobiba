@@ -6,3 +6,4 @@ scala/project
 rust/*/target
 .flowconfig
 a.out
+build/

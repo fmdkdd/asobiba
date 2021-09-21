@@ -1,0 +1,7 @@
+#ifndef CHOO_VERSION_H
+#define CHOO_VERSION_H
+
+#define CHOO_VERSION_MAJOR @choo_VERSION_MAJOR@
+#define CHOO_VERSION_MINOR @choo_VERSION_MINOR@
+
+#endif

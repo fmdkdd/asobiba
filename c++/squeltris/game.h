@@ -78,7 +78,7 @@ struct Pattern {
   int counter = 0;
 };
 
-static std::array<std::vector<std::string>,6> all_patterns = {{
+static std::array<std::vector<std::string>,13> all_patterns = {{
   {"XXX",
    ".X."},
 
@@ -98,6 +98,31 @@ static std::array<std::vector<std::string>,6> all_patterns = {{
 
   {"XX",
    "XX"},
+
+  {"XX",
+   "X.",
+   "XX"},
+
+  {"XXX",
+   "X.X"},
+
+  {"X..",
+   "XXX",
+   "..X"},
+
+  {"XXX",
+   "XXX"},
+
+  {"X.X",
+   "XXX",
+   "X.X"},
+
+  {"XX.X",
+   ".XXX"},
+
+  {"XXX",
+   "X.X",
+   "XXX"},
 }};
 
 constexpr int pattern_cell_height = 8;
