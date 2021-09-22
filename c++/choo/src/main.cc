@@ -25,7 +25,15 @@
 // transits between them, but at a slow pace.  You add trains to speed up trade
 // routes, allowing more cargo to be created.  But cities work like recipes in
 // Factorio: there's a clear ratio, you need e.g. 2 copper, 2 iron, 1 water to
-// grow 1 pop.  Then pops also want to go to other cities.
+// grow 1 pop.  Then pops also want to go to other cities.  Other thing that's
+// great in Factorio is: you build everything, so there's a sense of
+// accomplishment from going to nothing to covering the map with factories.
+// In RT3, industries and cities exist, but you can compliment them, build new
+// ones, and make them grow.
+// With a slider at map generation, you could chose between no industries at
+// all, and many.
+// Industries should be dynamic though: construction prices should follow
+// raw materials prices, wages should follow helping hands availability?
 
 // TODO: stations? cargo?
 
@@ -82,7 +90,7 @@ static void clearMouseButtons() {
 }
 
 static void updateMouseButtons(GLFWwindow *window) {
-  const int usefulButtons[] = {GLFW_MOUSE_BUTTON_LEFT};
+  const int usefulButtons[] = {GLFW_MOUSE_BUTTON_LEFT, GLFW_MOUSE_BUTTON_RIGHT};
 
   for (size_t i = 0; i < ARRAY_SIZE(usefulButtons); ++i) {
     int button = usefulButtons[i];
@@ -110,6 +118,16 @@ static bool wasMouseButtonPressed(int button) {
 static bool wasMouseButtonReleased(int button) {
   ASSERT((usize)button < ARRAY_SIZE(gCurrentMouseButtons));
   return !gPreviousMouseButtons[button] && gCurrentMouseButtons[button];
+}
+
+float gYScrollOffset;
+
+static void glfwScrollCallback(GLFWwindow *window, double xoffset,
+                               double yoffset) {
+  UNUSED(window);
+  UNUSED(xoffset);
+
+  gYScrollOffset += (float)yoffset;
 }
 
 int main() {
@@ -162,14 +180,21 @@ int main() {
   Track *currentTrack = nullptr;
 
   float cameraZoom = 400.0f;
+  static const float scrollZoomFactor = 1.3f;
+
+  Vec2 cameraCenter = Vec2(0.0f, 0.0f);
+  static const float dragFactor = 1.0f;
+
+  Vec2 cameraDragStart;
+  bool isDraggingCamera = false;
 
   auto lastLoopTime = std::chrono::high_resolution_clock::now();
   u32 updateClockUs = 0;
 
-  // bool isPlacingTrack = false;
-
   clearKeys();
   clearMouseButtons();
+
+  glfwSetScrollCallback(window, glfwScrollCallback);
 
   // Main loop
   while (true) {
@@ -190,6 +215,29 @@ int main() {
 
     const bool imguiCaptureMouse = ImGui::GetIO().WantCaptureMouse;
 
+    // Update camera controls
+    cameraZoom *= pow(scrollZoomFactor, gYScrollOffset);
+    gYScrollOffset = 0.0f;
+
+    if (isDraggingCamera) {
+      cameraCenter.x +=
+          (cameraDragStart.x - mouseX) * (dragFactor / cameraZoom);
+      cameraCenter.y +=
+          (mouseY - cameraDragStart.y) * (dragFactor / cameraZoom);
+
+      cameraDragStart.x = mouseX;
+      cameraDragStart.y = mouseY;
+
+      if (wasMouseButtonReleased(GLFW_MOUSE_BUTTON_RIGHT))
+        isDraggingCamera = false;
+    } else {
+      if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_RIGHT) &&
+          !imguiCaptureMouse) {
+        isDraggingCamera = true;
+        cameraDragStart = Vec2(mouseX, mouseY);
+      }
+    }
+
     // Update window and camera variables
     int displayWidth;
     int displayHeight;
@@ -197,17 +245,17 @@ int main() {
     const float halfWidth = (float)displayWidth / 2.0f;
     const float halfHeight = (float)displayHeight / 2.0f;
 
-    const float cameraLeft = -halfWidth / cameraZoom;
-    const float cameraRight = halfWidth / cameraZoom;
-    const float cameraBottom = -halfHeight / cameraZoom;
-    const float cameraTop = halfHeight / cameraZoom;
+    const float cameraLeft = cameraCenter.x - halfWidth / cameraZoom;
+    const float cameraRight = cameraCenter.x + halfWidth / cameraZoom;
+    const float cameraBottom = cameraCenter.y - halfHeight / cameraZoom;
+    const float cameraTop = cameraCenter.y + halfHeight / cameraZoom;
 
     const float mouseXWorldSpace =
         ((float)mouseX / (float)displayWidth) * (cameraRight - cameraLeft) +
         cameraLeft;
     const float mouseYWorldSpace =
-        -1 *
-        (((float)mouseY / (float)displayHeight) * (cameraTop - cameraBottom) +
+        ((1.0f - ((float)mouseY / (float)displayHeight)) *
+             (cameraTop - cameraBottom) +
          cameraBottom);
 
     // Update player interaction
@@ -282,10 +330,11 @@ int main() {
                 mouseYWorldSpace);
     // ImGui::SliderFloat("Direction", &train1.direction, 0.0f, 360.0f);
     ImGui::SliderFloat("Zoom", &cameraZoom, 0.0f, 1000.0f);
+    ImGui::SliderFloat("X", &cameraCenter.x, -1.0f, 1.0f);
 
     if (currentTrain != nullptr) {
-    ImGui::Text("Train pos: %f", currentTrain->pos);
-    ImGui::SliderFloat("Train speed", &currentTrain->speed, 0.0f, 0.02f);
+      ImGui::Text("Train pos: %f", currentTrain->pos);
+      ImGui::SliderFloat("Train speed", &currentTrain->speed, 0.0f, 0.02f);
     }
     if (currentTrack != nullptr)
       ImGui::Text("Track length: %f", currentTrack->length());
