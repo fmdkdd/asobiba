@@ -22,7 +22,7 @@ LIBS := -lm -pthread -lSDL2
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-SRC := main.cpp parse_obj.cpp
+SRC := main.cpp parse_obj.cpp parse_tga.cpp vec.cpp
 
 # Put all objects into the build dir, preserving the SRC hierarchy
 OBJ := $(SRC:%.cpp=$(BUILD_DIR)/%.o)

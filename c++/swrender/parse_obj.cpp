@@ -89,6 +89,10 @@ void parse_obj(const char* buffer, usize bufferLength, Obj* obj) {
     }
     else if (buffer[0] == 'v') {
       if (buffer[1] == 't') {
+        expect_char(&buffer, 'v');
+        expect_char(&buffer, 't');
+        Vec3 v = parse_vec3(&buffer);
+        obj->textureVertices.push_back(Vec2(v.x, v.y));
         skip_line(&buffer);
       }
       else if (buffer[1] == 'n') {
@@ -117,10 +121,29 @@ void parse_obj(const char* buffer, usize bufferLength, Obj* obj) {
     }
   }
 
-  printf("obj: %lu vertices %lu faces\n", obj->vertices.size(),
+  printf("obj: %lu vertices %lu texture vertices %lu faces\n", obj->vertices.size(),
+         obj->textureVertices.size(),
          obj->faces.size());
 
   ASSERT(buffer == bufferEnd);
+}
+
+void parse_obj_file(const char* filename, Obj *obj) {
+  FILE* objFile = fopen(filename, "r");
+  ENSURE(objFile != NULL);
+
+  ENSURE(fseek(objFile, 0, SEEK_END) == 0);
+  long fileSize = ftell(objFile);
+  ENSURE(fseek(objFile, 0, SEEK_SET) == 0);
+
+  char *objData = (char*)malloc(fileSize);
+  ENSURE(objData != NULL);
+  ENSURE(fread(objData, fileSize, 1, objFile) == 1);
+  ENSURE(fclose(objFile) == 0);
+
+  parse_obj(objData, fileSize, obj);
+
+  free(objData);
 }
 
 #undef EXPECT

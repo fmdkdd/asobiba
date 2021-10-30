@@ -8,8 +8,11 @@
 #define UNUSED(V) ((void)(V))
 
 typedef size_t   usize;
+typedef uint8_t  u8;
+typedef uint16_t  u16;
 typedef uint32_t u32;
 typedef uint64_t u64;
+typedef int32_t  i32;
 typedef float f32;
 
 template <typename T, usize N> usize ARRAY_SIZE(T const (&array)[N]) {

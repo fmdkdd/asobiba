@@ -46,7 +46,7 @@ struct Vec2 {
     return axis * clamp(dot, 0, v.length());
   }
 
-  Vec2 rotateAround(const Vec2 origin, float angle) {
+  Vec2 rotateAround(const Vec2 origin, float angle) const {
     const float cosa = cos(angle);
     const float sina = sin(angle);
     return Vec2((cosa * (x - origin.x) - sina * (y - origin.y)) + origin.x,
@@ -66,6 +66,10 @@ struct Vec2 {
       return b;
     return x;
   }
+
+  static float triangleArea(Vec2 a, Vec2 b, Vec2 c) {
+    return ((c.x - a.x) * (b.y - a.y) - (b.x - a.x) * (c.y - a.y)) / 2.0f;
+  }
 };
 
 struct Vec3 {
@@ -77,26 +81,45 @@ struct Vec3 {
   Vec3(float x, float y, float z) : x(x), y(y), z(z) {}
 
   Vec3 operator*(float s) const { return Vec3(x * s, y * s, z * s); }
-  Vec3 operator+(const Vec3 v) const { return Vec3(x + v.x, y + v.y, z + v.z); }
-  Vec3 operator+(const Vec2 v) const { return Vec3(x + v.x, y + v.y, z); }
+  Vec3 operator/(float s) const { return Vec3(x / s, y / s, z / s); }
+  Vec3 operator+(const Vec3 o) const { return Vec3(x + o.x, y + o.y, z + o.z); }
+  Vec3 operator-(const Vec3 o) const { return Vec3(x - o.x, y - o.y, z - o.z); }
 
-  Vec3 rotateZ(float angle) {
+  Vec3 operator+(const Vec2 o) const { return Vec3(x + o.x, y + o.y, z); }
+
+  Vec3 invert() const {
+    return Vec3(1.0f / x, 1.0f / y, 1.0f / z);
+  }
+
+  Vec3 rotateZ(float angle) const {
     const float cosa = cos(angle);
     const float sina = sin(angle);
     return Vec3(cosa * x - sina * y, sina * x + cosa * y, z);
   }
 
-  Vec3 rotateX(float angle) {
+  Vec3 rotateX(float angle) const {
     const float cosa = cos(angle);
     const float sina = sin(angle);
     return Vec3(x, cosa * y - sina * z, sina * y + cosa * z);
   }
 
-  Vec3 rotateY(float angle) {
+  Vec3 rotateY(float angle) const {
     const float cosa = cos(angle);
     const float sina = sin(angle);
     return Vec3(cosa * x - sina * z, y, sina * x + cosa * z);
   }
+
+  float dotProduct(const Vec3 o) const { return x * o.x + y * o.y + z * o.z; }
+
+  Vec3 crossProduct(const Vec3 o) const {
+    return Vec3(y * o.z - z * o.y,
+                z * o.x - x * o.z,
+                x * o.y - y * o.x);
+  }
+
+  float length() const {return sqrt(dotProduct(*this)); }
+
+  Vec3 normalized() const { return *this / length(); }
 };
 
 struct Vec4 {
@@ -110,5 +133,8 @@ struct Vec4 {
 
   Vec4 operator*(float s) const { return Vec4(x * s, y * s, z * s, w * s); }
 };
+
+Vec3 barycentricCoordinates2(Vec2 a, Vec2 b, Vec2 c, Vec2 p);
+Vec3 barycentricCoordinates3(Vec3 a, Vec3 b, Vec3 c, Vec3 p);
 
 #endif
