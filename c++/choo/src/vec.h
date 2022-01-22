@@ -37,7 +37,7 @@ struct Vec2 {
 
   Vec2 normalized() const { return *this / length(); }
 
-  Vec2 ortho() const { return Vec2(y, x); }
+  Vec2 ortho() const { return Vec2(-y, x); }
 
   // Return a vector W, result of U projected on V and clamped to V
   Vec2 projectClamped(const Vec2 v) const {

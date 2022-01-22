@@ -48,6 +48,12 @@ option(ENABLE_ASSERT "Enable assert" ON)
 add_executable(${PROJECT_NAME}
   src/version.h.in
   src/main.cc
+  src/game.h
+  src/game.cc
+  src/cargoGenerator.h
+  src/cargoGenerator.cc
+  src/station.h
+  src/station.cc
   src/track.h
   src/track.cc
   src/train.h

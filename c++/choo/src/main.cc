@@ -10,8 +10,7 @@
 #include <cmath>
 #include <cstdio>
 
-#include "track.h"
-#include "train.h"
+#include "game.h"
 #include "utils.h"
 #include "vec.h"
 #include "version.h"
@@ -36,6 +35,10 @@
 // raw materials prices, wages should follow helping hands availability?
 
 // TODO: stations? cargo?
+// TODO: picking: hovering on station, cargo generators.. (is cursor in BB?)
+// TODO: train state: in station, loading, ...
+// TODO: placing track is trivial unless there is interesting terrain
+
 
 static void glfwErrorCallback(int error, const char *description) {
   fprintf(stderr, "Glfw Error %d: %s\n", error, description);
@@ -50,7 +53,7 @@ static void clearKeys() {
 }
 
 static void updateKeys(GLFWwindow *window) {
-  const int usefulKeys[] = {GLFW_KEY_ESCAPE, GLFW_KEY_T};
+  const int usefulKeys[] = {GLFW_KEY_ESCAPE, GLFW_KEY_F, GLFW_KEY_D};
 
   for (size_t i = 0; i < ARRAY_SIZE(usefulKeys); ++i) {
     int key = usefulKeys[i];
@@ -169,14 +172,27 @@ int main() {
 
   glfwMakeContextCurrent(window);
 
-  static const usize MAX_TRAINS = 256;
-  Train trains[MAX_TRAINS];
-  usize trainCount = 0;
-  Train *currentTrain = nullptr;
+  Game game;
+  game.init();
 
-  static const usize MAX_TRACKS = 256;
-  Track tracks[MAX_TRACKS];
-  usize trackCount = 0;
+  {
+    CargoGenerator &s1 = game.newCargoGenerator();
+    CargoGenerator &s2 = game.newCargoGenerator();
+    s2.pos = Vec2(2.4f, -3.8f);
+    s2.size = 1;
+  }
+
+  enum EditState {
+    IDLE,
+    ADDING_TRACK,
+    ADDING_STATION,
+  };
+
+  static const char *EDIT_STATE_NAME[] = {"idle", "new track", "new station"};
+
+  EditState editState = IDLE;
+
+  Train *currentTrain = nullptr;
   Track *currentTrack = nullptr;
 
   float cameraZoom = 400.0f;
@@ -259,20 +275,24 @@ int main() {
          cameraBottom);
 
     // Update player interaction
-    if (wasKeyPressed(GLFW_KEY_T)) {
-      printf("New track\n");
-      currentTrack = &tracks[trackCount];
-      currentTrack->init();
-      trackCount++;
-      currentTrain = &trains[trainCount];
-      currentTrain->init();
-      trainCount++;
+    if (wasKeyPressed(GLFW_KEY_D)) {
+      editState = ADDING_STATION;
+    } else if (wasKeyPressed(GLFW_KEY_F)) {
+      editState = ADDING_TRACK;
+      currentTrack = &game.newTrack();
+      currentTrain = &game.newTrain();
       currentTrain->track = currentTrack;
     }
 
-    if (currentTrack != nullptr) {
+    if (editState == ADDING_TRACK) {
       if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT) && !imguiCaptureMouse) {
+        ASSERT(currentTrack != nullptr);
         currentTrack->add(mouseXWorldSpace, mouseYWorldSpace);
+      }
+    } else if (editState == ADDING_STATION) {
+      if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT) && !imguiCaptureMouse) {
+        Station &s = game.newStation();
+        s.pos = Vec2(mouseXWorldSpace, mouseYWorldSpace);
       }
     }
 
@@ -287,9 +307,7 @@ int main() {
       const u32 timestepUs = 5000;
       while (updateClockUs >= timestepUs) {
         updateClockUs -= timestepUs;
-        // Update all trains
-        for (usize i = 0; i < trainCount; ++i)
-          trains[i].step();
+        game.update();
       }
     }
 
@@ -301,10 +319,7 @@ int main() {
     glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    for (usize i = 0; i < trackCount; ++i)
-      tracks[i].render();
-    for (usize i = 0; i < trainCount; ++i)
-      trains[i].render();
+    game.render();
 
     // Draw cursor
     {
@@ -329,15 +344,15 @@ int main() {
     ImGui::Text("mouse (worldspace): %f %f", mouseXWorldSpace,
                 mouseYWorldSpace);
     // ImGui::SliderFloat("Direction", &train1.direction, 0.0f, 360.0f);
-    ImGui::SliderFloat("Zoom", &cameraZoom, 0.0f, 1000.0f);
-    ImGui::SliderFloat("X", &cameraCenter.x, -1.0f, 1.0f);
 
-    if (currentTrain != nullptr) {
+    ImGui::Text("Edit state: %s", EDIT_STATE_NAME[editState]);
+    if (editState == ADDING_TRACK) {
       ImGui::Text("Train pos: %f", currentTrain->pos);
       ImGui::SliderFloat("Train speed", &currentTrain->speed, 0.0f, 0.02f);
+      ImGui::Text("Track length: %f (%zu points)", currentTrack->length(), currentTrack->pointCount);
     }
-    if (currentTrack != nullptr)
-      ImGui::Text("Track length: %f", currentTrack->length());
+
+    ImGui::Text("Generator 0 cargo: %d", game.cargoGenerators[0].cargoCount);
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

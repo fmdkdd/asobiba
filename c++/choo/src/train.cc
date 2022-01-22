@@ -2,15 +2,16 @@
 
 #include <glad/glad.h>
 
-void Train::init() {
+void Train::init(u32 id) {
+  this->id = id;
   pos = 0;
-  carCount = 3;
+  carCount = 4;
   speed = 0.001f;
   direction = 45.0f;
   track = nullptr;
 }
 
-void Train::step() {
+void Train::update() {
   if (track == nullptr || track->isEmpty())
     return;
 

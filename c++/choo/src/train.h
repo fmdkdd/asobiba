@@ -5,6 +5,8 @@
 #include "vec.h"
 
 struct Train {
+  usize id;
+
   float pos;
   int carCount;
   float speed;
@@ -12,14 +14,11 @@ struct Train {
 
   Track *track;
 
-  void init();
-  void step();
-
-  Vec2 trackPos(float t) const {
-    return track->positionAtLength(t);
-  }
-
+  void init(u32 id);
+  void update();
   void render();
+
+  Vec2 trackPos(float t) const { return track->positionAtLength(t); }
 };
 
 #endif
