@@ -30,7 +30,11 @@ struct Game {
   void update();
   void render();
 
+  PointId addPoint(Vec2i p);
   void addSegment(Vec2i from, Vec2i to);
+  void addSegment(PointId from, Vec2i to);
+  void addSegment(Vec2i from, PointId to);
+  void addSegment(PointId from, PointId to);
 
   //Track &newTrack();
   Train &newTrain();

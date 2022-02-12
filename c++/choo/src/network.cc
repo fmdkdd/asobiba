@@ -39,7 +39,7 @@ void Network::render() const {
   }
 }
 
-Network::PointId Network::addPoint(Point p) {
+PointId Network::addPoint(Point p) {
   ASSERT(pointCount < MAX_POINTS);
   points[pointCount] = p;
   PointId id = pointCount;
@@ -57,4 +57,22 @@ void Network::addEdge(PointId from, PointId to) {
   e.to = to;
 
   edgeCount++;
+}
+
+Optional<PointId> Network::getClosestPoint(Vec2i p, float maxDistance) const {
+  float bestDistance = maxDistance;
+  Optional<PointId> bestCandidate;
+
+  Vec2f a = Vec2f(p.x, p.y);
+
+  for (usize i = 0; i < pointCount; ++i) {
+    Vec2f b = Vec2f(points[i].x, points[i].y);
+    float d = a.distance(b);
+    if (d < bestDistance) {
+      bestCandidate = Optional<PointId>(i);
+      bestDistance = d;
+    }
+  }
+
+  return bestCandidate;
 }

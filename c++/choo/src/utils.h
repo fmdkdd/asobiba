@@ -35,4 +35,16 @@ template <typename T, usize N> usize ARRAY_SIZE(T const (&array)[N]) {
 #define UNREACHABLE() __builtin_unreachable()
 #endif
 
+template<typename T>
+struct Optional {
+  bool hasValue;
+  T value;
+
+  Optional<T>(T x) : hasValue(true), value(x) {};
+  Optional() : hasValue(false) {};
+  ~Optional<T>() {};
+
+  T get() const { ASSERT(hasValue); return value; }
+};
+
 #endif

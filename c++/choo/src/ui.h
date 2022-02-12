@@ -19,12 +19,15 @@ struct UI {
   enum AddTrackSegmentState {
     ADDING_BEGIN,
     ADDING_END,
+    JOINING_END,
   };
 
   EditState editState;
   AddTrackSegmentState addTrackSegmentState;
 
   Vec2i trackSegmentBegin;
+  PointId trackSegmentBeginPointId;
+  Optional<PointId> closestPointOnNetwork;
 
   float cameraZoom;
   Vec2f cameraCenter;

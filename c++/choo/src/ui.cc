@@ -46,13 +46,27 @@ void UI::render() const {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    Vec2f current = Vec2f(mouseWorldSpace.x, mouseWorldSpace.y);
-    drawCircle(current, pointRadius, pointResolution);
+    Vec2f candidatePoint = Vec2f(mouseWorldSpace.x, mouseWorldSpace.y);
 
-    if (addTrackSegmentState == ADDING_END) {
-      glLoadIdentity();
+    if (closestPointOnNetwork.hasValue) {
+      Network::Point p =
+          game->trackNetwork.getPoint(closestPointOnNetwork.get());
+      candidatePoint = Vec2f(p.x, p.y);
+      glColor4f(1.0f, 0.0f, 1.0f, 1.0f);
+      drawCircle(candidatePoint, 2 * pointRadius, pointResolution);
+    } else {
+      drawCircle(candidatePoint, pointRadius, pointResolution);
+    }
+
+    if (addTrackSegmentState == ADDING_END || addTrackSegmentState == JOINING_END) {
+      glColor4f(1.0f, 1.0f, 0.0f, 0.5f);
       Vec2f begin = Vec2f(trackSegmentBegin.x, trackSegmentBegin.y);
-      Vec2f end = current;
+      if (addTrackSegmentState == JOINING_END) {
+        Network::Point p = game->trackNetwork.getPoint(trackSegmentBeginPointId);
+        begin = Vec2f(p.x, p.y);
+      }
+
+      Vec2f end = candidatePoint;
 
       drawCircle(begin, pointRadius, pointResolution);
 
@@ -100,15 +114,30 @@ void UI::updateInteraction(bool imguiCaptureMouse) {
 
   if (!imguiCaptureMouse) {
     if (editState == ADDING_TRACK_SEGMENT) {
+      closestPointOnNetwork = game->trackNetwork.getClosestPoint(
+          mouseWorldSpace, config::previewGrabTrackPointMaxDistance);
+
       if (addTrackSegmentState == ADDING_BEGIN) {
         if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-          trackSegmentBegin = mouseWorldSpace;
-          addTrackSegmentState = ADDING_END;
+          if (closestPointOnNetwork.hasValue) {
+            trackSegmentBeginPointId = closestPointOnNetwork.get();
+            addTrackSegmentState = JOINING_END;
+          } else {
+            trackSegmentBegin = mouseWorldSpace;
+            addTrackSegmentState = ADDING_END;
+          }
         }
-      } else if (addTrackSegmentState == ADDING_END) {
+      } else if (addTrackSegmentState == ADDING_END ||
+                 addTrackSegmentState == JOINING_END) {
         if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-          Vec2i trackSegmentEnd = mouseWorldSpace;
-          game->addSegment(trackSegmentBegin, trackSegmentEnd);
+          u32 idBegin = addTrackSegmentState == ADDING_END
+                            ? game->addPoint(trackSegmentBegin)
+                            : trackSegmentBeginPointId;
+          u32 idEnd = closestPointOnNetwork.hasValue
+                          ? closestPointOnNetwork.get()
+                          : game->addPoint(mouseWorldSpace);
+          game->addSegment(idBegin, idEnd);
+
           addTrackSegmentState = ADDING_BEGIN;
         }
       } else {
