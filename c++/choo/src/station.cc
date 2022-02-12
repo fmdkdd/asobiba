@@ -6,7 +6,7 @@
 void Station::init(u32 id) {
   this->id = id;
 
-  pos = Vec2(0.0f, 0.0f);
+  pos = Vec2f(0.0f, 0.0f);
 }
 
 void Station::update() {}

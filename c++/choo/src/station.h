@@ -7,7 +7,7 @@
 struct Station {
   usize id;
 
-  Vec2 pos;
+  Vec2f pos;
 
   void init(u32 id);
   void update();

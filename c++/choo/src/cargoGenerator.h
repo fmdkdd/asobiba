@@ -21,7 +21,7 @@ struct CargoGenerator {
   static const usize MAX_CARGO_AT_STATION = 256;
   usize id;
 
-  Vec2 pos;
+  Vec2f pos;
   u32 size;
 
   Cargo cargo[MAX_CARGO_AT_STATION];

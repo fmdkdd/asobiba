@@ -18,7 +18,7 @@ struct Train {
   void update();
   void render();
 
-  Vec2 trackPos(float t) const { return track->positionAtLength(t); }
+  Vec2f trackPos(float t) const { return track->positionAtLength(t); }
 };
 
 #endif

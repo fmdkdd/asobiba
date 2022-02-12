@@ -35,12 +35,12 @@ void Train::render() {
 
   for (int i = 0; i < carCount; ++i) {
     float carCenter = pos - i * (0.01f + car_space);
-    Vec2 carFront = trackPos(carCenter + 0.01f);
-    Vec2 carTail = trackPos(carCenter - 0.01f);
-    Vec2 carVec = carFront.vectorTo(carTail);
+    Vec2f carFront = trackPos(carCenter + 0.01f);
+    Vec2f carTail = trackPos(carCenter - 0.01f);
+    Vec2f carVec = carFront.vectorTo(carTail);
     direction = atan(carVec.y / carVec.x) * RADIAN_TO_DEGREES;
 
-    Vec2 center = trackPos(carCenter);
+    Vec2f center = trackPos(carCenter);
     float x = center.x;
     float y = center.y;
 

@@ -52,6 +52,8 @@ add_executable(${PROJECT_NAME}
   src/game.cc
   src/cargoGenerator.h
   src/cargoGenerator.cc
+  src/network.cc
+  src/network.h
   src/station.h
   src/station.cc
   src/track.h

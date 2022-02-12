@@ -9,7 +9,7 @@ void Track::init(u32 id) {
 
 void Track::add(float x, float y) {
   ASSERT(pointCount < MAX_POINTS);
-  Vec2 &p = points[pointCount];
+  Vec2f &p = points[pointCount];
   p.x = x;
   p.y = y;
   pointCount++;
@@ -28,35 +28,35 @@ void Track::render() const {
   float lineWidth = 0.01f;
   glBegin(GL_TRIANGLES);
 
-  Vec2 ab;
-  Vec2 a0;
-  Vec2 a1;
+  Vec2f ab;
+  Vec2f a0;
+  Vec2f a1;
 
   {
-    const Vec2 a = points[0];
-    const Vec2 b = points[1];
+    const Vec2f a = points[0];
+    const Vec2f b = points[1];
 
     ab = a.vectorTo(b);
-    const Vec2 normalAB = ab.ortho().normalized();
-    const Vec2 dAB = (normalAB * lineWidth);
+    const Vec2f normalAB = ab.ortho().normalized();
+    const Vec2f dAB = (normalAB * lineWidth);
     a0 = a - dAB;
     a1 = a + dAB;
   }
 
   for (usize i = 2; i < pointCount; ++i) {
-    const Vec2 &b = points[i-1];
-    const Vec2 &c = points[i];
+    const Vec2f &b = points[i-1];
+    const Vec2f &c = points[i];
 
-    const Vec2 bc = b.vectorTo(c);
-    const Vec2 normalBC = bc.ortho().normalized();
-    const Vec2 dBC = (normalBC * lineWidth);
-    const Vec2 c0 = c - dBC;
-    const Vec2 c1 = c + dBC;
+    const Vec2f bc = b.vectorTo(c);
+    const Vec2f normalBC = bc.ortho().normalized();
+    const Vec2f dBC = (normalBC * lineWidth);
+    const Vec2f c0 = c - dBC;
+    const Vec2f c1 = c + dBC;
 
-    const Vec2 miter = (ab.normalized() + bc.normalized()).normalized().ortho();
-    const Vec2 m = miter * (lineWidth / miter.dotProduct(normalBC));
-    const Vec2 b0 = b - m;
-    const Vec2 b1 = b + m;
+    const Vec2f miter = (ab.normalized() + bc.normalized()).normalized().ortho();
+    const Vec2f m = miter * (lineWidth / miter.dotProduct(normalBC));
+    const Vec2f b0 = b - m;
+    const Vec2f b1 = b + m;
 
     glVertex2f(a0.x, a0.y);
     glVertex2f(a1.x, a1.y);
@@ -72,12 +72,12 @@ void Track::render() const {
   }
 
   {
-    const Vec2 b = points[pointCount-1];
+    const Vec2f b = points[pointCount-1];
 
-    const Vec2 normalAB = ab.ortho().normalized();
-    const Vec2 dAB = (normalAB * lineWidth);
-    const Vec2 b0 = b - dAB;
-    const Vec2 b1 = b + dAB;
+    const Vec2f normalAB = ab.ortho().normalized();
+    const Vec2f dAB = (normalAB * lineWidth);
+    const Vec2f b0 = b - dAB;
+    const Vec2f b1 = b + dAB;
 
     glVertex2f(a0.x, a0.y);
     glVertex2f(a1.x, a1.y);
@@ -94,18 +94,18 @@ void Track::render() const {
 float Track::length() const {
   float len = 0.0f;
   for (usize i = 1; i < pointCount; ++i) {
-    const Vec2 &p0 = points[i - 1];
-    const Vec2 &p1 = points[i];
+    const Vec2f &p0 = points[i - 1];
+    const Vec2f &p1 = points[i];
     len += p0.distance(p1);
   }
   return len;
 }
 
-Vec2 Track::positionAtLength(float l) const {
+Vec2f Track::positionAtLength(float l) const {
   ASSERT(!isEmpty());
   for (usize i = 1; i < pointCount; ++i) {
-    const Vec2 &p0 = points[i - 1];
-    const Vec2 &p1 = points[i];
+    const Vec2f &p0 = points[i - 1];
+    const Vec2f &p1 = points[i];
     const float d = p0.distance(p1);
     if (l > d)
       l -= d;

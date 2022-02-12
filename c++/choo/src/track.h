@@ -11,7 +11,7 @@ struct Track {
 
   static const int MAX_POINTS = 256;
 
-  Vec2 points[MAX_POINTS];
+  Vec2f points[MAX_POINTS];
   usize pointCount;
 
   void init(u32 id);
@@ -20,7 +20,7 @@ struct Track {
   void update();
   void render() const;
   float length() const;
-  Vec2 positionAtLength(float l) const;
+  Vec2f positionAtLength(float l) const;
 
   bool isEmpty() const { return length() == 0.0f; }
 };

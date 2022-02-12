@@ -39,7 +39,6 @@
 // TODO: train state: in station, loading, ...
 // TODO: placing track is trivial unless there is interesting terrain
 
-
 static void glfwErrorCallback(int error, const char *description) {
   fprintf(stderr, "Glfw Error %d: %s\n", error, description);
 }
@@ -164,7 +163,7 @@ int main() {
   }
 
   ImGui::CreateContext();
-  ImVec4 clear_color = ImVec4(0.05f, 0.10f, 0.12f, 0.f);
+  ImVec4 clear_color = ImVec4(77.0f/255.0f, 74.0f/255.0f, 90.0f/255.0f, 0.f);
 
   // Setup Platform/Renderer bindings
   ImGui_ImplGlfw_InitForOpenGL(window, true);
@@ -175,33 +174,41 @@ int main() {
   Game game;
   game.init();
 
-  {
-    CargoGenerator &s1 = game.newCargoGenerator();
-    CargoGenerator &s2 = game.newCargoGenerator();
-    s2.pos = Vec2(2.4f, -3.8f);
-    s2.size = 1;
-  }
+  // {
+  //   CargoGenerator &s1 = game.newCargoGenerator();
+  //   CargoGenerator &s2 = game.newCargoGenerator();
+  //   s2.pos = Vec2f(2.4f, -3.8f);
+  //   s2.size = 1;
+  // }
 
   enum EditState {
     IDLE,
-    ADDING_TRACK,
+    ADDING_TRACK_SEGMENT,
     ADDING_STATION,
+  };
+
+  enum AddTrackSegmentState {
+    ADDING_BEGIN,
+    ADDING_END,
   };
 
   static const char *EDIT_STATE_NAME[] = {"idle", "new track", "new station"};
 
   EditState editState = IDLE;
+  AddTrackSegmentState addTrackSegmentState = ADDING_BEGIN;
+
+  Vec2i trackSegmentBegin;
 
   Train *currentTrain = nullptr;
   Track *currentTrack = nullptr;
 
-  float cameraZoom = 400.0f;
+  float cameraZoom = 1.0f;
   static const float scrollZoomFactor = 1.3f;
 
-  Vec2 cameraCenter = Vec2(0.0f, 0.0f);
+  Vec2f cameraCenter = Vec2f(0.0f, 0.0f);
   static const float dragFactor = 1.0f;
 
-  Vec2 cameraDragStart;
+  Vec2f cameraDragStart;
   bool isDraggingCamera = false;
 
   auto lastLoopTime = std::chrono::high_resolution_clock::now();
@@ -250,7 +257,7 @@ int main() {
       if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_RIGHT) &&
           !imguiCaptureMouse) {
         isDraggingCamera = true;
-        cameraDragStart = Vec2(mouseX, mouseY);
+        cameraDragStart = Vec2f(mouseX, mouseY);
       }
     }
 
@@ -273,26 +280,40 @@ int main() {
         ((1.0f - ((float)mouseY / (float)displayHeight)) *
              (cameraTop - cameraBottom) +
          cameraBottom);
+    const Vec2i mouseWorldSpace =
+        Vec2i(mouseXWorldSpace + 0.5f, mouseYWorldSpace + 0.5f);
 
     // Update player interaction
     if (wasKeyPressed(GLFW_KEY_D)) {
       editState = ADDING_STATION;
     } else if (wasKeyPressed(GLFW_KEY_F)) {
-      editState = ADDING_TRACK;
-      currentTrack = &game.newTrack();
-      currentTrain = &game.newTrain();
-      currentTrain->track = currentTrack;
+      editState = ADDING_TRACK_SEGMENT;
+      addTrackSegmentState = ADDING_BEGIN;
+      // currentTrain = &game.newTrain();
+      // currentTrain->track = currentTrack;
     }
 
-    if (editState == ADDING_TRACK) {
-      if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT) && !imguiCaptureMouse) {
-        ASSERT(currentTrack != nullptr);
-        currentTrack->add(mouseXWorldSpace, mouseYWorldSpace);
-      }
-    } else if (editState == ADDING_STATION) {
-      if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT) && !imguiCaptureMouse) {
-        Station &s = game.newStation();
-        s.pos = Vec2(mouseXWorldSpace, mouseYWorldSpace);
+    if (!imguiCaptureMouse) {
+      if (editState == ADDING_TRACK_SEGMENT) {
+        if (addTrackSegmentState == ADDING_BEGIN) {
+          if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+            trackSegmentBegin = mouseWorldSpace;
+            addTrackSegmentState = ADDING_END;
+          }
+        } else if (addTrackSegmentState == ADDING_END) {
+          if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+            Vec2i trackSegmentEnd = mouseWorldSpace;
+            game.addSegment(trackSegmentBegin, trackSegmentEnd);
+            addTrackSegmentState = ADDING_BEGIN;
+          }
+        } else {
+          UNREACHABLE();
+        }
+      } else if (editState == ADDING_STATION) {
+        if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
+          Station &s = game.newStation();
+          s.pos = Vec2f(mouseXWorldSpace, mouseYWorldSpace);
+        }
       }
     }
 
@@ -321,6 +342,7 @@ int main() {
 
     game.render();
 
+#if 0
     // Draw cursor
     {
       glColor4f(0.0f, 0.0f, 1.0f, 1.0f);
@@ -330,6 +352,7 @@ int main() {
       glScalef(0.02f, 0.02f, 1.0f);
       glRectf(-1.0f, -1.0f, 1.0f, 1.0f);
     }
+#endif
 
     // Draw ImGui
     ImGui_ImplOpenGL3_NewFrame();
@@ -341,18 +364,25 @@ int main() {
     // ImGui::Text("camera space: %f %f %f %f", -halfWidth, halfWidth,
     // -halfHeight, halfHeight);
     ImGui::Text("mouse (screenspace): %f %f", mouseX, mouseY);
-    ImGui::Text("mouse (worldspace): %f %f", mouseXWorldSpace,
-                mouseYWorldSpace);
+    ImGui::Text("mouse (worldspace): %f %f (%d %d)", mouseXWorldSpace,
+                mouseYWorldSpace, mouseWorldSpace.x, mouseWorldSpace.y);
     // ImGui::SliderFloat("Direction", &train1.direction, 0.0f, 360.0f);
 
     ImGui::Text("Edit state: %s", EDIT_STATE_NAME[editState]);
-    if (editState == ADDING_TRACK) {
-      ImGui::Text("Train pos: %f", currentTrain->pos);
-      ImGui::SliderFloat("Train speed", &currentTrain->speed, 0.0f, 0.02f);
-      ImGui::Text("Track length: %f (%zu points)", currentTrack->length(), currentTrack->pointCount);
+    if (editState == ADDING_TRACK_SEGMENT) {
+      ImGui::Text("Segment state: %d", addTrackSegmentState);
     }
 
-    ImGui::Text("Generator 0 cargo: %d", game.cargoGenerators[0].cargoCount);
+    ImGui::Text("Points: %zu", game.network.pointCount);
+    ImGui::Text("Edges: %zu", game.network.edgeCount);
+
+    //   ImGui::Text("Train pos: %f", currentTrain->pos);
+    //   ImGui::SliderFloat("Train speed", &currentTrain->speed, 0.0f, 0.02f);
+    //   ImGui::Text("Track length: %f (%zu points)", currentTrack->length(),
+    //   currentTrack->pointCount);
+    // }
+
+    // ImGui::Text("Generator 0 cargo: %d", game.cargoGenerators[0].cargoCount);
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());

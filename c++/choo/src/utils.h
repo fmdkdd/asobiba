@@ -9,6 +9,7 @@
 
 typedef size_t   usize;
 typedef uint32_t u32;
+typedef int32_t  s32;
 typedef uint64_t u64;
 
 template <typename T, usize N> usize ARRAY_SIZE(T const (&array)[N]) {
@@ -31,7 +32,7 @@ template <typename T, usize N> usize ARRAY_SIZE(T const (&array)[N]) {
   do {                                                                         \
     (void)sizeof((x));                                                         \
   } while (0)
-#define UNREACHABLE()
+#define UNREACHABLE() __builtin_unreachable()
 #endif
 
 #endif

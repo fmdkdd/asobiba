@@ -2,6 +2,7 @@
 #define GAME_H
 
 #include "cargoGenerator.h"
+#include "network.h"
 #include "station.h"
 #include "track.h"
 #include "train.h"
@@ -14,9 +15,7 @@ struct Game {
   Train trains[MAX_TRAINS];
   usize trainCount;
 
-  static const usize MAX_TRACKS = 256;
-  Track tracks[MAX_TRACKS];
-  usize trackCount;
+  Network network;
 
   static const usize MAX_STATIONS = 256;
   Station stations[MAX_STATIONS];
@@ -28,12 +27,15 @@ struct Game {
 
   void init();
   u32 genId() { return idCounter++; }
-  Track &newTrack();
+  void update();
+  void render();
+
+  void addSegment(Vec2i from, Vec2i to);
+
+  //Track &newTrack();
   Train &newTrain();
   Station &newStation();
   CargoGenerator &newCargoGenerator();
-  void update();
-  void render();
 };
 
 #endif
