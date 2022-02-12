@@ -5,6 +5,8 @@ void Game::init() {
   trainCount = 0;
   //trackCount = 0;
   cargoGeneratorCount = 0;
+
+  trackNetwork.init();
 }
 
 // Track &Game::newTrack() {
@@ -24,9 +26,9 @@ void Game::addSegment(Vec2i from, Vec2i to) {
   b.x = to.x;
   b.y = to.y;
 
-  u32 idA = network.addPoint(a);
-  u32 idB = network.addPoint(b);
-  network.addEdge(idA, idB);
+  u32 idA = trackNetwork.addPoint(a);
+  u32 idB = trackNetwork.addPoint(b);
+  trackNetwork.addEdge(idA, idB);
 }
 
 Train &Game::newTrain() {
@@ -65,7 +67,7 @@ void Game::update() {
 }
 
 void Game::render() {
-  network.render();
+  trackNetwork.render();
 
   for (usize i = 0; i < cargoGeneratorCount; ++i)
     cargoGenerators[i].render();

@@ -15,7 +15,7 @@ struct Game {
   Train trains[MAX_TRAINS];
   usize trainCount;
 
-  Network network;
+  Network trackNetwork;
 
   static const usize MAX_STATIONS = 256;
   Station stations[MAX_STATIONS];
