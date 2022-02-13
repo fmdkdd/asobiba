@@ -202,7 +202,20 @@ void Network::getShortestPath(PointId from, PointId to, Path *path) const {
   stack.push(from);
 
   path->pointCount = stack.size;
+  path->network = this;
   for (u32 i = 0; !stack.isEmpty(); ++i) {
     path->points[i] = stack.pop();
   }
+}
+
+u32 Path::length() const {
+  u32 len = 0;
+
+  for (u32 i=1; i < pointCount; ++i) {
+    const Vec2i &a = network->getPoint(points[i - 1]);
+    const Vec2i &b = network->getPoint(points[i]);
+    len += a.distance(b);
+  }
+
+  return len;
 }

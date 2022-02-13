@@ -35,8 +35,6 @@
 // Industries should be dynamic though: construction prices should follow
 // raw materials prices, wages should follow helping hands availability?
 
-// TODO: trains go along any path (pick train tool, pick start and stop, train
-// appears)
 // TODO: trains pick up goods at start, drop at stop
 // TODO: ?cargo sells for money, money buys trains, tracks, gas, cargo,
 // overhead? -> bankruptcy is failure condition, multiple goals possible as
@@ -45,6 +43,7 @@
 // TODO: picking: hovering on station, cargo generators.. (is cursor in BB?)
 // TODO: train state: in station, loading, ...
 // TODO: placing track is trivial unless there is interesting terrain
+// (mountains? rivers?)
 
 static void glfwErrorCallback(int error, const char *description) {
   fprintf(stderr, "Glfw Error %d: %s\n", error, description);

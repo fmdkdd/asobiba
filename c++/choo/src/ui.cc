@@ -74,6 +74,8 @@ void UI::render() const {
     if (closestPointOnNetwork.hasValue) {
       Vec2i p = game->trackNetwork.getPoint(closestPointOnNetwork.get());
       glColor4f(1.0f, 0.0f, 1.0f, 0.5f);
+      glMatrixMode(GL_MODELVIEW);
+      glLoadIdentity();
       drawCircle(p, 1.5 * pointRadius, pointResolution);
     }
 
@@ -83,23 +85,19 @@ void UI::render() const {
     auto pathWidth = config::previewLineWidth;
 
     glColor4f(1.0f, 0.0f, 1.0f, 0.5f);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+
     Vec2i beginPoint = game->trackNetwork.getPoint(addTrainBeginPoint);
     drawCircle(beginPoint, 1.5 * pointRadius, pointResolution);
 
     if (closestPointOnNetwork.hasValue) {
       PointId endPointId = closestPointOnNetwork.get();
-      Vec2i endPoint = game->trackNetwork.getPoint(endPointId);
-      drawCircle(endPoint, 1.5 * pointRadius, pointResolution);
-
-      Path path;
-      game->trackNetwork.getShortestPath(addTrainBeginPoint, endPointId, &path);
-
-      if (path.pointCount > 0) {
-        Vec2f points[256];
-        for (u32 i=0; i < path.pointCount; ++i) {
-          points[i] = game->trackNetwork.getPoint(path.points[i]);
-        }
-        drawLine(points, path.pointCount, 1.5*pathWidth);
+      if (addTrainBeginPoint != endPointId) {
+        Vec2i endPoint = game->trackNetwork.getPoint(endPointId);
+        drawCircle(endPoint, 1.5 * pointRadius, pointResolution);
+        if (addTrainShortestPath.pointCount > 0)
+          drawPath(&game->trackNetwork, addTrainShortestPath, 1.5 * pathWidth);
       }
     }
   }
@@ -114,7 +112,6 @@ void UI::renderImgui() const {
   ImGui::Text("mouse (screenspace): %f %f", mouseX, mouseY);
   ImGui::Text("mouse (worldspace): %d %d", mouseWorldSpace.x,
               mouseWorldSpace.y);
-  // ImGui::SliderFloat("Direction", &train1.direction, 0.0f, 360.0f);
 
   ImGui::Text("Edit state: %s", EDIT_STATE_NAME[editState]);
   if (editState == ADDING_TRACK_SEGMENT) {
@@ -124,11 +121,14 @@ void UI::renderImgui() const {
   ImGui::Text("Points: %zu", game->trackNetwork.pointCount);
   ImGui::Text("Edges: %zu", game->trackNetwork.edgeCount);
 
-  //   ImGui::Text("Train pos: %f", currentTrain->pos);
-  //   ImGui::SliderFloat("Train speed", &currentTrain->speed, 0.0f, 0.02f);
-  //   ImGui::Text("Track length: %f (%zu points)", currentTrack->length(),
-  //   currentTrack->pointCount);
-  // }
+  // ImGui::SliderFloat("Direction", &train1.direction, 0.0f, 360.0f);
+  if (game->trainCount > 0) {
+    Train &currentTrain = game->trains[0];
+    ImGui::Text("Train pos: %u", currentTrain.pathPosition);
+    ImGui::SliderInt("Train speed", &currentTrain.speed, 0.0f, 10.0f);
+    ImGui::Text("Track length: %u (%u points)", currentTrain.path.length(),
+                currentTrain.path.pointCount);
+  }
 
   // ImGui::Text("Generator 0 cargo: %d", game.cargoGenerators[0].cargoCount);
 }
@@ -193,11 +193,18 @@ void UI::updateInteraction(bool imguiCaptureMouse) {
     closestPointOnNetwork = game->trackNetwork.getClosestPoint(
         mouseWorldSpace, config::addTrainPickStationMaxDistance);
 
-    if (leftClick && closestPointOnNetwork.hasValue) {
+    if (closestPointOnNetwork.hasValue) {
       PointId endPoint = closestPointOnNetwork.get();
-      // Train &train = game->newTrain();
-      //  train.setPath(addTrainBeginPoint, endPoint);
-      editState = ADDING_TRAIN_PICK_BEGIN;
+      if (endPoint != addTrainBeginPoint) {
+        game->trackNetwork.getShortestPath(addTrainBeginPoint, endPoint,
+                                           &addTrainShortestPath);
+      }
+
+      if (leftClick) {
+        Train &train = game->newTrain();
+        train.setPath(addTrainShortestPath);
+        editState = ADDING_TRAIN_PICK_BEGIN;
+      }
     }
 
   } else if (editState == ADDING_STATION) {

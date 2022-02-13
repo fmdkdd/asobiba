@@ -1,7 +1,6 @@
 #ifndef TRAIN_H
 #define TRAIN_H
 
-#include "track.h"
 #include "vec.h"
 #include "network.h"
 
@@ -14,18 +13,14 @@ struct Train {
   s32 direction;
 
   bool hasPath;
-
-  static const usize MAX_POINTS = 256;
-  Vec2i pathPoints[MAX_POINTS];
-  u32 pathPointCount;
+  Path path;
 
   void init(u32 id);
   void update();
   void render();
 
-  void setPath(Vec2i *points, u32 pointCount);
+  void setPath(Path &path);
 
-  u32 pathLength() const;
   Vec2f interpolatePathPosition(u32 t) const;
 };
 

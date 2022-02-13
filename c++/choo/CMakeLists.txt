@@ -59,8 +59,6 @@ add_executable(${PROJECT_NAME}
   src/network.cc
   src/station.h
   src/station.cc
-  src/track.h
-  src/track.cc
   src/train.h
   src/train.cc
   src/ui.h

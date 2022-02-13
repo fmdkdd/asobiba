@@ -32,6 +32,7 @@ struct UI {
   Optional<PointId> closestPointOnNetwork;
 
   PointId addTrainBeginPoint;
+  Path addTrainShortestPath;
 
   float cameraZoom;
   Vec2f cameraCenter;

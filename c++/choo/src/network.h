@@ -6,13 +6,19 @@
 
 typedef u32 PointId;
 
+struct Network;
+
 struct Path {
   static const usize MAX_POINTS = 256;
 
   PointId points[MAX_POINTS];
   u32 pointCount;
 
-  //u32 getLength() const;
+  const Network *network;
+
+  u32 length() const;
+
+  Vec2i pointCoords(usize i) const;
 };
 
 struct Network {
@@ -45,6 +51,11 @@ struct Network {
 inline Vec2i Network::getPoint(PointId id) const {
   ASSERT(id < MAX_POINTS);
   return points[id];
+}
+
+inline Vec2i Path::pointCoords(usize i) const {
+  ASSERT(network != nullptr);
+  return network->getPoint(points[i]);
 }
 
 #endif
