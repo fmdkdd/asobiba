@@ -1,46 +1,54 @@
-#include "train.h"
-
 #include <glad/glad.h>
+
+#include "train.h"
 
 void Train::init(u32 id) {
   this->id = id;
-  pos = 0;
+  pathPosition = 0;
   carCount = 4;
-  speed = 0.001f;
-  direction = 45.0f;
-  track = nullptr;
+  speed = 1;
+  direction = 0;
+
+  hasPath = false;
+}
+
+void Train::setPath(Vec2i *points, u32 pointCount) {
+  for (u32 i=0; i < pointCount; ++i)
+    pathPoints[i] = points[i];
+  pathPointCount = pointCount;
+
+  hasPath = true;
 }
 
 void Train::update() {
-  if (track == nullptr || track->isEmpty())
+  if (!hasPath)
     return;
 
-  pos += speed;
+  pathPosition += speed;
 
-  float trackLength = track->length();
-  if (pos >= trackLength) {
-    pos = 0.0f;
+  if (pathPosition >= pathLength()) {
+    pathPosition = 0;
   }
 }
 
 static const float RADIAN_TO_DEGREES = 57.2958279f;
 
 void Train::render() {
-  if (track == nullptr || track->isEmpty())
+  if (!hasPath)
     return;
 
   const float car_width = 0.1f;
   const float car_height = 0.05f;
   const float car_space = 0.1f;
 
-  for (int i = 0; i < carCount; ++i) {
-    float carCenter = pos - i * (0.01f + car_space);
-    Vec2f carFront = trackPos(carCenter + 0.01f);
-    Vec2f carTail = trackPos(carCenter - 0.01f);
+  for (u32 i = 0; i < carCount; ++i) {
+    float carCenter = pathPosition - i * (0.01f + car_space);
+    Vec2f carFront = interpolatePathPosition(carCenter + 0.01f);
+    Vec2f carTail = interpolatePathPosition(carCenter - 0.01f);
     Vec2f carVec = carFront.vectorTo(carTail);
     direction = atan(carVec.y / carVec.x) * RADIAN_TO_DEGREES;
 
-    Vec2f center = trackPos(carCenter);
+    Vec2f center = interpolatePathPosition(carCenter);
     float x = center.x;
     float y = center.y;
 
@@ -67,4 +75,21 @@ void Train::render() {
     // car_x -= car_width + car_space;
     // car_y -=
   }
+}
+
+u32 Train::pathLength() const {
+  u32 length = 0;
+
+  for (u32 i=1; i < pathPointCount; ++i) {
+    const Vec2i &a = pathPoints[i - 1];
+    const Vec2i &b = pathPoints[i];
+    length += a.distance(b);
+  }
+
+  return length;
+}
+
+Vec2f Train::interpolatePathPosition(u32 t) const {
+
+  return Vec2f();
 }

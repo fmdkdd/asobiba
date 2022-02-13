@@ -31,12 +31,6 @@ void UI::init(Game *game) {
 }
 
 void UI::render() const {
-  auto clearColor = config::backgroundColor;
-
-  glOrtho(cameraLeft, cameraRight, cameraBottom, cameraTop, 0.0f, 1.0f);
-  glClearColor(clearColor.x, clearColor.y, clearColor.z, 0);
-  glClear(GL_COLOR_BUFFER_BIT);
-
   if (editState == ADDING_TRACK_SEGMENT) {
     auto pointRadius = config::previewPointRadius;
     auto pointResolution = config::previewPointResolution;
@@ -49,20 +43,20 @@ void UI::render() const {
     Vec2f candidatePoint = Vec2f(mouseWorldSpace.x, mouseWorldSpace.y);
 
     if (closestPointOnNetwork.hasValue) {
-      Network::Point p =
-          game->trackNetwork.getPoint(closestPointOnNetwork.get());
+      Vec2i p = game->trackNetwork.getPoint(closestPointOnNetwork.get());
       candidatePoint = Vec2f(p.x, p.y);
-      glColor4f(1.0f, 0.0f, 1.0f, 1.0f);
-      drawCircle(candidatePoint, 2 * pointRadius, pointResolution);
+      glColor4f(1.0f, 0.0f, 1.0f, 0.5f);
+      drawCircle(candidatePoint, 1.5 * pointRadius, pointResolution);
     } else {
       drawCircle(candidatePoint, pointRadius, pointResolution);
     }
 
-    if (addTrackSegmentState == ADDING_END || addTrackSegmentState == JOINING_END) {
+    if (addTrackSegmentState == ADDING_END ||
+        addTrackSegmentState == JOINING_END) {
       glColor4f(1.0f, 1.0f, 0.0f, 0.5f);
       Vec2f begin = Vec2f(trackSegmentBegin.x, trackSegmentBegin.y);
       if (addTrackSegmentState == JOINING_END) {
-        Network::Point p = game->trackNetwork.getPoint(trackSegmentBeginPointId);
+        Vec2i p = game->trackNetwork.getPoint(trackSegmentBeginPointId);
         begin = Vec2f(p.x, p.y);
       }
 
@@ -73,11 +67,48 @@ void UI::render() const {
       Vec2f ps[] = {begin, end};
       drawLine(ps, 2, segmentWidth);
     }
+  } else if (editState == ADDING_TRAIN_PICK_BEGIN) {
+    auto pointRadius = config::previewPointRadius;
+    auto pointResolution = config::previewPointResolution;
+
+    if (closestPointOnNetwork.hasValue) {
+      Vec2i p = game->trackNetwork.getPoint(closestPointOnNetwork.get());
+      glColor4f(1.0f, 0.0f, 1.0f, 0.5f);
+      drawCircle(p, 1.5 * pointRadius, pointResolution);
+    }
+
+  } else if (editState == ADDING_TRAIN_PICK_END) {
+    auto pointRadius = config::previewPointRadius;
+    auto pointResolution = config::previewPointResolution;
+    auto pathWidth = config::previewLineWidth;
+
+    glColor4f(1.0f, 0.0f, 1.0f, 0.5f);
+    Vec2i beginPoint = game->trackNetwork.getPoint(addTrainBeginPoint);
+    drawCircle(beginPoint, 1.5 * pointRadius, pointResolution);
+
+    if (closestPointOnNetwork.hasValue) {
+      PointId endPointId = closestPointOnNetwork.get();
+      Vec2i endPoint = game->trackNetwork.getPoint(endPointId);
+      drawCircle(endPoint, 1.5 * pointRadius, pointResolution);
+
+      Path path;
+      game->trackNetwork.getShortestPath(addTrainBeginPoint, endPointId, &path);
+
+      if (path.pointCount > 0) {
+        Vec2f points[256];
+        for (u32 i=0; i < path.pointCount; ++i) {
+          points[i] = game->trackNetwork.getPoint(path.points[i]);
+        }
+        drawLine(points, path.pointCount, 1.5*pathWidth);
+      }
+    }
   }
 }
 
 void UI::renderImgui() const {
-  static const char *EDIT_STATE_NAME[] = {"idle", "new track", "new station"};
+  static const char *EDIT_STATE_NAME[] = {"idle", "new track", "new station",
+                                          "new train (pick begin)",
+                                          "new train (pick end)"};
 
   ImGui::Text("camera zoom: %f", cameraZoom);
   ImGui::Text("mouse (screenspace): %f %f", mouseX, mouseY);
@@ -104,50 +135,75 @@ void UI::renderImgui() const {
 
 void UI::updateInteraction(bool imguiCaptureMouse) {
   if (wasKeyPressed(GLFW_KEY_D)) {
-    editState = ADDING_STATION;
-  } else if (wasKeyPressed(GLFW_KEY_F)) {
     editState = ADDING_TRACK_SEGMENT;
     addTrackSegmentState = ADDING_BEGIN;
-    // currentTrain = &game.newTrain();
-    // currentTrain->track = currentTrack;
+  } else if (wasKeyPressed(GLFW_KEY_F)) {
+    editState = ADDING_TRAIN_PICK_BEGIN;
+  } else if (wasKeyPressed(GLFW_KEY_C)) {
+    editState = ADDING_STATION;
   }
 
-  if (!imguiCaptureMouse) {
-    if (editState == ADDING_TRACK_SEGMENT) {
-      closestPointOnNetwork = game->trackNetwork.getClosestPoint(
-          mouseWorldSpace, config::previewGrabTrackPointMaxDistance);
+  if (imguiCaptureMouse)
+    return;
 
-      if (addTrackSegmentState == ADDING_BEGIN) {
-        if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-          if (closestPointOnNetwork.hasValue) {
-            trackSegmentBeginPointId = closestPointOnNetwork.get();
-            addTrackSegmentState = JOINING_END;
-          } else {
-            trackSegmentBegin = mouseWorldSpace;
-            addTrackSegmentState = ADDING_END;
-          }
-        }
-      } else if (addTrackSegmentState == ADDING_END ||
-                 addTrackSegmentState == JOINING_END) {
-        if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-          u32 idBegin = addTrackSegmentState == ADDING_END
-                            ? game->addPoint(trackSegmentBegin)
-                            : trackSegmentBeginPointId;
-          u32 idEnd = closestPointOnNetwork.hasValue
-                          ? closestPointOnNetwork.get()
-                          : game->addPoint(mouseWorldSpace);
-          game->addSegment(idBegin, idEnd);
+  bool leftClick = wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT);
 
-          addTrackSegmentState = ADDING_BEGIN;
+  if (editState == ADDING_TRACK_SEGMENT) {
+    closestPointOnNetwork = game->trackNetwork.getClosestPoint(
+        mouseWorldSpace, config::previewGrabTrackPointMaxDistance);
+
+    if (addTrackSegmentState == ADDING_BEGIN) {
+      if (leftClick) {
+        if (closestPointOnNetwork.hasValue) {
+          trackSegmentBeginPointId = closestPointOnNetwork.get();
+          addTrackSegmentState = JOINING_END;
+        } else {
+          trackSegmentBegin = mouseWorldSpace;
+          addTrackSegmentState = ADDING_END;
         }
-      } else {
-        UNREACHABLE();
       }
-    } else if (editState == ADDING_STATION) {
-      if (wasMouseButtonPressed(GLFW_MOUSE_BUTTON_LEFT)) {
-        // Station &s = game->newStation();
-        //  s.pos = mouseWorldSpace;
+    } else if (addTrackSegmentState == ADDING_END ||
+               addTrackSegmentState == JOINING_END) {
+      if (leftClick) {
+        u32 idBegin = addTrackSegmentState == ADDING_END
+                          ? game->addPoint(trackSegmentBegin)
+                          : trackSegmentBeginPointId;
+        u32 idEnd = closestPointOnNetwork.hasValue
+                        ? closestPointOnNetwork.get()
+                        : game->addPoint(mouseWorldSpace);
+        game->addSegment(idBegin, idEnd);
+
+        addTrackSegmentState = ADDING_BEGIN;
       }
+    } else {
+      UNREACHABLE();
+    }
+  } else if (editState == ADDING_TRAIN_PICK_BEGIN) {
+
+    closestPointOnNetwork = game->trackNetwork.getClosestPoint(
+        mouseWorldSpace, config::addTrainPickStationMaxDistance);
+
+    if (leftClick && closestPointOnNetwork.hasValue) {
+      addTrainBeginPoint = closestPointOnNetwork.get();
+      editState = ADDING_TRAIN_PICK_END;
+    }
+
+  } else if (editState == ADDING_TRAIN_PICK_END) {
+
+    closestPointOnNetwork = game->trackNetwork.getClosestPoint(
+        mouseWorldSpace, config::addTrainPickStationMaxDistance);
+
+    if (leftClick && closestPointOnNetwork.hasValue) {
+      PointId endPoint = closestPointOnNetwork.get();
+      // Train &train = game->newTrain();
+      //  train.setPath(addTrainBeginPoint, endPoint);
+      editState = ADDING_TRAIN_PICK_BEGIN;
+    }
+
+  } else if (editState == ADDING_STATION) {
+    if (leftClick) {
+      // Station &s = game->newStation();
+      //  s.pos = mouseWorldSpace;
     }
   }
 }
@@ -200,7 +256,8 @@ void UI::updateWindowCamera(int displayWidth, int displayHeight) {
 }
 
 void UI::updateKeys(GLFWwindow *window) {
-  const int usefulKeys[] = {GLFW_KEY_ESCAPE, GLFW_KEY_F, GLFW_KEY_D};
+  const int usefulKeys[] = {GLFW_KEY_ESCAPE, GLFW_KEY_F, GLFW_KEY_D,
+                            GLFW_KEY_C};
 
   for (size_t i = 0; i < ARRAY_SIZE(usefulKeys); ++i) {
     int key = usefulKeys[i];

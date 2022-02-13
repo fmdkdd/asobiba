@@ -36,7 +36,6 @@ struct Game {
   void addSegment(Vec2i from, PointId to);
   void addSegment(PointId from, PointId to);
 
-  //Track &newTrack();
   Train &newTrain();
   Station &newStation();
   CargoGenerator &newCargoGenerator();

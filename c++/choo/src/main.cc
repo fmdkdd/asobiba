@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cstdio>
 
+#include "config.h"
 #include "game.h"
 #include "ui.h"
 #include "utils.h"
@@ -34,6 +35,12 @@
 // Industries should be dynamic though: construction prices should follow
 // raw materials prices, wages should follow helping hands availability?
 
+// TODO: trains go along any path (pick train tool, pick start and stop, train
+// appears)
+// TODO: trains pick up goods at start, drop at stop
+// TODO: ?cargo sells for money, money buys trains, tracks, gas, cargo,
+// overhead? -> bankruptcy is failure condition, multiple goals possible as
+// long as you are in the green
 // TODO: stations? cargo?
 // TODO: picking: hovering on station, cargo generators.. (is cursor in BB?)
 // TODO: train state: in station, loading, ...
@@ -92,12 +99,12 @@ int main() {
   glfwMakeContextCurrent(window);
 
   Game *game;
-  game = (Game*)malloc(sizeof(Game));
+  game = (Game *)malloc(sizeof(Game));
   ENSURE(game != nullptr);
   game->init();
 
   UI *ui;
-  ui = (UI*)malloc(sizeof(UI));
+  ui = (UI *)malloc(sizeof(UI));
   ENSURE(ui != nullptr);
   ui->init(game);
 
@@ -158,10 +165,17 @@ int main() {
     glLoadIdentity();
 
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable( GL_BLEND );
+    glEnable(GL_BLEND);
 
-    ui->render();
+    auto clearColor = config::backgroundColor;
+
+    glOrtho(ui->cameraLeft, ui->cameraRight, ui->cameraBottom, ui->cameraTop,
+            0.0f, 1.0f);
+    glClearColor(clearColor.x, clearColor.y, clearColor.z, 0);
+    glClear(GL_COLOR_BUFFER_BIT);
+
     game->render();
+    ui->render();
 
     // Draw ImGui
     ImGui_ImplOpenGL3_NewFrame();

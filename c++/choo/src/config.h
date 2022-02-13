@@ -13,6 +13,8 @@ static const u32 previewPointResolution = 32;
 static const float previewLineWidth = 5.0f;
 static const float previewGrabTrackPointMaxDistance = 50.0f;
 
+static const float addTrainPickStationMaxDistance = 50.0f;
+
 static const Vec4f trackColor(1.0f, 1.0f, 0.0f, 1.0f);
 static const float trackPointRadius = 10.0f;
 static const u32 trackPointResolution = 32;

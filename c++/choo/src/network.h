@@ -6,12 +6,16 @@
 
 typedef u32 PointId;
 
-struct Network {
-  struct Point {
-    s32 x;
-    s32 y;
-  };
+struct Path {
+  static const usize MAX_POINTS = 256;
 
+  PointId points[MAX_POINTS];
+  u32 pointCount;
+
+  //u32 getLength() const;
+};
+
+struct Network {
   struct Edge {
     u32 from;
     u32 to;
@@ -20,7 +24,7 @@ struct Network {
   static const usize MAX_POINTS = 1024;
   static const usize MAX_EDGES = 4096;
 
-  Point points[MAX_POINTS];
+  Vec2i points[MAX_POINTS];
   usize pointCount;
 
   Edge edges[MAX_EDGES];
@@ -29,13 +33,18 @@ struct Network {
   void init();
   void render() const;
 
-  PointId addPoint(Point p);
+  PointId addPoint(Vec2i p);
   void addEdge(PointId from, PointId to);
 
-  Point getPoint(PointId id) const;
+  Vec2i getPoint(PointId id) const;
   Optional<PointId> getClosestPoint(Vec2i p, float maxDistance) const;
+
+  void getShortestPath(PointId from, PointId to, Path *path) const;
 };
 
-inline Network::Point Network::getPoint(PointId id) const { ASSERT(id < MAX_POINTS); return points[id]; }
+inline Vec2i Network::getPoint(PointId id) const {
+  ASSERT(id < MAX_POINTS);
+  return points[id];
+}
 
 #endif

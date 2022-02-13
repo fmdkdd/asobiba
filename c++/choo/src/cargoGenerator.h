@@ -15,7 +15,7 @@ struct Cargo {
   u32 price;
 };
 
-static const char *CARGO_TYPE_NAME[] = {"Coal", "Iron", "Gold"};
+//static const char *CARGO_TYPE_NAME[] = {"Coal", "Iron", "Gold"};
 
 struct CargoGenerator {
   static const usize MAX_CARGO_AT_STATION = 256;

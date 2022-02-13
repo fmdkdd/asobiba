@@ -14,6 +14,8 @@ struct UI {
     IDLE,
     ADDING_TRACK_SEGMENT,
     ADDING_STATION,
+    ADDING_TRAIN_PICK_BEGIN,
+    ADDING_TRAIN_PICK_END,
   };
 
   enum AddTrackSegmentState {
@@ -28,6 +30,8 @@ struct UI {
   Vec2i trackSegmentBegin;
   PointId trackSegmentBeginPointId;
   Optional<PointId> closestPointOnNetwork;
+
+  PointId addTrainBeginPoint;
 
   float cameraZoom;
   Vec2f cameraCenter;

@@ -8,8 +8,8 @@
 static const float PI = 3.1415926535897932384626433f;
 
 struct Vec2i {
-  int x;
-  int y;
+  s32 x;
+  s32 y;
 
   Vec2i() : x(0), y(0) {}
   Vec2i(int x, int y) : x(x), y(y) {}
@@ -19,6 +19,13 @@ struct Vec2i {
   Vec2i operator-(const Vec2i o) const { return Vec2i(x - o.x, y - o.y); }
 
   bool operator==(const Vec2i o) const { return x == o.x && y == o.y; }
+
+  u32 distance(const Vec2i o) const {
+    const s64 dx = o.x - x;
+    const s64 dy = o.y - y;
+    float d = sqrt(dx * dx + dy * dy);
+    return (u32)d;
+  }
 };
 
 struct Vec2f {
@@ -28,6 +35,8 @@ struct Vec2f {
   Vec2f() : x(0), y(0) {}
   Vec2f(float x, float y) : x(x), y(y) {}
   ~Vec2f() {}
+
+  Vec2f(Vec2i v) : x(v.x), y(v.y) {}
 
   Vec2f operator+(const Vec2f o) const { return Vec2f(x + o.x, y + o.y); }
   Vec2f operator-(const Vec2f o) const { return Vec2f(x - o.x, y - o.y); }
