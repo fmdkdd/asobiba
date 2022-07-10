@@ -130,7 +130,7 @@ void UI::renderImgui() const {
                 currentTrain.path.pointCount);
   }
 
-  // ImGui::Text("Generator 0 cargo: %d", game.cargoGenerators[0].cargoCount);
+  ImGui::Text("Factories: %d %d", game->factoryCount, game->factories[0].outputCargo[0].count);
 }
 
 void UI::updateInteraction(bool imguiCaptureMouse) {

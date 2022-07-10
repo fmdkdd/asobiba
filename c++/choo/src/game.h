@@ -1,7 +1,7 @@
 #ifndef GAME_H
 #define GAME_H
 
-#include "cargoGenerator.h"
+#include "factory.h"
 #include "network.h"
 #include "station.h"
 #include "train.h"
@@ -20,9 +20,9 @@ struct Game {
   Station stations[MAX_STATIONS];
   usize stationCount;
 
-  static const usize MAX_CARGO_GENERATORS = 256;
-  CargoGenerator cargoGenerators[MAX_CARGO_GENERATORS];
-  usize cargoGeneratorCount;
+  static const usize MAX_FACTORIES = 256;
+  Factory factories[MAX_FACTORIES];
+  usize factoryCount;
 
   void init();
   u32 genId() { return idCounter++; }
@@ -37,7 +37,9 @@ struct Game {
 
   Train &newTrain();
   Station &newStation();
-  CargoGenerator &newCargoGenerator();
+  Factory &newFactory();
+
+  void setupTestLevel();
 };
 
 #endif

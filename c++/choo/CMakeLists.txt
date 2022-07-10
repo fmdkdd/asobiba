@@ -49,8 +49,8 @@ add_executable(${PROJECT_NAME}
   src/version.h.in
   src/main.cc
   src/config.h
-  src/cargoGenerator.h
-  src/cargoGenerator.cc
+  src/factory.h
+  src/factory.cc
   src/game.h
   src/game.cc
   src/gfx.h
