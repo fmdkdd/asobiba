@@ -10,3 +10,9 @@
 [submodule "c++/choo/deps/imgui"]
 	path = c++/choo/deps/imgui
 	url = https://github.com/ocornut/imgui.git
+[submodule "c++/demo/deps/sdl2"]
+	path = c++/demo/deps/sdl2
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "c++/demo/deps/sdl2_image"]
+	path = c++/demo/deps/sdl2_image
+	url = https://github.com/libsdl-org/SDL_image.git
