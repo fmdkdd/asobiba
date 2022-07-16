@@ -53,7 +53,6 @@ set(SOURCE_FILES
   src/app.cc
   src/main.cc
   src/game_api.h
-  src/types.h
   src/utils.h
   )
 
