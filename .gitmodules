@@ -16,3 +16,6 @@
 [submodule "c++/demo/deps/sdl2_image"]
 	path = c++/demo/deps/sdl2_image
 	url = https://github.com/libsdl-org/SDL_image.git
+[submodule "c++/demo/deps/imgui"]
+	path = c++/demo/deps/imgui
+	url = https://github.com/ocornut/imgui.git

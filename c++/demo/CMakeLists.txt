@@ -21,6 +21,23 @@ endif()
 add_subdirectory(deps/sdl2)
 add_subdirectory(deps/sdl2_image)
 
+# ImGui
+
+add_library(imgui
+  deps/imgui/imgui.cpp
+  deps/imgui/imgui_draw.cpp
+  deps/imgui/imgui_tables.cpp
+  deps/imgui/imgui_widgets.cpp
+  deps/imgui/backends/imgui_impl_opengl3.cpp
+  deps/imgui/backends/imgui_impl_sdl.cpp)
+
+target_include_directories(imgui
+  PUBLIC
+  ${PROJECT_SOURCE_DIR}/deps/imgui
+  ${PROJECT_SOURCE_DIR}/deps/imgui/backends
+  PRIVATE
+  ${PROJECT_SOURCE_DIR}/deps/sdl2/include)
+
 # Game library
 
 set(GAME_SRC_FILES
@@ -45,6 +62,8 @@ if (HOT_RELOAD)
     target_compile_options(game PRIVATE -Wall -Wextra -pedantic)
   endif()
 endif()
+
+target_link_libraries(game PRIVATE imgui)
 
 # Binary
 
@@ -74,9 +93,11 @@ endif()
 
 if (HOT_RELOAD)
   target_compile_definitions(${PROJECT_NAME} PRIVATE -DHOT_RELOAD)
-  target_link_libraries(${PROJECT_NAME} PRIVATE SDL2::SDL2 SDL2_image::SDL2_image)
+  target_link_libraries(${PROJECT_NAME}
+    PRIVATE SDL2::SDL2 SDL2_image::SDL2_image GL imgui)
 else()
-  target_link_libraries(${PROJECT_NAME} PRIVATE SDL2::SDL2-static SDL2_image::SDL2_image-static)
+  target_link_libraries(${PROJECT_NAME}
+    PRIVATE SDL2::SDL2-static SDL2_image::SDL2_image-static GL imgui)
 endif()
 
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD

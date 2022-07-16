@@ -17,7 +17,7 @@ struct AnimatedSprite {
   u32 animationSpeed;
   u32 animationStepCounter;
 
-  void drawAt(SDL_Renderer* renderer, u32 x, u32 y);
+  void drawAt(SDL_GLContext gl, u32 x, u32 y);
   void step();
 };
 

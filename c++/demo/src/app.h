@@ -3,6 +3,7 @@
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_opengl.h>
 
 #include "utils.h"
 
@@ -40,7 +41,7 @@ enum Key {
 
 struct App {
   SDL_Window *window;
-  SDL_Renderer *renderer;
+  SDL_GLContext glContext;
   Font font;
 
   bool running;
@@ -61,6 +62,10 @@ struct App {
   void init();
   void run();
   void quit();
+
+  void initImGui(const char* glslVersion);
+  void quitImGui();
+  void drawImGui();
 
   u64 getHostRefreshRate();
   void updateInputs();
@@ -122,29 +127,34 @@ struct App {
   bool isKeyHeld(Key key) const { return keyHeld[key]; }
 
   void setRenderDrawColor(ColorRGBA c) {
-    SDL_SetRenderDrawColor(renderer, c.r, c.g, c.b, c.a);
+    glColor4f(c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, c.a / 255.0f);
+
   }
 
-  void renderClear() { SDL_RenderClear(renderer); }
+  void renderClear(ColorRGBA c) {
+    glClearColor(c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, c.a / 255.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+  }
 
   void drawLine(int x1, int y1, int x2, int y2) {
-    SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
+    //SDL_RenderDrawLine(renderer, x1, y1, x2, y2);
   }
 
   void fillRect(int x, int y, int w, int h) {
-    SDL_Rect r{x, y, w, h};
-    SDL_RenderFillRect(renderer, &r);
+    // SDL_Rect r{x, y, w, h};
+    // SDL_RenderFillRect(renderer, &r);
   }
 
   void drawRect(int x, int y, int w, int h) {
-    SDL_Rect r{x, y, w, h};
-    SDL_RenderDrawRect(renderer, &r);
+    // SDL_Rect r{x, y, w, h};
+    // SDL_RenderDrawRect(renderer, &r);
   }
 
   SDL_Texture *loadImage(const char *path) {
-    SDL_Surface *surface = IMG_Load(path);
-    ENSURE(surface != NULL);
-    return SDL_CreateTextureFromSurface(renderer, surface);
+    // SDL_Surface *surface = IMG_Load(path);
+    // ENSURE(surface != NULL);
+    // return SDL_CreateTextureFromSurface(renderer, surface);
+    return NULL;
   }
 
   u32 text(const char *s, int x, int y);

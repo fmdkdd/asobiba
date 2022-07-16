@@ -2,7 +2,9 @@
 
 #include "game_api.h"
 
-#include <unistd.h>
+#include "imgui.h"
+#include "imgui_impl_sdl.h"
+#include "imgui_impl_opengl3.h"
 
 static const char *FONT_CHARS =
     " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`-=[]\\;',."
@@ -12,7 +14,7 @@ void Font::init(const App &app, const char *file, int width, int height,
                 const char *charMapping, usize charMappingLength) {
   this->height = height;
   this->width = width;
-  this->texture = SDL_CreateTextureFromSurface(app.renderer, SDL_LoadBMP(file));
+  //this->texture = SDL_CreateTextureFromSurface(app.renderer, SDL_LoadBMP(file));
   memset(charIndex, 0, sizeof(charIndex));
   for (usize i = 0; i < charMappingLength; ++i) {
     unsigned char c = charMapping[i];
@@ -26,7 +28,7 @@ void Font::draw(App &app, unsigned char c, int x, int y) {
   int i = charIndex[c];
   SDL_Rect src = {i * width, 0, width, height};
   SDL_Rect dst = {x, y, width, height};
-  SDL_RenderCopy(app.renderer, texture, &src, &dst);
+  //SDL_RenderCopy(app.renderer, texture, &src, &dst);
 }
 
 static void sdl_die(const char *msg) {
@@ -45,19 +47,31 @@ void App::init() {
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0)
     sdl_die("Could not init SDL");
 
-  window =
-      SDL_CreateWindow("SDL demo", SDL_WINDOWPOS_UNDEFINED,
-                       SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, 0);
+  // GL 3.0 + GLSL 130
+  const char *glslVersion = "#version 130";
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+
+  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+  SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
+  SDL_WindowFlags windowFlags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL);
+  window = SDL_CreateWindow("SDL Demo", SDL_WINDOWPOS_UNDEFINED,
+                            SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight,
+                            windowFlags);
   if (window == NULL)
     sdl_die("Could not create window");
 
-  renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-  if (renderer == NULL)
-    sdl_die("Could not create renderer");
+  glContext = SDL_GL_CreateContext(window);
 
-  SDL_RenderSetScale(renderer, scale, scale);
-  SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
-  SDL_RenderSetLogicalSize(renderer, logicalWidth, logicalHeight);
+  if (glContext == NULL)
+    sdl_die("Could not create GL context");
+
+  if (SDL_GL_MakeCurrent(window, glContext) != 0)
+    sdl_die("GL_MakeCurrent failed");
 
   if (IMG_Init(IMG_INIT_PNG) == 0)
     sdl_die("Could not initialize IMG_PNG");
@@ -71,14 +85,33 @@ void App::init() {
   memset(keyHeld, false, sizeof(keyHeld));
   memset(keyPreviousHeld, false, sizeof(keyPreviousHeld));
 
+  initImGui(glslVersion);
+
   running = true;
 }
 
+void App::initImGui(const char* glslVersion) {
+  ImGui::CreateContext();
+  ImGui::StyleColorsDark();
+
+  ImGui_ImplSDL2_InitForOpenGL(window, glContext);
+  ImGui_ImplOpenGL3_Init(glslVersion);
+}
+
+void App::quitImGui() {
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplSDL2_Shutdown();
+  ImGui::DestroyContext();
+}
+
 void App::quit() {
+  quitImGui();
+
   font.quit();
 
   IMG_Quit();
-  SDL_DestroyRenderer(renderer);
+
+  SDL_GL_DeleteContext(glContext);
   SDL_DestroyWindow(window);
   SDL_Quit();
 }
@@ -108,6 +141,9 @@ void App::updateInputs() {
 
   SDL_Event e;
   while (SDL_PollEvent(&e)) {
+
+    ImGui_ImplSDL2_ProcessEvent(&e);
+
     switch (e.type) {
     case SDL_QUIT:
       running = false;
@@ -180,10 +216,10 @@ void App::run() {
   const s64 updateRateNanos = NANOS_PER_SECOND / updateRate;
   u64 lastLoopTick = 0;
 
-  #if 0
+#if 0
   u64 frameTimeHistory[128];
   u64 frameTimeHistoryIndex = 0;
-  #endif
+#endif
 
   // Vsync is best to avoid tearing, but frame timings may be whack.
   // That's one of the reason we do not rely on elapsed time to trigger
@@ -191,12 +227,12 @@ void App::run() {
 
   bool useVsync = true;
   if (useVsync) {
-    if (SDL_RenderSetVSync(renderer, 1) != 0) {
+    if (SDL_GL_SetSwapInterval(1) != 0) {
       SDL_Log("Failed to enable vsync, continuing with vsync off");
       useVsync = false;
     }
   } else {
-    if (SDL_RenderSetVSync(renderer, 0) != 0) {
+    if (SDL_GL_SetSwapInterval(0) != 0) {
       SDL_Log("Failed to disable vsync, continuing with vsync on");
       useVsync = true;
     }
@@ -244,11 +280,11 @@ void App::run() {
           avgDtNs += frameTimeHistory[i];
         avgDtNs /= (double)ARRAY_SIZE(frameTimeHistory);
 
-        printf("lag=%16zd dt=%16zd avg=%16.3f fps=%8.2f (%3zu)  ",
+        printf("lag=%16zd dt=%16zd avg=%16.3f fps=%8.2f (%3zu)\n",
                lagAccumulator, dtNanos, avgDtNs, 1000000000.0 / avgDtNs,
                targetRefreshRate);
       }
-      #endif
+#endif
 
       updateCounter += updateRate;
 
@@ -265,8 +301,15 @@ void App::run() {
       }
     }
 
+    {
+      int displayWidth, displayHeight;
+      SDL_GL_GetDrawableSize(window, &displayWidth, &displayHeight);
+      glViewport(0, 0, displayWidth, displayHeight);
+    }
+
     gameLib->api.render(gameLib->state, *this);
-    SDL_RenderPresent(renderer);
+    drawImGui();
+    SDL_GL_SwapWindow(window);
 
     if (fixupFrametime) {
       u64 now = SDL_GetPerformanceCounter();
@@ -326,4 +369,17 @@ bool App::button(const char *s, u32 x, u32 y) {
                  SDL_PointInRect(&lastMousePosition, &box);
 
   return clicked;
+}
+
+void App::drawImGui() {
+  ImGuiIO& io = ImGui::GetIO();
+
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplSDL2_NewFrame();
+  ImGui::NewFrame();
+
+  ImGui::Text("This is some useful text.");
+
+  ImGui::Render();
+  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }

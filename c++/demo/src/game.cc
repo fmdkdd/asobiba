@@ -4,14 +4,14 @@
 #include "game_api.h"
 #include "utils.h"
 
-void AnimatedSprite::drawAt(SDL_Renderer *renderer, u32 x, u32 y) {
+void AnimatedSprite::drawAt(SDL_GLContext gl, u32 x, u32 y) {
   SDL_Rect dst;
   dst.x = x;
   dst.y = y;
   dst.w = 40;
   dst.h = 40;
   ASSERT(animationStep < spriteRectsCount);
-  SDL_RenderCopy(renderer, spritesheet, &spriteRects[animationStep], &dst);
+  //SDL_RenderCopy(renderer, spritesheet, &spriteRects[animationStep], &dst);
 }
 
 void AnimatedSprite::step() {
@@ -179,8 +179,7 @@ void Game::render(App &app) {
   last_frame = now;
   double dt_ms = (double)std::chrono::nanoseconds(dt).count() / 1000000;
 
-  app.setRenderDrawColor(ColorRGBA{30, 30, 30, 255});
-  app.renderClear();
+  app.renderClear(ColorRGBA{30, 30, 30, 255});
 
   app.setRenderDrawColor(ColorRGBA{255, 255, 255, 255});
 
@@ -209,7 +208,7 @@ void Game::render(App &app) {
   }
 
   for (int i = 0; i < 10; ++i) {
-    lemmings[i].drawAt(app.renderer, 10 + 20 * i, 200);
+    lemmings[i].drawAt(app.glContext, 10 + 20 * i, 200);
   }
 
   // Pong
