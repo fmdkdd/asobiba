@@ -18,7 +18,7 @@ struct AnimatedSprite {
   u32 animationStepCounter;
 
   void drawAt(SDL_Renderer* renderer, u32 x, u32 y);
-  void step(u32 ticks);
+  void step();
 };
 
 struct Point {
@@ -52,8 +52,9 @@ struct Pong {
 
   u32 ballSpeed;
   u32 ballCounter;
+  u32 ballSpeedIncreaseOnHit;
 
-  void update(const App& app, u32 ticks);
+  void update(const App& app);
 };
 
 struct Game {
@@ -67,7 +68,7 @@ struct Game {
   void quit();
   void reset();
 
-  void update(const App& app, u32 ticks);
+  void update(const App& app);
   void render(App& app);
 };
 

@@ -8,7 +8,7 @@ struct GameAPI {
   Game* (*init)(App& app);
   void  (*quit)(Game* game);
   void  (*reset)(Game* game);
-  void  (*update)(Game* game, const App& app, u32 ticks);
+  void  (*update)(Game* game, const App& app);
   void  (*render)(Game* game, App& app);
 };
 

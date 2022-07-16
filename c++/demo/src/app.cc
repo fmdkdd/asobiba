@@ -1,7 +1,5 @@
 #include "app.h"
 
-#include <chrono>
-
 #include "game_api.h"
 
 #include <unistd.h>
@@ -37,30 +35,29 @@ static void sdl_die(const char *msg) {
 }
 
 void App::init() {
-  const u32 logical_width = 800;
-  const u32 logical_height = 450;
+  const u32 logicalWidth = 800;
+  const u32 logicalHeight = 450;
   const u32 scale = 1;
 
-  const u32 window_width = logical_width * scale;
-  const u32 window_height = logical_height * scale;
+  const u32 windowWidth = logicalWidth * scale;
+  const u32 windowHeight = logicalHeight * scale;
 
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0)
     sdl_die("Could not init SDL");
 
   window =
       SDL_CreateWindow("SDL demo", SDL_WINDOWPOS_UNDEFINED,
-                       SDL_WINDOWPOS_UNDEFINED, window_width, window_height, 0);
+                       SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight, 0);
   if (window == NULL)
     sdl_die("Could not create window");
 
-  renderer = SDL_CreateRenderer(
-      window, -1, SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED);
+  renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
   if (renderer == NULL)
     sdl_die("Could not create renderer");
 
   SDL_RenderSetScale(renderer, scale, scale);
   SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
-  SDL_RenderSetLogicalSize(renderer, logical_width, logical_height);
+  SDL_RenderSetLogicalSize(renderer, logicalWidth, logicalHeight);
 
   if (IMG_Init(IMG_INIT_PNG) == 0)
     sdl_die("Could not initialize IMG_PNG");
@@ -73,6 +70,8 @@ void App::init() {
   lastMousePosition.y = 0;
   memset(keyHeld, false, sizeof(keyHeld));
   memset(keyPreviousHeld, false, sizeof(keyPreviousHeld));
+
+  running = true;
 }
 
 void App::quit() {
@@ -84,83 +83,210 @@ void App::quit() {
   SDL_Quit();
 }
 
-void App::run() {
-  auto lastLoopTime = std::chrono::high_resolution_clock::now();
-  u32 updateClockUs = 0;
+u64 App::getHostRefreshRate() {
+  // SDL_GetCurrentDisplayMode isn't precise: e.g. reports 60Hz when display
+  // refreshes at 59.95.  We could probably measure this ourselves if such
+  // a difference is problematic.
 
-  while (true) {
-    swapInputState();
+  int displayIndex = SDL_GetWindowDisplayIndex(window);
+  if (displayIndex < 0) {
+    SDL_Log("Failed get window display index, defaulting to 0.");
+    displayIndex = 0;
+  }
+  SDL_DisplayMode current;
+  if (SDL_GetCurrentDisplayMode(displayIndex, &current) != 0) {
+    SDL_Log("Failed to query refresh rate, defaulting to 60Hz");
+    current.refresh_rate = 60;
+  }
 
-    SDL_Event e;
-    while (SDL_PollEvent(&e)) {
-      switch (e.type) {
-      case SDL_QUIT:
+  u64 hostRefreshRate = current.refresh_rate;
+  return hostRefreshRate;
+}
+
+void App::updateInputs() {
+  swapInputState();
+
+  SDL_Event e;
+  while (SDL_PollEvent(&e)) {
+    switch (e.type) {
+    case SDL_QUIT:
+      running = false;
+      return;
+
+    case SDL_KEYDOWN:
+      if (e.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+        running = false;
         return;
-      case SDL_KEYDOWN:
-        if (e.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
-          return;
+      }
 
 #ifdef HOT_RELOAD
-        if ((e.key.keysym.mod & KMOD_CTRL) && (e.key.keysym.sym == SDLK_r)) {
-          hotReloadCallback();
-          if (e.key.keysym.mod & KMOD_SHIFT)
-            gameLib->api.reset(gameLib->state);
-        }
+      if ((e.key.keysym.mod & KMOD_CTRL) && (e.key.keysym.sym == SDLK_r)) {
+        hotReloadCallback();
+        if (e.key.keysym.mod & KMOD_SHIFT)
+          gameLib->api.reset(gameLib->state);
+      }
 #endif
 
-        if (e.key.keysym.sym == SDLK_x || e.key.keysym.sym == SDLK_r ||
-            e.key.keysym.sym == SDLK_e || e.key.keysym.sym == SDLK_m)
-          updateKey(e.key.keysym.sym, false);
-        break;
+      if (e.key.keysym.sym == SDLK_x || e.key.keysym.sym == SDLK_r ||
+          e.key.keysym.sym == SDLK_e || e.key.keysym.sym == SDLK_m)
+        updateKey(e.key.keysym.sym, false);
+      break;
 
-      case SDL_KEYUP:
-        if (e.key.keysym.sym == SDLK_x || e.key.keysym.sym == SDLK_r ||
-            e.key.keysym.sym == SDLK_e || e.key.keysym.sym == SDLK_m)
-          updateKey(e.key.keysym.sym, true);
-        break;
+    case SDL_KEYUP:
+      if (e.key.keysym.sym == SDLK_x || e.key.keysym.sym == SDLK_r ||
+          e.key.keysym.sym == SDLK_e || e.key.keysym.sym == SDLK_m)
+        updateKey(e.key.keysym.sym, true);
+      break;
 
-      case SDL_MOUSEMOTION:
-        updateMousePosition(e.motion.x, e.motion.y);
-        break;
+    case SDL_MOUSEMOTION:
+      updateMousePosition(e.motion.x, e.motion.y);
+      break;
 
-      case SDL_MOUSEBUTTONDOWN:
-      case SDL_MOUSEBUTTONUP:
-        updateMouseButton(e.button.button, e.button.state);
-        break;
-      }
+    case SDL_MOUSEBUTTONDOWN:
+    case SDL_MOUSEBUTTONUP:
+      updateMouseButton(e.button.button, e.button.state);
+      break;
+
+    default:
+      break;
     }
+  }
+}
 
-    {
-      auto loopTime = std::chrono::high_resolution_clock::now();
-      std::chrono::duration<float, std::micro> loopDtUs =
-        (loopTime - lastLoopTime);
-      lastLoopTime = loopTime;
-      updateClockUs += static_cast<u32>(loopDtUs.count());
+void App::run() {
+  // The goal of all this is to ensure the gameplay it not drastically impacted
+  // by host refresh rate.  We favor frame presentation consistency over time
+  // keeping.  That is, we may run the game at very slightly different speeds on
+  // different monitors, in order to keep a consistent pattern of game updates
+  // and renders.
+  //
+  // Just the keeping track of the elapsed frame time in an accumulator quickly
+  // leads to an inconsistent pattern, because some frames may have a spike.  So
+  // instead we assume a constant host refresh rate, and derive a constant
+  // update rate from that.
+  //
+  // We use a fixed timestep of 480Hz, because it's small enough that we can fit
+  // at least one update and see the results at rates higher than 60Hz.  And at
+  // odd rates (144, 165), we are still making some progress so that we avoid
+  // duplicate frames.
+
+  static const s64 NANOS_PER_SECOND = 1000000000;
+
+  u64 updateCounter = 0;
+  const u64 updateRate = 480;
+  const u64 targetRefreshRate = getHostRefreshRate();
+  s64 lagAccumulator = 0;
+  const s64 targetRefreshRateNanos = NANOS_PER_SECOND / targetRefreshRate;
+  const s64 updateRateNanos = NANOS_PER_SECOND / updateRate;
+  u64 lastLoopTick = 0;
+
+  #if 0
+  u64 frameTimeHistory[128];
+  u64 frameTimeHistoryIndex = 0;
+  #endif
+
+  // Vsync is best to avoid tearing, but frame timings may be whack.
+  // That's one of the reason we do not rely on elapsed time to trigger
+  // updates.
+
+  bool useVsync = true;
+  if (useVsync) {
+    if (SDL_RenderSetVSync(renderer, 1) != 0) {
+      SDL_Log("Failed to enable vsync, continuing with vsync off");
+      useVsync = false;
+    }
+  } else {
+    if (SDL_RenderSetVSync(renderer, 0) != 0) {
+      SDL_Log("Failed to disable vsync, continuing with vsync on");
+      useVsync = true;
+    }
+  }
+
+  // If Vsync is off, we must back off to keep the target framerate.  But
+  // we still do not know exactly when the image is presented on the monitor.
+  // Our frame timings with vsync off may be more precise, but this does not
+  // necessarily mean that presented images are more regular.
+
+  bool fixupFrametime = !useVsync;
+  const u64 ticksPerFrame =
+      targetRefreshRateNanos * SDL_GetPerformanceFrequency() / NANOS_PER_SECOND;
+
+  const u64 perfFrequency = SDL_GetPerformanceFrequency();
+
+  while (running) {
+    u64 now = SDL_GetPerformanceCounter();
+
+    // Wrap-around, unlikely
+    if (now < lastLoopTick)
+      lastLoopTick = 0;
+
+    if (lastLoopTick == 0)
+      lastLoopTick = now;
+
+    s64 dt = now - lastLoopTick;
+    lastLoopTick = now;
+
+    if (dt > 0) {
+      s64 dtNanos = (dt * NANOS_PER_SECOND) / perfFrequency;
+      lagAccumulator += dtNanos;
+
+      // Stats for debugging
+      // TODO: graph overlay with update/render/frame times
+#if 0
       {
-        const u32 usPerTick = 1000;
-        const u32 ticks = updateClockUs / usPerTick;
-        updateClockUs -= ticks * usPerTick;
-        gameLib->api.update(gameLib->state, *this, ticks);
-      }
-    }
+        frameTimeHistory[frameTimeHistoryIndex] = dtNanos;
+        frameTimeHistoryIndex++;
+        if (frameTimeHistoryIndex == ARRAY_SIZE(frameTimeHistory))
+          frameTimeHistoryIndex = 0;
 
-    const bool isFullscreen =
-        SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN_DESKTOP;
+        double avgDtNs = 0;
+        for (usize i = 0; i < ARRAY_SIZE(frameTimeHistory); ++i)
+          avgDtNs += frameTimeHistory[i];
+        avgDtNs /= (double)ARRAY_SIZE(frameTimeHistory);
 
-    if (isFullscreen) {
-      if (button("Windowed", 16, 300)) {
-        SDL_SetWindowFullscreen(window, 0);
+        printf("lag=%16zd dt=%16zd avg=%16.3f fps=%8.2f (%3zu)  ",
+               lagAccumulator, dtNanos, avgDtNs, 1000000000.0 / avgDtNs,
+               targetRefreshRate);
       }
-    } else {
-      if (button("Fullscreen", 16, 300)) {
-        SDL_SetWindowFullscreen(window, SDL_WINDOW_FULLSCREEN_DESKTOP);
+      #endif
+
+      updateCounter += updateRate;
+
+      // Update inputs only if we are sure there's at least one game update,
+      // otherwise we may miss press/release events.
+      if (updateCounter >= targetRefreshRate) {
+        updateInputs();
+      }
+
+      while (updateCounter >= targetRefreshRate) {
+        updateCounter -= targetRefreshRate;
+        lagAccumulator -= updateRateNanos;
+        gameLib->api.update(gameLib->state, *this);
       }
     }
 
     gameLib->api.render(gameLib->state, *this);
     SDL_RenderPresent(renderer);
 
-    //usleep(16000);
+    if (fixupFrametime) {
+      u64 now = SDL_GetPerformanceCounter();
+      u64 targetEndTick = lastLoopTick + ticksPerFrame;
+
+      if (now < targetEndTick) {
+        u64 toEnd = targetEndTick - now;
+        u64 toEndNanos = toEnd * NANOS_PER_SECOND / perfFrequency;
+
+        static const u64 minSleepDurationNanos = 1000000;
+        if (toEndNanos > minSleepDurationNanos) {
+          u32 sleepMillis = (toEndNanos - minSleepDurationNanos) / 1000000;
+          SDL_Delay(sleepMillis);
+        }
+
+        while (SDL_GetPerformanceCounter() < targetEndTick) {
+          ;
+        }
+      }
+    }
   }
 }
 

@@ -43,6 +43,8 @@ struct App {
   SDL_Renderer *renderer;
   Font font;
 
+  bool running;
+
   GameLib *gameLib;
 
   void (*hotReloadCallback)();
@@ -59,6 +61,9 @@ struct App {
   void init();
   void run();
   void quit();
+
+  u64 getHostRefreshRate();
+  void updateInputs();
 
   void updateMousePosition(int x, int y) {
     lastMousePosition.x = x;

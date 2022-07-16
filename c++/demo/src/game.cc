@@ -14,10 +14,10 @@ void AnimatedSprite::drawAt(SDL_Renderer *renderer, u32 x, u32 y) {
   SDL_RenderCopy(renderer, spritesheet, &spriteRects[animationStep], &dst);
 }
 
-void AnimatedSprite::step(u32 ticks) {
-  animationStepCounter += ticks;
-  while (animationStepCounter >= animationSpeed) {
-    animationStepCounter -= animationSpeed;
+void AnimatedSprite::step() {
+  animationStepCounter += animationSpeed;
+  while (animationStepCounter >= 1000) {
+    animationStepCounter -= 1000;
     animationStep++;
     if (animationStep >= spriteRectsCount)
       animationStep = 0;
@@ -37,7 +37,7 @@ void Game::reset() {
   walkingLemming.spriteRectsCount = 7;
   walkingLemming.spriteRects =
       (SDL_Rect *)malloc(sizeof(SDL_Rect) * walkingLemming.spriteRectsCount);
-  walkingLemming.animationSpeed = 100;
+  walkingLemming.animationSpeed = 20;
   walkingLemming.animationStepCounter = 0;
   {
     SDL_Rect src;
@@ -65,13 +65,14 @@ void Game::reset() {
                pong.arena.y + (pong.arena.h / 2), 10, 10};
 
   pong.ballVelocity = {1, 1};
-  pong.ballSpeed = 10;
+  pong.ballSpeed = 200;
   pong.ballCounter = 0;
+  pong.ballSpeedIncreaseOnHit = 100;
 
-  pong.player1Speed = 3;
+  pong.player1Speed = 1000;
   pong.player1SpeedCounter = 0;
   pong.player1Velocity = 1;
-  pong.player2Speed = 3;
+  pong.player2Speed = 1000;
   pong.player2SpeedCounter = 0;
   pong.player2Velocity = 1;
 }
@@ -88,10 +89,10 @@ bool Rect::collideWith(Rect &other) const {
          y <= (other.y + other.h) && (y + h) >= other.y;
 }
 
-void Pong::update(const App &app, u32 ticks) {
-  player1SpeedCounter += ticks;
-  while (player1SpeedCounter >= player1Speed) {
-    player1SpeedCounter -= player1Speed;
+void Pong::update(const App &app) {
+  player1SpeedCounter += player1Speed;
+  while (player1SpeedCounter >= 1000) {
+    player1SpeedCounter -= 1000;
 
     if (app.isKeyHeld(KEY_PLAYER1_UP)) {
       player1Bat.y -= player1Velocity;
@@ -107,9 +108,9 @@ void Pong::update(const App &app, u32 ticks) {
     }
   }
 
-  player2SpeedCounter += ticks;
-  while (player2SpeedCounter >= player2Speed) {
-    player2SpeedCounter -= player2Speed;
+  player2SpeedCounter += player2Speed;
+  while (player2SpeedCounter >= 1000) {
+    player2SpeedCounter -= 1000;
 
     if (app.isKeyHeld(KEY_PLAYER2_UP)) {
       player2Bat.y -= player2Velocity;
@@ -125,9 +126,9 @@ void Pong::update(const App &app, u32 ticks) {
     }
   }
 
-  ballCounter += ticks;
-  while (ballCounter >= ballSpeed) {
-    ballCounter -= ballSpeed;
+  ballCounter += ballSpeed;
+  while (ballCounter >= 1000) {
+    ballCounter -= 1000;
 
     ball.x += ballVelocity.x;
     ball.y += ballVelocity.y;
@@ -152,21 +153,23 @@ void Pong::update(const App &app, u32 ticks) {
     if (ball.collideWith(player1Bat)) {
       ball.x = player1Bat.x + player1Bat.w;
       ballVelocity.x = -ballVelocity.x;
+      ballSpeed += ballSpeedIncreaseOnHit;
     }
-    if  (ball.collideWith(player2Bat)) {
+    if (ball.collideWith(player2Bat)) {
       ball.x = player2Bat.x - ball.w;
       ballVelocity.x = -ballVelocity.x;
+      ballSpeed += ballSpeedIncreaseOnHit;
     }
   }
 }
 
-void Game::update(const App &app, u32 ticks) {
+void Game::update(const App &app) {
   for (usize i = 0; i < ARRAY_SIZE(lemmings); ++i) {
-    lemmings[i].step(ticks);
+    lemmings[i].step();
   }
 
   // Pong
-  pong.update(app, ticks);
+  pong.update(app);
 }
 
 void Game::render(App &app) {
@@ -231,10 +234,7 @@ void gameQuit(Game *game) {
 }
 
 void gameReset(Game *game) { game->reset(); }
-
-void gameUpdate(Game *game, const App &app, u32 ticks) {
-  game->update(app, ticks);
-}
+void gameUpdate(Game *game, const App &app) { game->update(app); }
 void gameRender(Game *game, App &app) { game->render(app); }
 
 const GameAPI GAME_API = {
