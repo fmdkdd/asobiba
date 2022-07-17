@@ -3,33 +3,12 @@
 #include "game_api.h"
 
 #include "imgui.h"
+#include "imgui_impl_opengl2.h"
 #include "imgui_impl_sdl.h"
-#include "imgui_impl_opengl3.h"
 
-static const char *FONT_CHARS =
-    " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`-=[]\\;',."
-    "/~!@#$%^&*()_+{}|:\"<>?";
-
-void Font::init(const App &app, const char *file, int width, int height,
-                const char *charMapping, usize charMappingLength) {
-  this->height = height;
-  this->width = width;
-  //this->texture = SDL_CreateTextureFromSurface(app.renderer, SDL_LoadBMP(file));
-  memset(charIndex, 0, sizeof(charIndex));
-  for (usize i = 0; i < charMappingLength; ++i) {
-    unsigned char c = charMapping[i];
-    charIndex[c] = (u8)i;
-  }
-}
-
-void Font::quit() { SDL_DestroyTexture(texture); }
-
-void Font::draw(App &app, unsigned char c, int x, int y) {
-  int i = charIndex[c];
-  SDL_Rect src = {i * width, 0, width, height};
-  SDL_Rect dst = {x, y, width, height};
-  //SDL_RenderCopy(app.renderer, texture, &src, &dst);
-}
+// TODO:
+// - Fix sprites
+// - graph overlay with update/render/frame times
 
 static void sdl_die(const char *msg) {
   SDL_Log("%s: %s\n", msg, SDL_GetError());
@@ -37,22 +16,18 @@ static void sdl_die(const char *msg) {
 }
 
 void App::init() {
-  const u32 logicalWidth = 800;
-  const u32 logicalHeight = 450;
-  const u32 scale = 1;
+  logicalWidth = 800;
+  logicalHeight = 450;
 
-  const u32 windowWidth = logicalWidth * scale;
-  const u32 windowHeight = logicalHeight * scale;
+  const u32 windowWidth = logicalWidth;
+  const u32 windowHeight = logicalHeight;
 
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0)
     sdl_die("Could not init SDL");
 
-  // GL 3.0 + GLSL 130
-  const char *glslVersion = "#version 130";
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+  // GL 2.1
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 1);
 
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
   SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
@@ -76,30 +51,24 @@ void App::init() {
   if (IMG_Init(IMG_INIT_PNG) == 0)
     sdl_die("Could not initialize IMG_PNG");
 
-  font.init(*this, "data/font.bmp", 9, 16, FONT_CHARS, strlen(FONT_CHARS));
+  controls.init();
+  gfx.init(controls);
 
-  memset(mouseButtonHeld, false, sizeof(mouseButtonHeld));
-  memset(mouseButtonPreviousHeld, false, sizeof(mouseButtonPreviousHeld));
-  lastMousePosition.x = 0;
-  lastMousePosition.y = 0;
-  memset(keyHeld, false, sizeof(keyHeld));
-  memset(keyPreviousHeld, false, sizeof(keyPreviousHeld));
-
-  initImGui(glslVersion);
+  initImGui();
 
   running = true;
 }
 
-void App::initImGui(const char* glslVersion) {
+void App::initImGui() {
   ImGui::CreateContext();
   ImGui::StyleColorsDark();
 
   ImGui_ImplSDL2_InitForOpenGL(window, glContext);
-  ImGui_ImplOpenGL3_Init(glslVersion);
+  ImGui_ImplOpenGL2_Init();
 }
 
 void App::quitImGui() {
-  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplOpenGL2_Shutdown();
   ImGui_ImplSDL2_Shutdown();
   ImGui::DestroyContext();
 }
@@ -107,7 +76,8 @@ void App::quitImGui() {
 void App::quit() {
   quitImGui();
 
-  font.quit();
+  gfx.quit();
+  controls.quit();
 
   IMG_Quit();
 
@@ -137,7 +107,7 @@ u64 App::getHostRefreshRate() {
 }
 
 void App::updateInputs() {
-  swapInputState();
+  controls.swapInputState();
 
   SDL_Event e;
   while (SDL_PollEvent(&e)) {
@@ -165,22 +135,25 @@ void App::updateInputs() {
 
       if (e.key.keysym.sym == SDLK_x || e.key.keysym.sym == SDLK_r ||
           e.key.keysym.sym == SDLK_e || e.key.keysym.sym == SDLK_m)
-        updateKey(e.key.keysym.sym, false);
+        controls.updateKey(e.key.keysym.sym, false);
       break;
 
     case SDL_KEYUP:
       if (e.key.keysym.sym == SDLK_x || e.key.keysym.sym == SDLK_r ||
           e.key.keysym.sym == SDLK_e || e.key.keysym.sym == SDLK_m)
-        updateKey(e.key.keysym.sym, true);
+        controls.updateKey(e.key.keysym.sym, true);
       break;
 
     case SDL_MOUSEMOTION:
-      updateMousePosition(e.motion.x, e.motion.y);
+      controls.updateScreenMousePosition(e.motion.x, displayHeight - e.motion.y);
+      controls.updateLogicalMousePosition(
+          (float)e.motion.x * logicalWidth / displayWidth,
+          (float)(displayHeight - e.motion.y) * logicalHeight / displayHeight);
       break;
 
     case SDL_MOUSEBUTTONDOWN:
     case SDL_MOUSEBUTTONUP:
-      updateMouseButton(e.button.button, e.button.state);
+      controls.updateMouseButton(e.button.button, e.button.state);
       break;
 
     default:
@@ -262,12 +235,13 @@ void App::run() {
     s64 dt = now - lastLoopTick;
     lastLoopTick = now;
 
+    SDL_GL_GetDrawableSize(window, (int*)&displayWidth, (int*)&displayHeight);
+
     if (dt > 0) {
       s64 dtNanos = (dt * NANOS_PER_SECOND) / perfFrequency;
       lagAccumulator += dtNanos;
 
       // Stats for debugging
-      // TODO: graph overlay with update/render/frame times
 #if 0
       {
         frameTimeHistory[frameTimeHistoryIndex] = dtNanos;
@@ -297,17 +271,22 @@ void App::run() {
       while (updateCounter >= targetRefreshRate) {
         updateCounter -= targetRefreshRate;
         lagAccumulator -= updateRateNanos;
-        gameLib->api.update(gameLib->state, *this);
+        gameLib->api.update(gameLib->state, controls);
       }
     }
 
     {
-      int displayWidth, displayHeight;
-      SDL_GL_GetDrawableSize(window, &displayWidth, &displayHeight);
       glViewport(0, 0, displayWidth, displayHeight);
+
+      glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+      glEnable(GL_BLEND);
+
+      glMatrixMode(GL_PROJECTION);
+      glLoadIdentity();
+      glOrtho(0, logicalWidth, 0, logicalHeight, 0.0f, 1.0f);
     }
 
-    gameLib->api.render(gameLib->state, *this);
+    gameLib->api.render(gameLib->state, gfx);
     drawImGui();
     SDL_GL_SwapWindow(window);
 
@@ -333,53 +312,16 @@ void App::run() {
   }
 }
 
-u32 App::text(const char *s, int x, int y) {
-  const u32 charWidth = font.width - 2;
-  u32 pos = x;
-
-  for (usize i = 0; s[i] != '\0'; ++i) {
-    font.draw(*this, s[i], pos, y);
-    pos += charWidth;
-  }
-
-  return pos - x + 1;
-}
-
-SDL_Rect App::boxedText(const char *s, u32 x, u32 y) {
-  const u32 textWidth = text(s, x, y);
-
-  const u32 textHeight = font.height;
-  const u32 leftMargin = 2;
-  const u32 topMargin = 2;
-  const u32 rightMargin = 2;
-  const u32 bottomMargin = 2;
-  const int box_x = x - leftMargin;
-  const int box_y = y - topMargin;
-  const int box_w = leftMargin + textWidth + rightMargin;
-  const int box_h = topMargin + textHeight + bottomMargin;
-  drawRect(box_x, box_y, box_w, box_h);
-
-  return SDL_Rect{box_x, box_y, box_w, box_h};
-}
-
-bool App::button(const char *s, u32 x, u32 y) {
-  SDL_Rect box = boxedText(s, x, y);
-
-  bool clicked = isMouseButtonHeld(SDL_BUTTON_LEFT) &&
-                 SDL_PointInRect(&lastMousePosition, &box);
-
-  return clicked;
-}
-
 void App::drawImGui() {
-  ImGuiIO& io = ImGui::GetIO();
+  ImGuiIO &io = ImGui::GetIO();
+  UNUSED(io);
 
-  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplOpenGL2_NewFrame();
   ImGui_ImplSDL2_NewFrame();
   ImGui::NewFrame();
 
   ImGui::Text("This is some useful text.");
 
   ImGui::Render();
-  ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+  ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
 }

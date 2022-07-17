@@ -28,7 +28,7 @@ add_library(imgui
   deps/imgui/imgui_draw.cpp
   deps/imgui/imgui_tables.cpp
   deps/imgui/imgui_widgets.cpp
-  deps/imgui/backends/imgui_impl_opengl3.cpp
+  deps/imgui/backends/imgui_impl_opengl2.cpp
   deps/imgui/backends/imgui_impl_sdl.cpp)
 
 target_include_directories(imgui
@@ -41,10 +41,11 @@ target_include_directories(imgui
 # Game library
 
 set(GAME_SRC_FILES
-  src/app.h
-  src/app.cc
   src/game.h
   src/game.cc
+  src/gfx.h
+  src/gfx.cc
+  src/vec.h
   )
 
 if (HOT_RELOAD)
@@ -63,16 +64,19 @@ if (HOT_RELOAD)
   endif()
 endif()
 
-target_link_libraries(game PRIVATE imgui)
-
 # Binary
 
 set(SOURCE_FILES
   src/app.h
   src/app.cc
+  src/controls.h
+  src/controls.cc
   src/main.cc
   src/game_api.h
+  src/gfx.h
+  src/gfx.cc
   src/utils.h
+  src/vec.h
   )
 
 if (HOT_RELOAD)

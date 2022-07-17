@@ -1,12 +1,12 @@
 #ifndef GAME_H
 #define GAME_H
 
-#include <chrono>
-
 #include <SDL2/SDL.h>
+
 #include "utils.h"
 
-struct App;
+struct Controls;
+struct Gfx;
 
 struct AnimatedSprite {
   SDL_Texture *spritesheet;
@@ -32,7 +32,7 @@ struct Rect {
   s32 w;
   s32 h;
 
-  bool collideWith(Rect& other) const;
+  bool collideWith(Rect &other) const;
 };
 
 struct Pong {
@@ -54,22 +54,22 @@ struct Pong {
   u32 ballCounter;
   u32 ballSpeedIncreaseOnHit;
 
-  void update(const App& app);
+  void update(const Controls &controls);
 };
 
 struct Game {
-  SDL_Texture* lemmingsSpritesheet;
+  SDL_Texture *lemmingsSpritesheet;
 
   AnimatedSprite lemmings[10];
 
   Pong pong;
 
-  void init(App& app);
+  void init(Gfx &gfx);
   void quit();
   void reset();
 
-  void update(const App& app);
-  void render(App& app);
+  void update(const Controls &controls);
+  void render(Gfx &gfx);
 };
 
 #endif

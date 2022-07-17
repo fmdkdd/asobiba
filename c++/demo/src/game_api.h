@@ -1,15 +1,16 @@
 #ifndef GAME_API_H
 #define GAME_API_H
 
-struct App;
+struct Controls;
+struct Gfx;
 struct Game;
 
 struct GameAPI {
-  Game* (*init)(App& app);
+  Game* (*init)(Gfx& gfx);
   void  (*quit)(Game* game);
   void  (*reset)(Game* game);
-  void  (*update)(Game* game, const App& app);
-  void  (*render)(Game* game, App& app);
+  void  (*update)(Game* game, const Controls& controls);
+  void  (*render)(Game* game, Gfx& gfx);
 };
 
 struct GameLib {

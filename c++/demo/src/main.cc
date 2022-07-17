@@ -37,12 +37,15 @@ int main() {
   app.init();
 
   GameLib gameLib;
+  gameLib.handle = NULL;
+  gameLib.state = NULL;
+
 #ifdef HOT_RELOAD
   reloadGame(gameLib);
 #else
   gameLib.api = GAME_API;
 #endif
-  gameLib.state = gameLib.api.init(app);
+  gameLib.state = gameLib.api.init(app.gfx);
 
 #ifdef HOT_RELOAD
   gGameLib = &gameLib;
@@ -59,14 +62,3 @@ int main() {
 
   return EXIT_SUCCESS;
 }
-
-// TODO:
-// - Game states: menu -> game -> pause -> exit
-// - Menu with 50% alpha overlay
-// - ImGui integration
-// - Screen shake
-// - Drag&drop
-// - Dialog boxes
-// - Do not structure too much in order to leave
-//   maximum flexiblity for prototyping (no framework)
-// - UI animations?

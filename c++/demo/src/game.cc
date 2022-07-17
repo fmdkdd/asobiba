@@ -1,6 +1,9 @@
 #include "game.h"
 
-#include "app.h"
+#include <chrono>
+
+#include "controls.h"
+#include "gfx.h"
 #include "game_api.h"
 #include "utils.h"
 
@@ -11,7 +14,7 @@ void AnimatedSprite::drawAt(SDL_GLContext gl, u32 x, u32 y) {
   dst.w = 40;
   dst.h = 40;
   ASSERT(animationStep < spriteRectsCount);
-  //SDL_RenderCopy(renderer, spritesheet, &spriteRects[animationStep], &dst);
+  // SDL_RenderCopy(renderer, spritesheet, &spriteRects[animationStep], &dst);
 }
 
 void AnimatedSprite::step() {
@@ -24,8 +27,8 @@ void AnimatedSprite::step() {
   }
 }
 
-void Game::init(App &app) {
-  lemmingsSpritesheet = app.loadImage("data/lemmings-spritesheet.png");
+void Game::init(Gfx &gfx) {
+  //lemmingsSpritesheet = gfx.loadImage("data/lemmings-spritesheet.png");
 
   reset();
 }
@@ -89,15 +92,15 @@ bool Rect::collideWith(Rect &other) const {
          y <= (other.y + other.h) && (y + h) >= other.y;
 }
 
-void Pong::update(const App &app) {
+void Pong::update(const Controls &controls) {
   player1SpeedCounter += player1Speed;
   while (player1SpeedCounter >= 1000) {
     player1SpeedCounter -= 1000;
 
-    if (app.isKeyHeld(KEY_PLAYER1_UP)) {
-      player1Bat.y -= player1Velocity;
-    } else if (app.isKeyHeld(KEY_PLAYER1_DOWN)) {
+    if (controls.isKeyHeld(KEY_PLAYER1_UP)) {
       player1Bat.y += player1Velocity;
+    } else if (controls.isKeyHeld(KEY_PLAYER1_DOWN)) {
+      player1Bat.y -= player1Velocity;
     }
 
     if (player1Bat.y < arena.y) {
@@ -112,10 +115,10 @@ void Pong::update(const App &app) {
   while (player2SpeedCounter >= 1000) {
     player2SpeedCounter -= 1000;
 
-    if (app.isKeyHeld(KEY_PLAYER2_UP)) {
-      player2Bat.y -= player2Velocity;
-    } else if (app.isKeyHeld(KEY_PLAYER2_DOWN)) {
+    if (controls.isKeyHeld(KEY_PLAYER2_UP)) {
       player2Bat.y += player2Velocity;
+    } else if (controls.isKeyHeld(KEY_PLAYER2_DOWN)) {
+      player2Bat.y -= player2Velocity;
     }
 
     if (player2Bat.y < arena.y) {
@@ -163,67 +166,66 @@ void Pong::update(const App &app) {
   }
 }
 
-void Game::update(const App &app) {
+void Game::update(const Controls &controls) {
   for (usize i = 0; i < ARRAY_SIZE(lemmings); ++i) {
     lemmings[i].step();
   }
 
   // Pong
-  pong.update(app);
+  pong.update(controls);
 }
 
-void Game::render(App &app) {
+void Game::render(Gfx &gfx) {
+  const Controls& controls = *gfx.controls;
+
   static std::chrono::time_point<std::chrono::high_resolution_clock> last_frame;
   auto now = std::chrono::high_resolution_clock::now();
   auto dt = now - last_frame;
   last_frame = now;
   double dt_ms = (double)std::chrono::nanoseconds(dt).count() / 1000000;
 
-  app.renderClear(ColorRGBA{30, 30, 30, 255});
+  clearScreen(ColorRGBA{30, 30, 30, 255});
 
-  app.setRenderDrawColor(ColorRGBA{255, 255, 255, 255});
+  setDrawColor(ColorRGBA{255, 255, 255, 255});
 
-  app.text("Hello!", 16, 16);
+  gfx.text("Hello!", 16, 420);
 
-  app.boxedText("I'm a text box", 16, 48);
+  gfx.boxedText("I'm a text box", 16, 400);
 
   char buf[256];
   snprintf(buf, sizeof(buf), "Frame time: %fs", dt_ms);
-  app.text(buf, 160, 20);
+  gfx.text(buf, 160, 400);
 
-  int mouse_x;
-  int mouse_y;
-  SDL_GetMouseState(&mouse_x, &mouse_y);
-  snprintf(buf, sizeof(buf), "mouse: x: %d y: %d", mouse_x, mouse_y);
-  app.text(buf, 160, 40);
+  snprintf(buf, sizeof(buf), "screen mouse: x: %d y: %d", controls.lastScreenMousePosition.x, controls.lastScreenMousePosition.y);
+  gfx.text(buf, 140, 380);
 
   snprintf(buf, sizeof(buf), "logical mouse: x: %d y: %d",
-           app.lastMousePosition.x, app.lastMousePosition.y);
-  app.text(buf, 120, 80);
+           controls.lastLogicalMousePosition.x, controls.lastLogicalMousePosition.y);
+  gfx.text(buf, 130, 360);
 
-  app.drawRect(app.lastMousePosition.x, app.lastMousePosition.y, 10, 10);
+  drawRect(controls.lastLogicalMousePosition.x, controls.lastLogicalMousePosition.y, 10, 10);
 
-  if (app.button("And I'm a super button", 16, 128)) {
-    app.text("Stop clicking!", 16, 144);
+  if (gfx.button("And I'm a button", 16, 328)) {
+    gfx.text("Stop clicking!", 16, 310);
   }
 
   for (int i = 0; i < 10; ++i) {
-    lemmings[i].drawAt(app.glContext, 10 + 20 * i, 200);
+    //lemmings[i].drawAt(gfx.glContext, 10 + 20 * i, 200);
   }
 
   // Pong
-  app.drawRect(pong.arena.x, pong.arena.y, pong.arena.w, pong.arena.h);
-  app.fillRect(pong.player1Bat.x, pong.player1Bat.y, pong.player1Bat.w,
+  drawRect(pong.arena.x, pong.arena.y, pong.arena.w, pong.arena.h);
+  fillRect(pong.player1Bat.x, pong.player1Bat.y, pong.player1Bat.w,
                pong.player1Bat.h);
-  app.fillRect(pong.player2Bat.x, pong.player2Bat.y, pong.player2Bat.w,
+  fillRect(pong.player2Bat.x, pong.player2Bat.y, pong.player2Bat.w,
                pong.player2Bat.h);
-  app.fillRect(pong.ball.x, pong.ball.y, pong.ball.w, pong.ball.h);
+  fillRect(pong.ball.x, pong.ball.y, pong.ball.w, pong.ball.h);
 }
 
-Game *gameInit(App &app) {
+Game *gameInit(Gfx &gfx) {
   Game *game = (Game *)malloc(sizeof(Game));
   ENSURE(game != NULL);
-  game->init(app);
+  game->init(gfx);
   return game;
 }
 
@@ -233,8 +235,8 @@ void gameQuit(Game *game) {
 }
 
 void gameReset(Game *game) { game->reset(); }
-void gameUpdate(Game *game, const App &app) { game->update(app); }
-void gameRender(Game *game, App &app) { game->render(app); }
+void gameUpdate(Game *game, const Controls &controls) { game->update(controls); }
+void gameRender(Game *game, Gfx &gfx) { game->render(gfx); }
 
 const GameAPI GAME_API = {
     gameInit, gameQuit, gameReset, gameUpdate, gameRender,
