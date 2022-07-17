@@ -1,4 +1,5 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_image.h>
 #include <SDL2/SDL_opengl.h>
 
 #include "gfx.h"
@@ -6,16 +7,9 @@
 #include "controls.h"
 #include "vec.h"
 
-static const char *FONT_CHARS =
-    " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`-=[]\\;',."
-    "/~!@#$%^&*()_+{}|:\"<>?";
-
-void Font::init(const char *file, int charWidth, int charHeight,
-                const char *charMapping, usize charMappingLength) {
-  SDL_Surface *surface = SDL_LoadBMP(file);
-
-  glGenTextures(1, &texture);
-  glBindTexture(GL_TEXTURE_2D, texture);
+void Texture::init(SDL_Surface *surface) {
+  glGenTextures(1, &textureId);
+  glBindTexture(GL_TEXTURE_2D, textureId);
 
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surface->w, surface->h, 0, GL_RGBA,
                GL_UNSIGNED_BYTE, surface->pixels);
@@ -24,10 +18,24 @@ void Font::init(const char *file, int charWidth, int charHeight,
 
   glBindTexture(GL_TEXTURE_2D, 0);
 
+  width = surface->w;
+  height = surface->h;
+}
+
+void Texture::quit() {
+  glDeleteTextures(1, &textureId);
+}
+
+static const char *FONT_CHARS =
+    " ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789`-=[]\\;',."
+    "/~!@#$%^&*()_+{}|:\"<>?";
+
+void Font::init(const char *file, int charWidth, int charHeight,
+                const char *charMapping, usize charMappingLength) {
+  texture.init(SDL_LoadBMP(file));
+
   this->charHeight = charHeight;
   this->charWidth = charWidth;
-  this->texWidth = surface->w;
-  this->texHeight = surface->h;
 
   memset(charIndex, 0, sizeof(charIndex));
   for (usize i = 0; i < charMappingLength; ++i) {
@@ -36,15 +44,15 @@ void Font::init(const char *file, int charWidth, int charHeight,
   }
 }
 
-void Font::quit() { glDeleteTextures(1, &texture); }
+void Font::quit() { texture.quit(); }
 
 void Font::drawCharAt(unsigned char c, int x, int y) {
   int i = charIndex[c];
 
   SDL_Rect src = {i * charWidth, 0, charWidth, charHeight};
 
-  float tw = (float)texWidth;
-  float th = (float)texHeight;
+  float tw = (float)texture.width;
+  float th = (float)texture.height;
 
   float u0 = src.x / tw;
   float u1 = (src.x + src.w) / tw;
@@ -52,7 +60,7 @@ void Font::drawCharAt(unsigned char c, int x, int y) {
   float v1 = src.h / th;
 
   glEnable(GL_TEXTURE_2D);
-  glBindTexture(GL_TEXTURE_2D, texture);
+  glBindTexture(GL_TEXTURE_2D, texture.textureId);
 
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
@@ -72,6 +80,52 @@ void Font::drawCharAt(unsigned char c, int x, int y) {
 
   glBindTexture(GL_TEXTURE_2D, 0);
   glDisable(GL_TEXTURE_2D);
+}
+
+void AnimatedSprite::drawAt(u32 x, u32 y) {
+  ASSERT(animationStep < spriteRectsCount);
+
+  Recti& src = spriteRects[animationStep];
+
+  float tw = (float)spritesheet->width;
+  float th = (float)spritesheet->height;
+
+  float u0 = src.x / tw;
+  float u1 = (src.x + src.w) / tw;
+  float v0 = src.y / tw;
+  float v1 = (src.y + src.h) / th;
+
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, spritesheet->textureId);
+
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+  glTranslatef(x, y, 0.0f);
+  glScalef(40.0f, 40.0f, 0.0f);
+
+  glBegin(GL_QUADS);
+  glTexCoord2f(u0, v0);
+  glVertex2f(0.0f, 1.0f);
+  glTexCoord2f(u1, v0);
+  glVertex2f(1.0f, 1.0f);
+  glTexCoord2f(u1, v1);
+  glVertex2f(1.0f, 0.0f);
+  glTexCoord2f(u0, v1);
+  glVertex2f(0.0f, 0.0f);
+  glEnd();
+
+  glBindTexture(GL_TEXTURE_2D, 0);
+  glDisable(GL_TEXTURE_2D);
+}
+
+void AnimatedSprite::step() {
+  animationStepCounter += animationSpeed;
+  while (animationStepCounter >= 1000) {
+    animationStepCounter -= 1000;
+    animationStep++;
+    if (animationStep >= spriteRectsCount)
+      animationStep = 0;
+  }
 }
 
 void Gfx::init(const Controls &controls) {
@@ -118,6 +172,12 @@ bool Gfx::button(const char *s, u32 x, u32 y) {
                  SDL_PointInRect(&controls->lastLogicalMousePosition, &box);
 
   return clicked;
+}
+
+void Gfx::loadImage(const char* path, Texture* texture) {
+  SDL_Surface *surface = IMG_Load(path);
+  ENSURE(surface != NULL);
+  texture->init(surface);
 }
 
 void drawCircle(Vec2f center, float radius, u32 pointCount) {

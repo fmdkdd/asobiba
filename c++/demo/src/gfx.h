@@ -15,12 +15,19 @@ struct ColorRGBA {
   u8 a;
 };
 
+struct Texture {
+  GLuint textureId;
+  int width;
+  int height;
+
+  void init(SDL_Surface *surface);
+  void quit();
+};
+
 struct Font {
-  GLuint texture;
+  Texture texture;
   int charWidth;
   int charHeight;
-  int texWidth;
-  int texHeight;
   u8 charIndex[256];
 
   void init(const char *file, int width, int height, const char *mapping,
@@ -28,6 +35,19 @@ struct Font {
   void quit();
 
   void drawCharAt(unsigned char c, int x, int y);
+};
+
+struct AnimatedSprite {
+  Texture *spritesheet;
+  Recti *spriteRects;
+  usize spriteRectsCount;
+
+  u32 animationStep;
+  u32 animationSpeed;
+  u32 animationStepCounter;
+
+  void drawAt(u32 x, u32 y);
+  void step();
 };
 
 struct Gfx {
@@ -40,6 +60,8 @@ struct Gfx {
   u32 text(const char *s, int x, int y);
   SDL_Rect boxedText(const char *s, u32 x, u32 y);
   bool button(const char *s, u32 x, u32 y);
+
+  void loadImage(const char* path, Texture* texture);
 };
 
 void clearScreen(ColorRGBA c);

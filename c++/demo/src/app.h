@@ -40,15 +40,6 @@ struct App {
 
   u64 getHostRefreshRate();
   void updateInputs();
-
-#if 0
-  SDL_Texture *loadImage(const char *path) {
-    // SDL_Surface *surface = IMG_Load(path);
-    // ENSURE(surface != NULL);
-    // return SDL_CreateTextureFromSurface(renderer, surface);
-    return NULL;
-  }
-#endif
 };
 
 #endif

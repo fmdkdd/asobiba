@@ -3,43 +3,16 @@
 
 #include <SDL2/SDL.h>
 
-#include "utils.h"
+#include "gfx.h"
+#include "vec.h"
 
 struct Controls;
-struct Gfx;
-
-struct AnimatedSprite {
-  SDL_Texture *spritesheet;
-  SDL_Rect *spriteRects;
-  u32 spriteRectsCount;
-
-  u32 animationStep;
-  u32 animationSpeed;
-  u32 animationStepCounter;
-
-  void drawAt(SDL_GLContext gl, u32 x, u32 y);
-  void step();
-};
-
-struct Point {
-  s32 x;
-  s32 y;
-};
-
-struct Rect {
-  s32 x;
-  s32 y;
-  s32 w;
-  s32 h;
-
-  bool collideWith(Rect &other) const;
-};
 
 struct Pong {
-  Rect arena;
-  Rect player1Bat;
-  Rect player2Bat;
-  Rect ball;
+  Recti arena;
+  Recti player1Bat;
+  Recti player2Bat;
+  Recti ball;
 
   s32 player1Velocity;
   u32 player1Speed;
@@ -48,7 +21,7 @@ struct Pong {
   u32 player2Speed;
   u32 player2SpeedCounter;
 
-  Point ballVelocity;
+  Vec2i ballVelocity;
 
   u32 ballSpeed;
   u32 ballCounter;
@@ -58,7 +31,7 @@ struct Pong {
 };
 
 struct Game {
-  SDL_Texture *lemmingsSpritesheet;
+  Texture lemmingsSpritesheet;
 
   AnimatedSprite lemmings[10];
 

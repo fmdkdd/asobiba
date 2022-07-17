@@ -7,7 +7,6 @@
 #include "imgui_impl_sdl.h"
 
 // TODO:
-// - Fix sprites
 // - graph overlay with update/render/frame times
 
 static void sdl_die(const char *msg) {

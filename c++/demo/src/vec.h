@@ -111,4 +111,17 @@ struct Rectf {
   Rectf(float x, float y, float w, float h) : x(x), y(y), w(w), h(h) {}
 };
 
+struct Recti {
+  s32 x, y;
+  s32 w, h;
+
+  Recti() : x(0), y(0), w(0), h(0) {}
+  Recti(s32 x, s32 y, s32 w, s32 h) : x(x), y(y), w(w), h(h) {}
+
+  bool intersectsWith(Recti &other) const {
+    return x <= (other.x + other.w) && (x + w) >= other.x &&
+      y <= (other.y + other.h) && (y + h) >= other.y;
+  }
+};
+
 #endif
