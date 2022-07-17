@@ -6,9 +6,6 @@
 #include "imgui_impl_opengl2.h"
 #include "imgui_impl_sdl.h"
 
-// TODO:
-// - graph overlay with update/render/frame times
-
 static void sdl_die(const char *msg) {
   SDL_Log("%s: %s\n", msg, SDL_GetError());
   exit(1);
@@ -64,6 +61,10 @@ void App::initImGui() {
 
   ImGui_ImplSDL2_InitForOpenGL(window, glContext);
   ImGui_ImplOpenGL2_Init();
+
+  frameTimeHistory.init();
+  updateTimeHistory.init();
+  renderTimeHistory.init();
 }
 
 void App::quitImGui() {
@@ -188,11 +189,6 @@ void App::run() {
   const s64 updateRateNanos = NANOS_PER_SECOND / updateRate;
   u64 lastLoopTick = 0;
 
-#if 0
-  u64 frameTimeHistory[128];
-  u64 frameTimeHistoryIndex = 0;
-#endif
-
   // Vsync is best to avoid tearing, but frame timings may be whack.
   // That's one of the reason we do not rely on elapsed time to trigger
   // updates.
@@ -241,23 +237,11 @@ void App::run() {
       lagAccumulator += dtNanos;
 
       // Stats for debugging
-#if 0
-      {
-        frameTimeHistory[frameTimeHistoryIndex] = dtNanos;
-        frameTimeHistoryIndex++;
-        if (frameTimeHistoryIndex == ARRAY_SIZE(frameTimeHistory))
-          frameTimeHistoryIndex = 0;
+      frameTimeHistory.push((double)dtNanos / 1000000);
 
-        double avgDtNs = 0;
-        for (usize i = 0; i < ARRAY_SIZE(frameTimeHistory); ++i)
-          avgDtNs += frameTimeHistory[i];
-        avgDtNs /= (double)ARRAY_SIZE(frameTimeHistory);
-
-        printf("lag=%16zd dt=%16zd avg=%16.3f fps=%8.2f (%3zu)\n",
-               lagAccumulator, dtNanos, avgDtNs, 1000000000.0 / avgDtNs,
-               targetRefreshRate);
-      }
-#endif
+      // printf("lag=%16zd dt=%16zd avg=%16.3f fps=%8.2f (%3zu)\n",
+      //        lagAccumulator, dtNanos, avgDtNs, 1000.0 / avgDtNs,
+      //        targetRefreshRate);
 
       updateCounter += updateRate;
 
@@ -267,11 +251,17 @@ void App::run() {
         updateInputs();
       }
 
+      u64 startUpdate = SDL_GetPerformanceCounter();
+
       while (updateCounter >= targetRefreshRate) {
         updateCounter -= targetRefreshRate;
         lagAccumulator -= updateRateNanos;
         gameLib->api.update(gameLib->state, controls);
       }
+
+      u64 endUpdate = SDL_GetPerformanceCounter();
+      u64 updateTime = (endUpdate - startUpdate) * NANOS_PER_SECOND / perfFrequency;
+      updateTimeHistory.push((double)updateTime / 1000000);
     }
 
     {
@@ -285,7 +275,14 @@ void App::run() {
       glOrtho(0, logicalWidth, 0, logicalHeight, 0.0f, 1.0f);
     }
 
-    gameLib->api.render(gameLib->state, gfx);
+    {
+      u64 startRender = SDL_GetPerformanceCounter();
+      gameLib->api.render(gameLib->state, gfx);
+      u64 endRender = SDL_GetPerformanceCounter();
+      u64 renderTime = (endRender - startRender) * NANOS_PER_SECOND / perfFrequency;
+      renderTimeHistory.push((double)renderTime / 1000000);
+    }
+
     drawImGui();
     SDL_GL_SwapWindow(window);
 
@@ -319,8 +316,48 @@ void App::drawImGui() {
   ImGui_ImplSDL2_NewFrame();
   ImGui::NewFrame();
 
-  ImGui::Text("This is some useful text.");
+  ImGui::Begin("Stats");
+
+  ImGui::PlotLines("Frametime", frameTimeHistory.values, frameTimeHistory.count, frameTimeHistory.index, NULL, 0, 18, ImVec2(0, 60));
+
+  ImGui::Text("Frametime avg=%.3f min=%.3f max=%.3f", frameTimeHistory.getAverage(),
+              frameTimeHistory.min, frameTimeHistory.max);
+
+  ImGui::PlotLines("Update time", updateTimeHistory.values, updateTimeHistory.count, updateTimeHistory.index, NULL, 0, 10, ImVec2(0, 20));
+    ImGui::PlotLines("Render time", renderTimeHistory.values, renderTimeHistory.count, renderTimeHistory.index, NULL, 0, 10, ImVec2(0, 20));
+
+  ImGui::End();
+
 
   ImGui::Render();
   ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
+}
+
+void StatHistory::init() {
+  count = 0;
+  index = 0;
+  min = 0;
+  max = 0;
+}
+
+void StatHistory::push(float value) {
+  values[index] = value;
+  index++;
+  if (index == ARRAY_SIZE(values))
+    index = 0;
+  if (count < ARRAY_SIZE(values))
+    count++;
+
+  if (value > max)
+    max = value;
+  if (value < min)
+    min = value;
+}
+
+float StatHistory::getAverage() const {
+  double avg = 0;
+  for (usize i = 0; i < count; ++i)
+    avg += values[i];
+  avg /= (double)count;
+  return (float)avg;
 }

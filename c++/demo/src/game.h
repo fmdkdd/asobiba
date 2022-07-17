@@ -26,6 +26,7 @@ struct Pong {
   u32 ballSpeed;
   u32 ballCounter;
   u32 ballSpeedIncreaseOnHit;
+  u32 ballSpeedMax;
 
   void update(const Controls &controls);
 };

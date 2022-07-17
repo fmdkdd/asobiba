@@ -47,6 +47,7 @@ void Game::reset() {
   pong.ballSpeed = 200;
   pong.ballCounter = 0;
   pong.ballSpeedIncreaseOnHit = 100;
+  pong.ballSpeedMax = 3000;
 
   pong.player1Speed = 1000;
   pong.player1SpeedCounter = 0;
@@ -128,11 +129,15 @@ void Pong::update(const Controls &controls) {
       ball.x = player1Bat.x + player1Bat.w;
       ballVelocity.x = -ballVelocity.x;
       ballSpeed += ballSpeedIncreaseOnHit;
+      if (ballSpeed >= ballSpeedMax)
+        ballSpeed = ballSpeedMax;
     }
     if (ball.intersectsWith(player2Bat)) {
       ball.x = player2Bat.x - ball.w;
       ballVelocity.x = -ballVelocity.x;
       ballSpeed += ballSpeedIncreaseOnHit;
+      if (ballSpeed >= ballSpeedMax)
+        ballSpeed = ballSpeedMax;
     }
   }
 }

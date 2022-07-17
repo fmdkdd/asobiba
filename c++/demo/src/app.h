@@ -11,12 +11,30 @@
 
 struct GameLib;
 
+struct StatHistory {
+  float values[1024];
+  usize count;
+  usize index;
+
+  float max;
+  float min;
+
+  void init();
+
+  void push(float value);
+  float getAverage() const;
+};
+
 struct App {
   u32 logicalWidth;
   u32 logicalHeight;
 
   u32 displayWidth;
   u32 displayHeight;
+
+  StatHistory frameTimeHistory;
+  StatHistory updateTimeHistory;
+  StatHistory renderTimeHistory;
 
   SDL_Window *window;
   SDL_GLContext glContext;
