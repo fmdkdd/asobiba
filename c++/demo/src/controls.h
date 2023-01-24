@@ -6,10 +6,14 @@
 #include "utils.h"
 
 enum Key {
+  KEY_IGNORED,
+
   KEY_PLAYER1_UP,
   KEY_PLAYER1_DOWN,
   KEY_PLAYER2_UP,
   KEY_PLAYER2_DOWN,
+
+  KEY_PAUSE,
 
   KEY_COUNT,
 };
@@ -39,10 +43,10 @@ struct Controls {
   }
 
   void swapInputState() {
-    for (usize i = 0; i < ARRAY_SIZE(mouseButtonHeld); ++i) {
+    for (usize i = 0; i < K_ARRAY_SIZE(mouseButtonHeld); ++i) {
       mouseButtonPreviousHeld[i] = mouseButtonHeld[i];
     }
-    for (usize i = 0; i < ARRAY_SIZE(keyHeld); ++i) {
+    for (usize i = 0; i < K_ARRAY_SIZE(keyHeld); ++i) {
       keyPreviousHeld[i] = keyHeld[i];
     }
   }
@@ -62,11 +66,15 @@ struct Controls {
 
   Key mapKeycodeToKey(SDL_Keycode keycode) const;
 
-  void updateKey(SDL_Keycode keycode, bool released) {
+  void onKeyUp(SDL_Keycode keycode) {
     Key key = mapKeycodeToKey(keycode);
-    if (released)
+    if (key != KEY_IGNORED)
       keyHeld[key] = false;
-    else
+  }
+
+  void onKeyDown(SDL_Keycode keycode) {
+    Key key = mapKeycodeToKey(keycode);
+    if (key != KEY_IGNORED)
       keyHeld[key] = true;
   }
 

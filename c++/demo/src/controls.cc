@@ -23,7 +23,9 @@ Key Controls::mapKeycodeToKey(SDL_Keycode keycode) const {
     return KEY_PLAYER2_UP;
   case SDLK_m:
     return KEY_PLAYER2_DOWN;
+  case SDLK_p:
+    return KEY_PAUSE;
   default:
-    UNREACHABLE();
+    return KEY_IGNORED;
   }
 }

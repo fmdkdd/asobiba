@@ -83,7 +83,7 @@ void Font::drawCharAt(unsigned char c, int x, int y) {
 }
 
 void AnimatedSprite::drawAt(u32 x, u32 y) {
-  ASSERT(animationStep < spriteRectsCount);
+  K_ASSERT(animationStep < spriteRectsCount);
 
   Recti& src = spriteRects[animationStep];
 
@@ -176,7 +176,7 @@ bool Gfx::button(const char *s, u32 x, u32 y) {
 
 void Gfx::loadImage(const char* path, Texture* texture) {
   SDL_Surface *surface = IMG_Load(path);
-  ENSURE(surface != NULL);
+  K_ENSURE(surface != NULL);
   texture->init(surface);
 }
 
@@ -196,7 +196,7 @@ void drawCircle(Vec2f center, float radius, u32 pointCount) {
 }
 
 void drawLine(Vec2f *points, usize pointCount, float width) {
-  ASSERT(pointCount > 1);
+  K_ASSERT(pointCount > 1);
 
   float lineWidth = width;
   glBegin(GL_TRIANGLES);
@@ -283,7 +283,7 @@ void drawRect(int x, int y, int w, int h) {
 
   glMatrixMode(GL_MODELVIEW);
   glLoadIdentity();
-  drawLine(points, ARRAY_SIZE(points), 0.5f);
+  drawLine(points, K_ARRAY_SIZE(points), 0.5f);
 }
 
 void fillRect(float x, float y, float w, float h) {

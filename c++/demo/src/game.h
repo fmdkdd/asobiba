@@ -31,12 +31,21 @@ struct Pong {
   void update(const Controls &controls);
 };
 
+enum class GameState {
+  Paused,
+  Running,
+};
+
 struct Game {
+  GameState state;
+
   Texture lemmingsSpritesheet;
 
   AnimatedSprite lemmings[10];
 
   Pong pong;
+
+  u64 time;
 
   void init(Gfx &gfx);
   void quit();
@@ -44,6 +53,7 @@ struct Game {
 
   void update(const Controls &controls);
   void render(Gfx &gfx);
+  void renderImGui();
 };
 
 #endif

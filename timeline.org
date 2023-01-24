@@ -16678,3 +16678,221 @@ This gives you an Emacs of whatever version.  Good stuff.  I don't think we can
 easily use it with our all-tools docker image though...  The alternative would
 be to setup a Github action that's the same as our all-tools image, but I prefer
 the reproducibility we have now.
+
+* [2022-08-11 jeu.]
+** Thinking about rewriting win32 games piecewise
+So let's say you have game.exe, and old win32 game, and you want to make some
+improvements upon it.  For starters, it's windows-only, so you want to make it
+more portable by substituting the win32 API.
+
+Just use wine you say, and chances are that would let you run the exe, alright.
+But it wouldn't let you improve on the game.  For that you need to either do a
+complete rewrite of the game from source... but how do you know you have the
+same behavior?  Painful and time-consuming reversing, then runtime tests?
+
+Ideally, you'd want to decompile the exe to get some obfuscated source code.
+Then you could recompile it using the compiler of your choice (probably after a
+lot of cleanup).  Then you could more easily make improvements, and rewrite any
+function that you like.
+
+The thing is, how do you know the decompiler gave you working code?  Decompiling
+isn't a 1:1 process.  Decompilers make no guarantee that their output, when
+compiled, produce the original binary.  And they couldn't, because they don't
+control the compilers you use.
+
+I'm thinking of another process that would preserve the original binary but let
+you control it.  Start with some wrapper code whose only job is to map the
+binary to memory and start its main function.  Then modify the wrapper to let
+you redefine any function of the original binary by injecting a trampoline in
+its place.  That way you can slowly rewrite any part that you want, but with the
+guarantee that the original code is still there, unmodified.
+
+You get a small overhead for the trampolines, but the point is that at some
+point you will have rewritten most functions and can finally ditch the original
+binary.
+
+Or that's the plan anyway.
+
+Let's see what we can do with winmine.exe.
+
+First I want to test if decompiling would work.
+
+Using dogbolt.org.  Seems like Binary Ninja and Hex-Rays do the best job (and
+are also the fastest to answer).
+
+And yet, 8Gb of MSVC later, to find out that both won't compile out of the box.
+Hex-Rays is missing defs.h.  Found some versions online but they are incomplete.
+And even then, I'm suspecting this file contains binary-specific definitions.
+
+Binary Ninja output does not make any effort, with noise like this:
+
+#+begin_src c
+int32_t __convention("regparm") sub_1001399(char* arg1, void* arg2, char* arg3,
+    void* arg4 @ ebp, int32_t arg5 @ esi, int32_t arg6 @ edi)
+#+end_src
+
+So back to plan A.  Take a PE binary, write a wrapper that launches it.  It will
+crash as soon as it calls the missing win API, but then we'll be able to stub it
+(maybe even link with winelib to start with?).
+
+* [2022-08-13 sam.]
+** Executing PE binary
+Well, that's not trivial.
+
+I can map the text section to memory, mark it as RX and jump to the entry point.
+It fails pretty fast though on:
+
+: mov eax, dword ptr fs:[0]
+
+FS register on win32 executables points to a Thread Information Block.  Here fs
+is 0, so segfault.
+
+Can't seem to find a way to set FS in my program.  I'm guessing it's probably
+handled by the kernel usually, so I may not have the permissions to overwrite it
+in user mode.
+
+Well, that's too bad.  Maybe we can skip this prologue of the PE entry point and
+go to the meat of the code instead?
+
+0x21f0 seems like a good spot, but I need to to push some arguments first.
+
+* [2023-01-22 dim.]
+** Thinking about coroutines
+In LD jam games, I often feel the need to write code stateful code in a clunky
+way.
+
+Like, this effect:
+
+#+begin_src js
+if (state == 0) {
+  x = 0;
+  xTarget = 100;
+  state = 1;
+}
+elseif (state == 1) {
+  x
+  state = 2;
+}
+#+end_src
+
+[Things I have trouble with: juggling state over updates]
+
+update(dt)
+  if click:
+    xTarget = 100
+    xCounter = 1
+    xTween = true
+
+  if xTween:
+    xCounter -= dt
+    x = lerp(x, xTarget, xCounter)
+    if xCounter <= 0:
+      xTween = false
+
+TWEEN(to: 100, duration: 1).start() -> creates new object that needs to be
+updated
+cons: fire and forget, easy to have multiple TWEENs that update the same propery
+without thinking about it (harder to debug)
+pros: fire and forget.  If we don't need to care about the specifics of the
+update code, it's always the same
+
+For the same reason, DELAYS are annoyingly repetitive.  It's just: set a
+counter, update it, when it becomes zero, do stuff.  In Godot or ECS systems,
+it's a standalone object you create.
+
+Exercice: try to make a menu with animations, not too much spaghetti
+
+* [2023-01-24 mar.]
+** Variable framerate loop
+High level goals: game should be as responsive as possible at higher framerates, but
+gameplay should be framerate independent.  Possible?
+
+Constraints:
+- ensure inputs are polled at regular interval
+- Vsync on/off
+- 59.9Hz monitors != 60Hz monitors
+- what happens if the game can't handle 60fps?
+- use integers to avoid drifting a total (float) lag accumulator
+
+It's a sampling problem.  If the system is simulated at 60Hz, and should be
+displayed at 120Hz, then we can't have extra frames to show.  If the system
+is running at 120Hz, then we can easily show frames at 120Hz and 60Hz, by
+bundling two update calls.  But this won't work for 100Hz easily, because we
+can't interpolate/resample the state that way.
+I guess some resampling can be done for positions or colors, but it becomes
+tricky and annoying to define it for all possible objects.
+Other solution is to have the simulation running at multiple and downsample,
+but there is no nice least common multiple of the usual frequencies: 60, 120,
+140, 165, is 9240.  And that doesn't get divided by 240 cleanly.
+
+One way to look at it: the system should run in realtime (consistent across
+machines, as long as they keep time correctly), but the rendering is just a
+camera sampling the system at regular interval.  Then the main issues become:
+temporal aliasing due to misaligned update frequency and sampling frequency.
+But isn't aliasing just not a problem anymore if we sample at 2x update
+frequency?  So system at 60Hz, we render at 120Hz, but that's wasted
+resources to draw a screen that hasn't moved.
+
+If we want responsiveness, it means at 240Hz we update input, the game logic,
+and the render shows something as well.  But now this seems fishy, because it
+means what takes 16ms at 60Hz to show now takes 4ms.  Hm, if it's something
+instantaneous, like an object suddenly appearing, it still makes sense.  But
+then we can't have an update code that doesn't care about dt, because adding
+velocities for instance can't be the same at 240Hz and 60Hz.
+
+BUT!  update(dt) doesn't work in the general case, because update(1)
+update(1) isn't necessarily equal to update(2).  So what can work is 4xUpdate
+at 60Hz, and 1xUpdate at 240Hz.  Fixed update.  Responsive.
+
+BUT! Now the update code needs to be called 4 times at 60Hz, which reduces
+the budget for that code drastically.  And when you look at it, most of the
+code won't need to be executed 4 times, but just once per render.
+
+So, hmm.  Fixed update, 16ms, seems a good compromise.  Then we can get some
+responsiveness back if we poll inputs at render frequency and interpolate
+some stuff at render time.  Hitting a key shoots a ball, the ball is updated
+at 60Hz, but since we interpolate we can appear to make it move at 240Hz.
+But interpolatino requires knowing two states?  If we are interpolating
+between N and N-1, we are actually adding latency.  That's stupid.
+
+What doesn't work: 1 render = 1 update.  Think of 50hz/60hz old console
+games, and that can't work.
+
+Okay, so what's left?  If we want update() to be independent of dt, and be
+called only once per render, then it can't work at both 60Hz and 120Hz.  So we
+cap at 60Hz.  Then I think we can still render at higher framerates, and animate
+at that freq, but that's not necessary.
+
+So, cap at 60Hz.  Simpler.  Now the only things to worry about are:
+- vsync
+- 59.9Hz monitors
+- slow pc
+- float drift
+
+Let's split the problems: if we agree the sim should run at 60Hz, then let's
+forget the render for a moment.  The main loop is just: clock in, do one update,
+then wait until clock diff is 16.7ms.  That guarantees consistency across
+machines.  If the machine is slow, the update can take more than 16.7ms, and so
+there's no sleep, and we get the framerate the machine is capable of.
+
+Now, rendering.  Rendering is done after update, before the wait.  If the
+machine is slow, idem.  If the machine is fast, then we have slack at the end of
+the frame.  Good.
+
+Now vsync.  Vsync just means that we wait for the host to signal at end of frame
+instead of keeping track of host time ourselves.  But this is problematic if the
+host isn't vsyncing at 60Hz.  At 30Hz, we need to skip frames:
+
+: uRu.uRu.uRu.uRu.uRu.uRu.
+: u +16.7
+: R -33.3
+
+At 120Hz we have duplicate renders (because we need to push something to the GPU in
+order to vsync?):
+
+: uRRuRRuRRuRRuRR
+: u +1
+: R -1/2
+
+Alright you know what?  Let's just stop whiteboarding and write stuff and live
+with a flawed solution.

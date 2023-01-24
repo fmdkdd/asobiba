@@ -12,52 +12,60 @@
 struct GameLib;
 
 struct StatHistory {
-  float values[1024];
-  usize count;
-  usize index;
+  float m_Values[1024];
+  usize m_Count;
+  usize m_Index;
 
-  float max;
-  float min;
+  float m_Max;
+  float m_Min;
 
-  void init();
+  void Init();
 
-  void push(float value);
-  float getAverage() const;
+  void Push(float value);
+  float GetAverage() const;
 };
 
 struct App {
-  u32 logicalWidth;
-  u32 logicalHeight;
+  u32 m_LogicalWidth;
+  u32 m_LogicalHeight;
 
-  u32 displayWidth;
-  u32 displayHeight;
+  u32 m_DisplayWidth;
+  u32 m_DisplayHeight;
 
-  StatHistory frameTimeHistory;
-  StatHistory updateTimeHistory;
-  StatHistory renderTimeHistory;
+  bool m_IsVSyncOn;
+  u64 m_HostDisplayRefreshRate;
 
-  SDL_Window *window;
-  SDL_GLContext glContext;
+  float m_TimeScale;
 
-  Controls controls;
-  Gfx gfx;
+  StatHistory m_FrameTimeHistory;
+  StatHistory m_UpdateTimeHistory;
+  StatHistory m_RenderTimeHistory;
 
-  bool running;
+  SDL_Window *m_Window;
+  SDL_GLContext m_GLContext;
 
-  GameLib *gameLib;
+  Controls m_Controls;
+  Gfx m_Gfx;
 
-  void (*hotReloadCallback)();
+  bool m_IsRunning;
 
-  void init();
-  void run();
-  void quit();
+  GameLib *m_GameLib;
 
-  void initImGui();
-  void quitImGui();
-  void drawImGui();
+  void (*m_HotReloadCallback)();
 
-  u64 getHostRefreshRate();
-  void updateInputs();
+  void Init();
+  void Run();
+  void Quit();
+
+  void InitImGui();
+  void QuitImGui();
+  void DrawImGui();
+
+  u64 GetTicksPerFrame();
+  u64 GetHostRefreshRate();
+  void SetVSync(bool useVSync);
+
+  void UpdateInputs();
 };
 
 #endif

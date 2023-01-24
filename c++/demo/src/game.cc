@@ -7,6 +7,8 @@
 #include "gfx.h"
 #include "utils.h"
 
+#include "imgui.h"
+
 void Game::init(Gfx &gfx) {
   gfx.loadImage("data/lemmings-spritesheet.png", &lemmingsSpritesheet);
 
@@ -14,6 +16,8 @@ void Game::init(Gfx &gfx) {
 }
 
 void Game::reset() {
+  state = GameState::Running;
+
   // Lemmings
   AnimatedSprite walkingLemming;
   walkingLemming.spritesheet = &lemmingsSpritesheet;
@@ -30,7 +34,7 @@ void Game::reset() {
     }
   }
 
-  for (usize i = 0; i < ARRAY_SIZE(lemmings); ++i) {
+  for (usize i = 0; i < K_ARRAY_SIZE(lemmings); ++i) {
     lemmings[i] = walkingLemming;
     lemmings[i].animationStep = rand() % 7;
     lemmings[i].animationSpeed = walkingLemming.animationSpeed;
@@ -55,6 +59,8 @@ void Game::reset() {
   pong.player2Speed = 1000;
   pong.player2SpeedCounter = 0;
   pong.player2Velocity = 1;
+
+  time = 0;
 }
 
 void Game::quit() {
@@ -143,12 +149,25 @@ void Pong::update(const Controls &controls) {
 }
 
 void Game::update(const Controls &controls) {
-  for (usize i = 0; i < ARRAY_SIZE(lemmings); ++i) {
+  if (controls.isKeyPressed(KEY_PAUSE)) {
+    printf("toggle pause\n");
+    if (state == GameState::Paused)
+      state = GameState::Running;
+    else
+      state = GameState::Paused;
+  }
+
+  if (state == GameState::Paused)
+    return;
+
+  for (usize i = 0; i < K_ARRAY_SIZE(lemmings); ++i) {
     lemmings[i].step();
   }
 
   // Pong
   pong.update(controls);
+
+  time += 1;
 }
 
 void Game::render(Gfx &gfx) {
@@ -200,11 +219,33 @@ void Game::render(Gfx &gfx) {
   fillRect(pong.player2Bat.x, pong.player2Bat.y, pong.player2Bat.w,
            pong.player2Bat.h);
   fillRect(pong.ball.x, pong.ball.y, pong.ball.w, pong.ball.h);
+
+  const float d = 0.2f;
+
+  Vec2f curve[1000];
+  for (size_t i=0; i < K_ARRAY_SIZE(curve); ++i) {
+    Vec2f& v = curve[i];
+    v.x = i;
+    v.y = 400 + 20 * (sin(d * (4*time+i)) + 2*sin(0.25 * (4*time+i)));
+  }
+  drawLine(curve, K_ARRAY_SIZE(curve), 2.0f);
+
+
+  if (state == GameState::Paused) {
+    setDrawColor(ColorRGBA{0, 0, 0, 120});
+    fillRect(0, 0, 800, 600);
+    setDrawColor(ColorRGBA{255, 255, 255, 255});
+    gfx.text("Paused", 400, 300);
+  }
+}
+
+void Game::renderImGui() {
+  ImGui::Text("%d", pong.ballSpeed);
 }
 
 Game *gameInit(Gfx &gfx) {
   Game *game = (Game *)malloc(sizeof(Game));
-  ENSURE(game != NULL);
+  K_ENSURE(game != NULL);
   game->init(gfx);
   return game;
 }
@@ -219,7 +260,13 @@ void gameUpdate(Game *game, const Controls &controls) {
   game->update(controls);
 }
 void gameRender(Game *game, Gfx &gfx) { game->render(gfx); }
+void gameRenderImGui(Game *game) { game->renderImGui(); }
 
 const GameAPI GAME_API = {
-    gameInit, gameQuit, gameReset, gameUpdate, gameRender,
+    gameInit,
+    gameQuit,
+    gameReset,
+    gameUpdate,
+    gameRender,
+    gameRenderImGui,
 };

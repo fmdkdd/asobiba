@@ -8,12 +8,11 @@
 #include "utils.h"
 
 #ifdef HOT_RELOAD
-void reloadGame(GameLib &lib) {
+void ReloadGame(GameLib &lib) {
   static const char *GAME_LIBRARY = "./libgame.so";
 
-  printf("Reloading game\n");
   if (lib.handle)
-    ASSERT(dlclose(lib.handle) == 0);
+    K_ASSERT(dlclose(lib.handle) == 0);
   lib.handle = dlopen(GAME_LIBRARY, RTLD_NOW);
   if (lib.handle == NULL) {
     fprintf(stderr, "dlopen failed: %s\n", dlerror());
@@ -21,44 +20,45 @@ void reloadGame(GameLib &lib) {
   }
   if (lib.handle) {
     GameAPI *api = (GameAPI *)dlsym(lib.handle, "GAME_API");
-    ASSERT(api != NULL);
+    K_ASSERT(api != NULL);
     lib.api = *api;
   }
+  printf("Game lib reloaded\n");
 }
 
 static GameLib *gGameLib;
-static void onSignalUSR1(int) { reloadGame(*gGameLib); }
-static void onHotReloadKey() { reloadGame(*gGameLib); }
+static void OnSignalUSR1(int) { ReloadGame(*gGameLib); }
+static void OnHotReloadKey() { ReloadGame(*gGameLib); }
 #endif
 
 int main() {
   App app;
 
-  app.init();
+  app.Init();
 
   GameLib gameLib;
   gameLib.handle = NULL;
   gameLib.state = NULL;
 
 #ifdef HOT_RELOAD
-  reloadGame(gameLib);
+  ReloadGame(gameLib);
 #else
   gameLib.api = GAME_API;
 #endif
-  gameLib.state = gameLib.api.init(app.gfx);
+  gameLib.state = gameLib.api.init(app.m_Gfx);
 
 #ifdef HOT_RELOAD
   gGameLib = &gameLib;
-  signal(SIGUSR1, onSignalUSR1);
-  app.hotReloadCallback = onHotReloadKey;
+  signal(SIGUSR1, OnSignalUSR1);
+  app.m_HotReloadCallback = OnHotReloadKey;
 #endif
 
-  app.gameLib = &gameLib;
-  app.run();
+  app.m_GameLib = &gameLib;
+  app.Run();
 
   gameLib.api.quit(gameLib.state);
 
-  app.quit();
+  app.Quit();
 
   return EXIT_SUCCESS;
 }

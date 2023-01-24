@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.10)
 
 # C++ standard, compile options
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 project(demo VERSION 0.1)
@@ -50,6 +50,8 @@ set(GAME_SRC_FILES
 
 if (HOT_RELOAD)
   add_library(game ${GAME_SRC_FILES})
+
+  target_include_directories(game PRIVATE ${PROJECT_SOURCE_DIR}/deps/imgui)
 
   set_property(TARGET game PROPERTY POSITION_INDEPENDENT_CODE ON)
 

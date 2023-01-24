@@ -6,17 +6,22 @@
 #include "imgui_impl_opengl2.h"
 #include "imgui_impl_sdl.h"
 
+// TODO: title -> new game -> death -> restart, menus with animations
+// TODO: settings menu, vsync, window size, fullscreen
+
+// TODO: neonwise line that follows cursor, but with 'weight' and elasticity
+
 static void sdl_die(const char *msg) {
   SDL_Log("%s: %s\n", msg, SDL_GetError());
   exit(1);
 }
 
-void App::init() {
-  logicalWidth = 800;
-  logicalHeight = 450;
+void App::Init() {
+  m_LogicalWidth = 800;
+  m_LogicalHeight = 600;
 
-  const u32 windowWidth = logicalWidth;
-  const u32 windowHeight = logicalHeight;
+  const u32 windowWidth = m_LogicalWidth;
+  const u32 windowHeight = m_LogicalHeight;
 
   if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0)
     sdl_die("Could not init SDL");
@@ -30,68 +35,68 @@ void App::init() {
   SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
 
   SDL_WindowFlags windowFlags = (SDL_WindowFlags)(SDL_WINDOW_OPENGL);
-  window = SDL_CreateWindow("SDL Demo", SDL_WINDOWPOS_UNDEFINED,
-                            SDL_WINDOWPOS_UNDEFINED, windowWidth, windowHeight,
-                            windowFlags);
-  if (window == NULL)
+  m_Window = SDL_CreateWindow("SDL Demo", SDL_WINDOWPOS_UNDEFINED,
+                              SDL_WINDOWPOS_UNDEFINED, windowWidth,
+                              windowHeight, windowFlags);
+  if (m_Window == NULL)
     sdl_die("Could not create window");
 
-  glContext = SDL_GL_CreateContext(window);
+  m_GLContext = SDL_GL_CreateContext(m_Window);
 
-  if (glContext == NULL)
+  if (m_GLContext == NULL)
     sdl_die("Could not create GL context");
 
-  if (SDL_GL_MakeCurrent(window, glContext) != 0)
+  if (SDL_GL_MakeCurrent(m_Window, m_GLContext) != 0)
     sdl_die("GL_MakeCurrent failed");
 
   if (IMG_Init(IMG_INIT_PNG) == 0)
     sdl_die("Could not initialize IMG_PNG");
 
-  controls.init();
-  gfx.init(controls);
+  m_Controls.init();
+  m_Gfx.init(m_Controls);
 
-  initImGui();
+  InitImGui();
 
-  running = true;
+  m_IsRunning = true;
 }
 
-void App::initImGui() {
+void App::InitImGui() {
   ImGui::CreateContext();
   ImGui::StyleColorsDark();
 
-  ImGui_ImplSDL2_InitForOpenGL(window, glContext);
+  ImGui_ImplSDL2_InitForOpenGL(m_Window, m_GLContext);
   ImGui_ImplOpenGL2_Init();
 
-  frameTimeHistory.init();
-  updateTimeHistory.init();
-  renderTimeHistory.init();
+  m_FrameTimeHistory.Init();
+  m_UpdateTimeHistory.Init();
+  m_RenderTimeHistory.Init();
 }
 
-void App::quitImGui() {
+void App::QuitImGui() {
   ImGui_ImplOpenGL2_Shutdown();
   ImGui_ImplSDL2_Shutdown();
   ImGui::DestroyContext();
 }
 
-void App::quit() {
-  quitImGui();
+void App::Quit() {
+  QuitImGui();
 
-  gfx.quit();
-  controls.quit();
+  m_Gfx.quit();
+  m_Controls.quit();
 
   IMG_Quit();
 
-  SDL_GL_DeleteContext(glContext);
-  SDL_DestroyWindow(window);
+  SDL_GL_DeleteContext(m_GLContext);
+  SDL_DestroyWindow(m_Window);
   SDL_Quit();
 }
 
-u64 App::getHostRefreshRate() {
+u64 App::GetHostRefreshRate() {
   // SDL_GetCurrentDisplayMode isn't precise: e.g. reports 60Hz when display
   // refreshes at 59.95.  We could probably measure this ourselves if such
   // a difference is problematic.
 
-  int displayIndex = SDL_GetWindowDisplayIndex(window);
+  int displayIndex = SDL_GetWindowDisplayIndex(m_Window);
   if (displayIndex < 0) {
     SDL_Log("Failed get window display index, defaulting to 0.");
     displayIndex = 0;
@@ -106,8 +111,24 @@ u64 App::getHostRefreshRate() {
   return hostRefreshRate;
 }
 
-void App::updateInputs() {
-  controls.swapInputState();
+void App::SetVSync(bool useVSync) {
+  if (useVSync) {
+    if (SDL_GL_SetSwapInterval(1) != 0) {
+      SDL_Log("Failed to enable vsync, continuing with vsync off");
+      useVSync = false;
+    }
+  } else {
+    if (SDL_GL_SetSwapInterval(0) != 0) {
+      SDL_Log("Failed to disable vsync, continuing with vsync on");
+      useVSync = true;
+    }
+  }
+
+  m_IsVSyncOn = useVSync;
+}
+
+void App::UpdateInputs() {
+  m_Controls.swapInputState();
 
   SDL_Event e;
   while (SDL_PollEvent(&e)) {
@@ -116,44 +137,41 @@ void App::updateInputs() {
 
     switch (e.type) {
     case SDL_QUIT:
-      running = false;
+      m_IsRunning = false;
       return;
 
     case SDL_KEYDOWN:
       if (e.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
-        running = false;
+        m_IsRunning = false;
         return;
       }
 
 #ifdef HOT_RELOAD
       if ((e.key.keysym.mod & KMOD_CTRL) && (e.key.keysym.sym == SDLK_r)) {
-        hotReloadCallback();
+        m_HotReloadCallback();
         if (e.key.keysym.mod & KMOD_SHIFT)
-          gameLib->api.reset(gameLib->state);
-      }
+          m_GameLib->api.reset(m_GameLib->state);
+      } else
 #endif
-
-      if (e.key.keysym.sym == SDLK_x || e.key.keysym.sym == SDLK_r ||
-          e.key.keysym.sym == SDLK_e || e.key.keysym.sym == SDLK_m)
-        controls.updateKey(e.key.keysym.sym, false);
+        m_Controls.onKeyDown(e.key.keysym.sym);
       break;
 
     case SDL_KEYUP:
-      if (e.key.keysym.sym == SDLK_x || e.key.keysym.sym == SDLK_r ||
-          e.key.keysym.sym == SDLK_e || e.key.keysym.sym == SDLK_m)
-        controls.updateKey(e.key.keysym.sym, true);
+      m_Controls.onKeyUp(e.key.keysym.sym);
       break;
 
     case SDL_MOUSEMOTION:
-      controls.updateScreenMousePosition(e.motion.x, displayHeight - e.motion.y);
-      controls.updateLogicalMousePosition(
-          (float)e.motion.x * logicalWidth / displayWidth,
-          (float)(displayHeight - e.motion.y) * logicalHeight / displayHeight);
+      m_Controls.updateScreenMousePosition(e.motion.x,
+                                           m_DisplayHeight - e.motion.y);
+      m_Controls.updateLogicalMousePosition(
+          (float)e.motion.x * m_LogicalWidth / m_DisplayWidth,
+          (float)(m_DisplayHeight - e.motion.y) * m_LogicalHeight /
+              m_DisplayHeight);
       break;
 
     case SDL_MOUSEBUTTONDOWN:
     case SDL_MOUSEBUTTONUP:
-      controls.updateMouseButton(e.button.button, e.button.state);
+      m_Controls.updateMouseButton(e.button.button, e.button.state);
       break;
 
     default:
@@ -162,62 +180,32 @@ void App::updateInputs() {
   }
 }
 
-void App::run() {
-  // The goal of all this is to ensure the gameplay it not drastically impacted
-  // by host refresh rate.  We favor frame presentation consistency over time
-  // keeping.  That is, we may run the game at very slightly different speeds on
-  // different monitors, in order to keep a consistent pattern of game updates
-  // and renders.
-  //
-  // Just the keeping track of the elapsed frame time in an accumulator quickly
-  // leads to an inconsistent pattern, because some frames may have a spike.  So
-  // instead we assume a constant host refresh rate, and derive a constant
-  // update rate from that.
-  //
-  // We use a fixed timestep of 480Hz, because it's small enough that we can fit
-  // at least one update and see the results at rates higher than 60Hz.  And at
-  // odd rates (144, 165), we are still making some progress so that we avoid
-  // duplicate frames.
+u64 App::GetTicksPerFrame() {
+  static const u64 NANOS_PER_SECOND = 1'000'000'000;
 
-  static const s64 NANOS_PER_SECOND = 1000000000;
-
-  u64 updateCounter = 0;
-  const u64 updateRate = 480;
-  const u64 targetRefreshRate = getHostRefreshRate();
-  s64 lagAccumulator = 0;
-  const s64 targetRefreshRateNanos = NANOS_PER_SECOND / targetRefreshRate;
-  const s64 updateRateNanos = NANOS_PER_SECOND / updateRate;
-  u64 lastLoopTick = 0;
-
-  // Vsync is best to avoid tearing, but frame timings may be whack.
-  // That's one of the reason we do not rely on elapsed time to trigger
-  // updates.
-
-  bool useVsync = true;
-  if (useVsync) {
-    if (SDL_GL_SetSwapInterval(1) != 0) {
-      SDL_Log("Failed to enable vsync, continuing with vsync off");
-      useVsync = false;
-    }
-  } else {
-    if (SDL_GL_SetSwapInterval(0) != 0) {
-      SDL_Log("Failed to disable vsync, continuing with vsync on");
-      useVsync = true;
-    }
-  }
-
-  // If Vsync is off, we must back off to keep the target framerate.  But
-  // we still do not know exactly when the image is presented on the monitor.
-  // Our frame timings with vsync off may be more precise, but this does not
-  // necessarily mean that presented images are more regular.
-
-  bool fixupFrametime = !useVsync;
+  const u64 targetRefreshRate = m_HostDisplayRefreshRate;
+  const u64 targetRefreshRateNanos = NANOS_PER_SECOND / targetRefreshRate;
   const u64 ticksPerFrame =
       targetRefreshRateNanos * SDL_GetPerformanceFrequency() / NANOS_PER_SECOND;
 
+  return ticksPerFrame;
+}
+
+void App::Run() {
+  static const u64 NANOS_PER_SECOND = 1'000'000'000;
+
+  const u64 updateRate = 60;
+  const s64 updateRateNanos = NANOS_PER_SECOND / updateRate;
+  s64 lagAccumulator = 0;
+  u64 lastLoopTick = 0;
+
   const u64 perfFrequency = SDL_GetPerformanceFrequency();
 
-  while (running) {
+  SetVSync(true);
+  m_HostDisplayRefreshRate = GetHostRefreshRate();
+  m_TimeScale = 1.0f;
+
+  while (m_IsRunning) {
     u64 now = SDL_GetPerformanceCounter();
 
     // Wrap-around, unlikely
@@ -227,76 +215,71 @@ void App::run() {
     if (lastLoopTick == 0)
       lastLoopTick = now;
 
-    s64 dt = now - lastLoopTick;
+    s64 ticksSinceLastLoop = now - lastLoopTick;
     lastLoopTick = now;
 
-    SDL_GL_GetDrawableSize(window, (int*)&displayWidth, (int*)&displayHeight);
+    SDL_GL_GetDrawableSize(m_Window, (int *)&m_DisplayWidth,
+                           (int *)&m_DisplayHeight);
 
-    if (dt > 0) {
-      s64 dtNanos = (dt * NANOS_PER_SECOND) / perfFrequency;
-      lagAccumulator += dtNanos;
+    if (ticksSinceLastLoop > 0) {
+      s64 nanosSinceLastLoop =
+          (ticksSinceLastLoop * NANOS_PER_SECOND) / perfFrequency;
+      lagAccumulator += nanosSinceLastLoop * m_TimeScale;
 
       // Stats for debugging
-      frameTimeHistory.push((double)dtNanos / 1000000);
-
-      // printf("lag=%16zd dt=%16zd avg=%16.3f fps=%8.2f (%3zu)\n",
-      //        lagAccumulator, dtNanos, avgDtNs, 1000.0 / avgDtNs,
-      //        targetRefreshRate);
-
-      updateCounter += updateRate;
-
-      // Update inputs only if we are sure there's at least one game update,
-      // otherwise we may miss press/release events.
-      if (updateCounter >= targetRefreshRate) {
-        updateInputs();
-      }
+      m_FrameTimeHistory.Push((double)nanosSinceLastLoop / 1'000'000);
 
       u64 startUpdate = SDL_GetPerformanceCounter();
 
-      while (updateCounter >= targetRefreshRate) {
-        updateCounter -= targetRefreshRate;
+      if (lagAccumulator >= updateRateNanos) {
+        UpdateInputs();
+      }
+
+      while (lagAccumulator >= updateRateNanos) {
         lagAccumulator -= updateRateNanos;
-        gameLib->api.update(gameLib->state, controls);
+        m_GameLib->api.update(m_GameLib->state, m_Controls);
       }
 
       u64 endUpdate = SDL_GetPerformanceCounter();
-      u64 updateTime = (endUpdate - startUpdate) * NANOS_PER_SECOND / perfFrequency;
-      updateTimeHistory.push((double)updateTime / 1000000);
+      u64 updateTime =
+          (endUpdate - startUpdate) * NANOS_PER_SECOND / perfFrequency;
+      m_UpdateTimeHistory.Push((double)updateTime / 1'000'000);
     }
 
     {
-      glViewport(0, 0, displayWidth, displayHeight);
+      glViewport(0, 0, m_DisplayWidth, m_DisplayHeight);
 
       glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
       glEnable(GL_BLEND);
 
       glMatrixMode(GL_PROJECTION);
       glLoadIdentity();
-      glOrtho(0, logicalWidth, 0, logicalHeight, 0.0f, 1.0f);
+      glOrtho(0, m_LogicalWidth, 0, m_LogicalHeight, 0.0f, 1.0f);
     }
 
     {
       u64 startRender = SDL_GetPerformanceCounter();
-      gameLib->api.render(gameLib->state, gfx);
+      m_GameLib->api.render(m_GameLib->state, m_Gfx);
       u64 endRender = SDL_GetPerformanceCounter();
-      u64 renderTime = (endRender - startRender) * NANOS_PER_SECOND / perfFrequency;
-      renderTimeHistory.push((double)renderTime / 1000000);
+      u64 renderTime =
+          (endRender - startRender) * NANOS_PER_SECOND / perfFrequency;
+      m_RenderTimeHistory.Push((double)renderTime / 1'000'000);
     }
 
-    drawImGui();
-    SDL_GL_SwapWindow(window);
+    DrawImGui();
+    SDL_GL_SwapWindow(m_Window);
 
-    if (fixupFrametime) {
+    if (!m_IsVSyncOn) {
       u64 now = SDL_GetPerformanceCounter();
-      u64 targetEndTick = lastLoopTick + ticksPerFrame;
+      u64 targetEndTick = lastLoopTick + GetTicksPerFrame();
 
       if (now < targetEndTick) {
         u64 toEnd = targetEndTick - now;
         u64 toEndNanos = toEnd * NANOS_PER_SECOND / perfFrequency;
 
-        static const u64 minSleepDurationNanos = 1000000;
+        static const u64 minSleepDurationNanos = 1'000'000;
         if (toEndNanos > minSleepDurationNanos) {
-          u32 sleepMillis = (toEndNanos - minSleepDurationNanos) / 1000000;
+          u32 sleepMillis = (toEndNanos - minSleepDurationNanos) / 1'000'000;
           SDL_Delay(sleepMillis);
         }
 
@@ -308,9 +291,9 @@ void App::run() {
   }
 }
 
-void App::drawImGui() {
+void App::DrawImGui() {
   ImGuiIO &io = ImGui::GetIO();
-  UNUSED(io);
+  K_UNUSED(io);
 
   ImGui_ImplOpenGL2_NewFrame();
   ImGui_ImplSDL2_NewFrame();
@@ -318,46 +301,63 @@ void App::drawImGui() {
 
   ImGui::Begin("Stats");
 
-  ImGui::PlotLines("Frametime", frameTimeHistory.values, frameTimeHistory.count, frameTimeHistory.index, NULL, 0, 18, ImVec2(0, 60));
+  ImGui::PlotLines("Frametime", m_FrameTimeHistory.m_Values,
+                   m_FrameTimeHistory.m_Count, m_FrameTimeHistory.m_Index, NULL,
+                   0, 18, ImVec2(0, 60));
 
-  ImGui::Text("Frametime avg=%.3f min=%.3f max=%.3f", frameTimeHistory.getAverage(),
-              frameTimeHistory.min, frameTimeHistory.max);
+  ImGui::Text("Frametime avg=%.3f min=%.3f max=%.3f",
+              m_FrameTimeHistory.GetAverage(), m_FrameTimeHistory.m_Min,
+              m_FrameTimeHistory.m_Max);
 
-  ImGui::PlotLines("Update time", updateTimeHistory.values, updateTimeHistory.count, updateTimeHistory.index, NULL, 0, 10, ImVec2(0, 20));
-    ImGui::PlotLines("Render time", renderTimeHistory.values, renderTimeHistory.count, renderTimeHistory.index, NULL, 0, 10, ImVec2(0, 20));
+  ImGui::PlotLines("Update time", m_UpdateTimeHistory.m_Values,
+                   m_UpdateTimeHistory.m_Count, m_UpdateTimeHistory.m_Index,
+                   NULL, 0, 10, ImVec2(0, 20));
+  ImGui::PlotLines("Render time", m_RenderTimeHistory.m_Values,
+                   m_RenderTimeHistory.m_Count, m_RenderTimeHistory.m_Index,
+                   NULL, 0, 10, ImVec2(0, 20));
+
+  bool vsync = m_IsVSyncOn;
+  if (ImGui::Checkbox("VSync", &vsync)) {
+    SetVSync(vsync);
+  }
+
+  ImGui::SliderInt("Host framerate", (int *)&m_HostDisplayRefreshRate, 10, 200);
+
+  ImGui::SliderFloat("Timescale", &m_TimeScale, 0.1f, 20.0f);
 
   ImGui::End();
 
+  m_GameLib->api.renderImGui(m_GameLib->state);
 
   ImGui::Render();
   ImGui_ImplOpenGL2_RenderDrawData(ImGui::GetDrawData());
 }
 
-void StatHistory::init() {
-  count = 0;
-  index = 0;
-  min = 0;
-  max = 0;
+void StatHistory::Init() {
+  m_Count = 0;
+  m_Index = 0;
+  m_Min = 0;
+  m_Max = 0;
 }
 
-void StatHistory::push(float value) {
-  values[index] = value;
-  index++;
-  if (index == ARRAY_SIZE(values))
-    index = 0;
-  if (count < ARRAY_SIZE(values))
-    count++;
+void StatHistory::Push(float value) {
+  m_Values[m_Index] = value;
+  m_Index++;
+  if (m_Index == K_ARRAY_SIZE(m_Values))
+    m_Index = 0;
+  if (m_Count < K_ARRAY_SIZE(m_Values))
+    m_Count++;
 
-  if (value > max)
-    max = value;
-  if (value < min)
-    min = value;
+  if (value > m_Max)
+    m_Max = value;
+  if (value < m_Min)
+    m_Min = value;
 }
 
-float StatHistory::getAverage() const {
+float StatHistory::GetAverage() const {
   double avg = 0;
-  for (usize i = 0; i < count; ++i)
-    avg += values[i];
-  avg /= (double)count;
+  for (usize i = 0; i < m_Count; ++i)
+    avg += m_Values[i];
+  avg /= (double)m_Count;
   return (float)avg;
 }

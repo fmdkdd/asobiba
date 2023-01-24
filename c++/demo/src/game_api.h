@@ -11,6 +11,7 @@ struct GameAPI {
   void  (*reset)(Game* game);
   void  (*update)(Game* game, const Controls& controls);
   void  (*render)(Game* game, Gfx& gfx);
+  void  (*renderImGui)(Game* game);
 };
 
 struct GameLib {
