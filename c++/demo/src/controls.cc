@@ -1,14 +1,16 @@
 #include "controls.h"
 
 void Controls::init() {
-  memset(mouseButtonHeld, false, sizeof(mouseButtonHeld));
-  memset(mouseButtonPreviousHeld, false, sizeof(mouseButtonPreviousHeld));
+  memset(mouseButtonDown, false, sizeof(mouseButtonDown));
+  memset(gamePreviousMouseButtonDown, false, sizeof(gamePreviousMouseButtonDown));
+  memset(renderPreviousMouseButtonDown, false, sizeof(renderPreviousMouseButtonDown));
   lastScreenMousePosition.x = 0;
   lastScreenMousePosition.y = 0;
   lastLogicalMousePosition.x = 0;
   lastLogicalMousePosition.y = 0;
-  memset(keyHeld, false, sizeof(keyHeld));
-  memset(keyPreviousHeld, false, sizeof(keyPreviousHeld));
+  memset(keyDown, false, sizeof(keyDown));
+  memset(gamePreviousKeyDown, false, sizeof(gamePreviousKeyDown));
+  memset(renderPreviousKeyDown, false, sizeof(renderPreviousKeyDown));
 }
 
 void Controls::quit() {}

@@ -166,10 +166,30 @@ SDL_Rect Gfx::boxedText(const char *s, u32 x, u32 y) {
 }
 
 bool Gfx::button(const char *s, u32 x, u32 y) {
-  SDL_Rect box = boxedText(s, x, y);
+  const u32 textWidth = text(s, x, y);
 
-  bool clicked = controls->isMouseButtonHeld(SDL_BUTTON_LEFT) &&
-                 SDL_PointInRect(&controls->lastLogicalMousePosition, &box);
+  const u32 textHeight = font.charHeight;
+  const u32 leftMargin = 4;
+  const u32 topMargin = 4;
+  const u32 rightMargin = 4;
+  const u32 bottomMargin = 4;
+  const int box_x = x - leftMargin;
+  const int box_y = y - topMargin;
+  const int box_w = leftMargin + textWidth + rightMargin;
+  const int box_h = topMargin + textHeight + bottomMargin;
+
+  SDL_Rect box = SDL_Rect{box_x, box_y, box_w, box_h};
+  bool underMouse = SDL_PointInRect(&controls->lastLogicalMousePosition, &box);
+  bool pressed = controls->isMouseButtonDown(SDL_BUTTON_LEFT) && underMouse;
+  bool clicked = controls->wasRenderMouseButtonReleased(SDL_BUTTON_LEFT) && underMouse;
+
+  if (pressed) {
+    fillRect(box_x, box_y, box_w, box_h);
+    text(s, x, y);
+  }
+  else {
+    drawRect(box_x, box_y, box_w, box_h);
+  }
 
   return clicked;
 }

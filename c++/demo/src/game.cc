@@ -16,7 +16,7 @@ void Game::init(Gfx &gfx) {
 }
 
 void Game::reset() {
-  state = GameState::Running;
+  state = GameState::TitleScreen;
 
   // Lemmings
   AnimatedSprite walkingLemming;
@@ -24,7 +24,7 @@ void Game::reset() {
   walkingLemming.spriteRectsCount = 7;
   walkingLemming.spriteRects =
       (Recti *)malloc(sizeof(Recti) * walkingLemming.spriteRectsCount);
-  walkingLemming.animationSpeed = 20;
+  walkingLemming.animationSpeed = 110;
   walkingLemming.animationStepCounter = 0;
   {
     Recti src{0, 0, 20, 20};
@@ -48,19 +48,21 @@ void Game::reset() {
                pong.arena.y + (pong.arena.h / 2), 10, 10};
 
   pong.ballVelocity = {1, 1};
-  pong.ballSpeed = 200;
+  pong.ballSpeed = 2000;
   pong.ballCounter = 0;
   pong.ballSpeedIncreaseOnHit = 100;
   pong.ballSpeedMax = 3000;
 
-  pong.player1Speed = 1000;
+  pong.player1Speed = 5000;
   pong.player1SpeedCounter = 0;
   pong.player1Velocity = 1;
-  pong.player2Speed = 1000;
+  pong.player2Speed = 5000;
   pong.player2SpeedCounter = 0;
   pong.player2Velocity = 1;
 
   time = 0;
+  isPaused = false;
+  useLemmings = true;
 }
 
 void Game::quit() {
@@ -75,9 +77,9 @@ void Pong::update(const Controls &controls) {
   while (player1SpeedCounter >= 1000) {
     player1SpeedCounter -= 1000;
 
-    if (controls.isKeyHeld(KEY_PLAYER1_UP)) {
+    if (controls.isKeyDown(KEY_PLAYER1_UP)) {
       player1Bat.y += player1Velocity;
-    } else if (controls.isKeyHeld(KEY_PLAYER1_DOWN)) {
+    } else if (controls.isKeyDown(KEY_PLAYER1_DOWN)) {
       player1Bat.y -= player1Velocity;
     }
 
@@ -93,9 +95,9 @@ void Pong::update(const Controls &controls) {
   while (player2SpeedCounter >= 1000) {
     player2SpeedCounter -= 1000;
 
-    if (controls.isKeyHeld(KEY_PLAYER2_UP)) {
+    if (controls.isKeyDown(KEY_PLAYER2_UP)) {
       player2Bat.y += player2Velocity;
-    } else if (controls.isKeyHeld(KEY_PLAYER2_DOWN)) {
+    } else if (controls.isKeyDown(KEY_PLAYER2_DOWN)) {
       player2Bat.y -= player2Velocity;
     }
 
@@ -149,19 +151,17 @@ void Pong::update(const Controls &controls) {
 }
 
 void Game::update(const Controls &controls) {
-  if (controls.isKeyPressed(KEY_PAUSE)) {
-    printf("toggle pause\n");
-    if (state == GameState::Paused)
-      state = GameState::Running;
-    else
-      state = GameState::Paused;
+  if (controls.wasGameKeyPressed(KEY_PAUSE)) {
+    isPaused = !isPaused;
   }
 
-  if (state == GameState::Paused)
+  if (isPaused)
     return;
 
-  for (usize i = 0; i < K_ARRAY_SIZE(lemmings); ++i) {
-    lemmings[i].step();
+  if (useLemmings) {
+    for (usize i = 0; i < K_ARRAY_SIZE(lemmings); ++i) {
+      lemmings[i].step();
+    }
   }
 
   // Pong
@@ -170,7 +170,23 @@ void Game::update(const Controls &controls) {
   time += 1;
 }
 
-void Game::render(Gfx &gfx) {
+void Game::RenderTitleScreen(Gfx &gfx) {
+  clearScreen(ColorRGBA{30, 30, 30, 255});
+
+  setDrawColor(ColorRGBA{255, 255, 255, 255});
+
+  gfx.text("Title", 200, 500);
+
+  if (gfx.button("Play", 200, 450)) {
+    state = GameState::Demo;
+  }
+
+  if (gfx.button("Settings", 200, 400)) {
+    state = GameState::Settings;
+  }
+}
+
+void Game::RenderDemo(Gfx &gfx) {
   const Controls &controls = *gfx.controls;
 
   static std::chrono::time_point<std::chrono::high_resolution_clock> last_frame;
@@ -208,8 +224,10 @@ void Game::render(Gfx &gfx) {
     gfx.text("Stop clicking!", 16, 310);
   }
 
-  for (int i = 0; i < 10; ++i) {
-    lemmings[i].drawAt(10 + 20 * i, 250);
+  if (useLemmings) {
+    for (int i = 0; i < 10; ++i) {
+      lemmings[i].drawAt(10 + 20 * i, 250);
+    }
   }
 
   // Pong
@@ -223,15 +241,14 @@ void Game::render(Gfx &gfx) {
   const float d = 0.2f;
 
   Vec2f curve[1000];
-  for (size_t i=0; i < K_ARRAY_SIZE(curve); ++i) {
-    Vec2f& v = curve[i];
+  for (size_t i = 0; i < K_ARRAY_SIZE(curve); ++i) {
+    Vec2f &v = curve[i];
     v.x = i;
-    v.y = 400 + 20 * (sin(d * (4*time+i)) + 2*sin(0.25 * (4*time+i)));
+    v.y = 520 + 20 * (sin(d * (4 * time + i)) + 2 * sin(0.25 * (4 * time + i)));
   }
   drawLine(curve, K_ARRAY_SIZE(curve), 2.0f);
 
-
-  if (state == GameState::Paused) {
+  if (isPaused) {
     setDrawColor(ColorRGBA{0, 0, 0, 120});
     fillRect(0, 0, 800, 600);
     setDrawColor(ColorRGBA{255, 255, 255, 255});
@@ -239,8 +256,44 @@ void Game::render(Gfx &gfx) {
   }
 }
 
+void Game::RenderSettings(Gfx &gfx) {
+  clearScreen(ColorRGBA{30, 30, 30, 255});
+
+  setDrawColor(ColorRGBA{255, 255, 255, 255});
+
+  gfx.text("Settings", 200, 500);
+
+  if (gfx.button("Lemmings", 200, 450)) {
+    useLemmings = !useLemmings;
+    printf("use lemmings=%d\n", useLemmings);
+  }
+  if (useLemmings)
+    gfx.text("on", 280, 450);
+  else
+    gfx.text("off", 280, 450);
+
+  if (gfx.button("Back", 350, 500)) {
+    state = GameState::TitleScreen;
+  }
+}
+
+void Game::render(Gfx &gfx) {
+  switch (state) {
+  case GameState::TitleScreen:
+    RenderTitleScreen(gfx);
+    break;
+  case GameState::Demo:
+    RenderDemo(gfx);
+    break;
+  case GameState::Settings:
+    RenderSettings(gfx);
+    break;
+  }
+}
+
 void Game::renderImGui() {
-  ImGui::Text("%d", pong.ballSpeed);
+  ImGui::Text("State: %d", (int)state);
+  ImGui::Text("Ball speed: %d", pong.ballSpeed);
 }
 
 Game *gameInit(Gfx &gfx) {
@@ -263,10 +316,5 @@ void gameRender(Game *game, Gfx &gfx) { game->render(gfx); }
 void gameRenderImGui(Game *game) { game->renderImGui(); }
 
 const GameAPI GAME_API = {
-    gameInit,
-    gameQuit,
-    gameReset,
-    gameUpdate,
-    gameRender,
-    gameRenderImGui,
+    gameInit, gameQuit, gameReset, gameUpdate, gameRender, gameRenderImGui,
 };

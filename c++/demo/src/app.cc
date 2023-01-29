@@ -10,6 +10,7 @@
 // TODO: settings menu, vsync, window size, fullscreen
 
 // TODO: neonwise line that follows cursor, but with 'weight' and elasticity
+// TODO: fullscreen aspect ratio keep
 
 static void sdl_die(const char *msg) {
   SDL_Log("%s: %s\n", msg, SDL_GetError());
@@ -128,8 +129,6 @@ void App::SetVSync(bool useVSync) {
 }
 
 void App::UpdateInputs() {
-  m_Controls.swapInputState();
-
   SDL_Event e;
   while (SDL_PollEvent(&e)) {
 
@@ -170,8 +169,11 @@ void App::UpdateInputs() {
       break;
 
     case SDL_MOUSEBUTTONDOWN:
+      m_Controls.onMouseButtonDown(e.button.button);
+      break;
+
     case SDL_MOUSEBUTTONUP:
-      m_Controls.updateMouseButton(e.button.button, e.button.state);
+      m_Controls.onMouseButtonUp(e.button.button);
       break;
 
     default:
@@ -221,6 +223,8 @@ void App::Run() {
     SDL_GL_GetDrawableSize(m_Window, (int *)&m_DisplayWidth,
                            (int *)&m_DisplayHeight);
 
+    UpdateInputs();
+
     if (ticksSinceLastLoop > 0) {
       s64 nanosSinceLastLoop =
           (ticksSinceLastLoop * NANOS_PER_SECOND) / perfFrequency;
@@ -231,13 +235,10 @@ void App::Run() {
 
       u64 startUpdate = SDL_GetPerformanceCounter();
 
-      if (lagAccumulator >= updateRateNanos) {
-        UpdateInputs();
-      }
-
       while (lagAccumulator >= updateRateNanos) {
         lagAccumulator -= updateRateNanos;
         m_GameLib->api.update(m_GameLib->state, m_Controls);
+        m_Controls.swapGameInputState();
       }
 
       u64 endUpdate = SDL_GetPerformanceCounter();
@@ -260,6 +261,7 @@ void App::Run() {
     {
       u64 startRender = SDL_GetPerformanceCounter();
       m_GameLib->api.render(m_GameLib->state, m_Gfx);
+      m_Controls.swapRenderInputState();
       u64 endRender = SDL_GetPerformanceCounter();
       u64 renderTime =
           (endRender - startRender) * NANOS_PER_SECOND / perfFrequency;

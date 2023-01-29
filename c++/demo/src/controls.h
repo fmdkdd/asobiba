@@ -23,11 +23,13 @@ struct Controls {
   SDL_Point lastLogicalMousePosition;
 
   static const usize MOUSE_BUTTON_COUNT = 5;
-  bool mouseButtonPreviousHeld[MOUSE_BUTTON_COUNT];
-  bool mouseButtonHeld[MOUSE_BUTTON_COUNT];
+  bool gamePreviousMouseButtonDown[MOUSE_BUTTON_COUNT];
+  bool renderPreviousMouseButtonDown[MOUSE_BUTTON_COUNT];
+  bool mouseButtonDown[MOUSE_BUTTON_COUNT];
 
-  bool keyPreviousHeld[KEY_COUNT];
-  bool keyHeld[KEY_COUNT];
+  bool gamePreviousKeyDown[KEY_COUNT];
+  bool renderPreviousKeyDown[KEY_COUNT];
+  bool keyDown[KEY_COUNT];
 
   void init();
   void quit();
@@ -42,26 +44,48 @@ struct Controls {
     lastLogicalMousePosition.y = y;
   }
 
-  void swapInputState() {
-    for (usize i = 0; i < K_ARRAY_SIZE(mouseButtonHeld); ++i) {
-      mouseButtonPreviousHeld[i] = mouseButtonHeld[i];
+  void swapGameInputState() {
+    for (usize i = 0; i < K_ARRAY_SIZE(mouseButtonDown); ++i) {
+      gamePreviousMouseButtonDown[i] = mouseButtonDown[i];
     }
-    for (usize i = 0; i < K_ARRAY_SIZE(keyHeld); ++i) {
-      keyPreviousHeld[i] = keyHeld[i];
+    for (usize i = 0; i < K_ARRAY_SIZE(keyDown); ++i) {
+      gamePreviousKeyDown[i] = keyDown[i];
     }
   }
 
-  bool isMouseButtonPressed(u8 button) const {
-    return mouseButtonHeld[button] && !mouseButtonPreviousHeld[button];
+  void swapRenderInputState() {
+    for (usize i = 0; i < K_ARRAY_SIZE(mouseButtonDown); ++i) {
+      renderPreviousMouseButtonDown[i] = mouseButtonDown[i];
+    }
+    for (usize i = 0; i < K_ARRAY_SIZE(keyDown); ++i) {
+      renderPreviousKeyDown[i] = keyDown[i];
+    }
   }
 
-  bool isMouseButtonHeld(u8 button) const { return mouseButtonHeld[button]; }
+  bool wasGameMouseButtonPressed(u8 button) const {
+    return mouseButtonDown[button] && !gamePreviousMouseButtonDown[button];
+  }
 
-  void updateMouseButton(u8 button, u8 state) {
-    if (state == SDL_RELEASED)
-      mouseButtonHeld[button] = false;
-    else
-      mouseButtonHeld[button] = true;
+  bool wasGameMouseButtonReleased(u8 button) const {
+    return !mouseButtonDown[button] && gamePreviousMouseButtonDown[button];
+  }
+
+  bool wasRenderMouseButtonPressed(u8 button) const {
+    return mouseButtonDown[button] && !renderPreviousMouseButtonDown[button];
+  }
+
+  bool wasRenderMouseButtonReleased(u8 button) const {
+    return !mouseButtonDown[button] && renderPreviousMouseButtonDown[button];
+  }
+
+  bool isMouseButtonDown(u8 button) const { return mouseButtonDown[button]; }
+
+  void onMouseButtonDown(u8 button) {
+    mouseButtonDown[button] = true;
+  }
+
+  void onMouseButtonUp(u8 button) {
+    mouseButtonDown[button] = false;
   }
 
   Key mapKeycodeToKey(SDL_Keycode keycode) const;
@@ -69,20 +93,32 @@ struct Controls {
   void onKeyUp(SDL_Keycode keycode) {
     Key key = mapKeycodeToKey(keycode);
     if (key != KEY_IGNORED)
-      keyHeld[key] = false;
+      keyDown[key] = false;
   }
 
   void onKeyDown(SDL_Keycode keycode) {
     Key key = mapKeycodeToKey(keycode);
     if (key != KEY_IGNORED)
-      keyHeld[key] = true;
+      keyDown[key] = true;
   }
 
-  bool isKeyPressed(Key key) const {
-    return keyHeld[key] && !keyPreviousHeld[key];
+  bool wasGameKeyPressed(Key key) const {
+    return keyDown[key] && !gamePreviousKeyDown[key];
   }
 
-  bool isKeyHeld(Key key) const { return keyHeld[key]; }
+  bool wasGameKeyReleased(Key key) const {
+    return !keyDown[key] && gamePreviousKeyDown[key];
+  }
+
+  bool wasRenderKeyPressed(Key key) const {
+    return keyDown[key] && !renderPreviousKeyDown[key];
+  }
+
+  bool wasRenderKeyReleased(Key key) const {
+    return !keyDown[key] && renderPreviousKeyDown[key];
+  }
+
+  bool isKeyDown(Key key) const { return keyDown[key]; }
 
 };
 

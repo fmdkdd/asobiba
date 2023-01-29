@@ -32,8 +32,9 @@ struct Pong {
 };
 
 enum class GameState {
-  Paused,
-  Running,
+  TitleScreen,
+  Settings,
+  Demo,
 };
 
 struct Game {
@@ -46,6 +47,9 @@ struct Game {
   Pong pong;
 
   u64 time;
+  bool isPaused;
+
+  bool useLemmings;
 
   void init(Gfx &gfx);
   void quit();
@@ -54,6 +58,10 @@ struct Game {
   void update(const Controls &controls);
   void render(Gfx &gfx);
   void renderImGui();
+
+  void RenderTitleScreen(Gfx &gfx);
+  void RenderDemo(Gfx &gfx);
+  void RenderSettings(Gfx &gfx);
 };
 
 #endif
