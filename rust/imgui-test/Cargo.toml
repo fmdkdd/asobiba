@@ -6,4 +6,4 @@ authors = ["fmdkdd"]
 [dependencies]
 imgui = "0.0"
 glium = "0.14"
-time = "0.1"
+time = "0.2"
