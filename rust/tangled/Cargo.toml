@@ -7,7 +7,7 @@ authors = ["fmdkdd <fmdkdd@gmail.com>"]
 glium = "0.16"
 android_glue = "0.2"
 rand = "0.3"
-time = "0.1"
+time = "0.2"
 
 [package.metadata.android]
 fullscreen = true
