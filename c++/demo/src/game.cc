@@ -151,6 +151,18 @@ void Pong::update(const Controls &controls) {
 }
 
 void Game::update(const Controls &controls) {
+  switch (state) {
+  case GameState::TitleScreen:
+    break;
+  case GameState::Demo:
+    updateDemo(controls);
+    break;
+  case GameState::Settings:
+    break;
+  }
+}
+
+void Game::updateDemo(const Controls &controls) {
   if (controls.wasGameKeyPressed(KEY_PAUSE)) {
     isPaused = !isPaused;
   }

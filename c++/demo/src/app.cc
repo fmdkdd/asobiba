@@ -11,6 +11,7 @@
 
 // TODO: neonwise line that follows cursor, but with 'weight' and elasticity
 // TODO: fullscreen aspect ratio keep
+// TODO: font size
 
 static void sdl_die(const char *msg) {
   SDL_Log("%s: %s\n", msg, SDL_GetError());

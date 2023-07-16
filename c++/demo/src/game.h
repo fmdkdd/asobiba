@@ -59,6 +59,8 @@ struct Game {
   void render(Gfx &gfx);
   void renderImGui();
 
+  void updateDemo(const Controls &controls);
+
   void RenderTitleScreen(Gfx &gfx);
   void RenderDemo(Gfx &gfx);
   void RenderSettings(Gfx &gfx);
