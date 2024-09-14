@@ -59,7 +59,7 @@ struct Gfx {
 
   u32 text(const char *s, int x, int y);
   SDL_Rect boxedText(const char *s, u32 x, u32 y);
-  bool button(const char *s, u32 x, u32 y);
+  bool button(const char *s, u32 x, u32 y, bool enabled=true);
 
   void loadImage(const char* path, Texture* texture);
 };

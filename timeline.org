@@ -16896,3 +16896,39 @@ order to vsync?):
 
 Alright you know what?  Let's just stop whiteboarding and write stuff and live
 with a flawed solution.
+
+* [2024-09-09 lun.]
+** Thinking about coroutines again
+One obvious solution is to have the game code in a higher-level language, that
+has a yield construct, or a waitFrame(N).
+
+Downsides are that interpreted languages are slow... but we could just use a
+C-superset, and statically compile it... to C!  Basically a fancier macro
+system.
+
+* [2024-09-12 jeu.]
+** Potential animation solution
+Most flexible solution is to hide state in objects?  Like... other engines do
+after all.
+
+#+begin_src c
+updateScene() {
+  if (mouseClick) {
+    AnimSequence seq(Animation(&rect.x, rect.x+100, 10),
+                     Animation(&rect.y, rect.y+10, 5));
+    scene.add(seq);
+  }
+}
+#+end_src
+
+When the scene updates all objs, it updates the animSequence.  The sequence just
+updates the current animation.  When that one is over, it will animate the next
+one.
+
+The animation object is responsible for updating the property to the target.
+
+When the whole sequence is over, the animSeq object is released and we are done.
+
+This 'hides' the complexity of the internal state of animation inside objects.
+Harder to debug because what happens to rect.x and rect.y is not centralized,
+but distributed over animation objects.  But it does solve the problem.

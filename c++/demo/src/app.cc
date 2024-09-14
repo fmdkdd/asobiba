@@ -7,6 +7,7 @@
 #include "imgui_impl_sdl.h"
 
 // TODO: title -> new game -> death -> restart, menus with animations
+// TODO: multiple demos from title?
 // TODO: settings menu, vsync, window size, fullscreen
 
 // TODO: neonwise line that follows cursor, but with 'weight' and elasticity
@@ -238,7 +239,7 @@ void App::Run() {
 
       while (lagAccumulator >= updateRateNanos) {
         lagAccumulator -= updateRateNanos;
-        m_GameLib->api.update(m_GameLib->state, m_Controls);
+        m_GameLib->api.update(m_GameLib->state, m_Controls, m_Gfx);
         m_Controls.swapGameInputState();
       }
 

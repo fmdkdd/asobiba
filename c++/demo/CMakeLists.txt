@@ -41,10 +41,16 @@ target_include_directories(imgui
 # Game library
 
 set(GAME_SRC_FILES
+  src/arena.h
   src/game.h
   src/game.cc
   src/gfx.h
   src/gfx.cc
+  src/scene.h
+  src/scene_table.cc
+  src/scene_demo.cc
+  src/scene_settings.cc
+  src/scene_title_screen.cc
   src/vec.h
   )
 
@@ -62,7 +68,7 @@ if (HOT_RELOAD)
   if (MSVC)
     target_compile_options(game PRIVATE /W4 /WX)
   else()
-    target_compile_options(game PRIVATE -Wall -Wextra -pedantic)
+    target_compile_options(game PRIVATE -Wall -Wextra -pedantic -fno-omit-frame-pointer -g3)
   endif()
 endif()
 
@@ -90,7 +96,7 @@ endif()
 if (MSVC)
     target_compile_options(${PROJECT_NAME} PRIVATE /W4 /WX)
 else()
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic)
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -pedantic -fno-omit-frame-pointer -fsanitize-undefined-trap-on-error -g3)
 endif()
 
 if (ENABLE_ASSERT)

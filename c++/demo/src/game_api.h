@@ -9,7 +9,7 @@ struct GameAPI {
   Game* (*init)(Gfx& gfx);
   void  (*quit)(Game* game);
   void  (*reset)(Game* game);
-  void  (*update)(Game* game, const Controls& controls);
+  void  (*update)(Game* game, const Controls& controls, Gfx& gfx);
   void  (*render)(Game* game, Gfx& gfx);
   void  (*renderImGui)(Game* game);
 };

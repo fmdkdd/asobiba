@@ -3,67 +3,36 @@
 
 #include <SDL2/SDL.h>
 
-#include "gfx.h"
+#include "arena.h"
 #include "vec.h"
+
+enum class SceneId;
+struct Scene;
+struct Gfx;
 
 struct Controls;
 
-struct Pong {
-  Recti arena;
-  Recti player1Bat;
-  Recti player2Bat;
-  Recti ball;
-
-  s32 player1Velocity;
-  u32 player1Speed;
-  u32 player1SpeedCounter;
-  s32 player2Velocity;
-  u32 player2Speed;
-  u32 player2SpeedCounter;
-
-  Vec2i ballVelocity;
-
-  u32 ballSpeed;
-  u32 ballCounter;
-  u32 ballSpeedIncreaseOnHit;
-  u32 ballSpeedMax;
-
-  void update(const Controls &controls);
-};
-
-enum class GameState {
-  TitleScreen,
-  Settings,
-  Demo,
-};
-
 struct Game {
-  GameState state;
+  Arena m_arena;
 
-  Texture lemmingsSpritesheet;
-
-  AnimatedSprite lemmings[10];
-
-  Pong pong;
+  Scene* m_pCurrentScene;
+  SceneId m_nextScene;
 
   u64 time;
   bool isPaused;
 
-  bool useLemmings;
+  // Settings
+  bool m_useLemmings;
 
   void init(Gfx &gfx);
   void quit();
   void reset();
 
-  void update(const Controls &controls);
+  void update(const Controls &controls, Gfx& gfx);
   void render(Gfx &gfx);
   void renderImGui();
 
-  void updateDemo(const Controls &controls);
-
-  void RenderTitleScreen(Gfx &gfx);
-  void RenderDemo(Gfx &gfx);
-  void RenderSettings(Gfx &gfx);
+  void changeScene(SceneId sceneId);
 };
 
 #endif

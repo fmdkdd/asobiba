@@ -165,7 +165,12 @@ SDL_Rect Gfx::boxedText(const char *s, u32 x, u32 y) {
   return SDL_Rect{box_x, box_y, box_w, box_h};
 }
 
-bool Gfx::button(const char *s, u32 x, u32 y) {
+bool Gfx::button(const char *s, u32 x, u32 y, bool enabled) {
+  if (enabled)
+    setDrawColor(ColorRGBA{255, 255, 255, 255});
+  else
+    setDrawColor(ColorRGBA{120, 120, 130, 255});
+
   const u32 textWidth = text(s, x, y);
 
   const u32 textHeight = font.charHeight;
@@ -179,19 +184,27 @@ bool Gfx::button(const char *s, u32 x, u32 y) {
   const int box_h = topMargin + textHeight + bottomMargin;
 
   SDL_Rect box = SDL_Rect{box_x, box_y, box_w, box_h};
-  bool underMouse = SDL_PointInRect(&controls->lastLogicalMousePosition, &box);
-  bool pressed = controls->isMouseButtonDown(SDL_BUTTON_LEFT) && underMouse;
-  bool clicked = controls->wasRenderMouseButtonReleased(SDL_BUTTON_LEFT) && underMouse;
 
-  if (pressed) {
-    fillRect(box_x, box_y, box_w, box_h);
-    text(s, x, y);
+  if (enabled) {
+    const bool underMouse = SDL_PointInRect(&controls->lastLogicalMousePosition, &box);
+    const bool pressed = controls->isMouseButtonDown(SDL_BUTTON_LEFT) && underMouse;
+    const bool clicked = controls->wasRenderMouseButtonReleased(SDL_BUTTON_LEFT) && underMouse;
+
+    if (pressed) {
+      fillRect(box_x, box_y, box_w, box_h);
+      text(s, x, y);
+    }
+    else {
+      drawRect(box_x, box_y, box_w, box_h);
+    }
+
+    return clicked;
   }
   else {
     drawRect(box_x, box_y, box_w, box_h);
-  }
 
-  return clicked;
+    return false;
+  }
 }
 
 void Gfx::loadImage(const char* path, Texture* texture) {
